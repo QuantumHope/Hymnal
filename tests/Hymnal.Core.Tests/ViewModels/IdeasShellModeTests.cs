@@ -439,6 +439,75 @@ public sealed class IdeasShellModeTests : IDisposable
     }
 
     [Fact]
+    public async Task Promote_switches_to_write_and_opens_the_new_story()
+    {
+        var root = CreateWorkspace(AnthologyJson);
+        try
+        {
+            await SeedIdeaAsync(root, "The Lighthouse");
+
+            await Ui(root, async context =>
+            {
+                var window = context.CreateMainWindow();
+                await context.SettleAsync();
+                await Within(window.SelectIdeasCommand.Execute().ToTask());
+                Assert.Equal(ShellMode.Ideas, window.ActiveMode);
+
+                var ideas = window.IdeasViewModel!;
+                ideas.Selected = ideas.Cards.Single();
+                ideas.AskFileNameAsync = suggestion => Task.FromResult<string?>(suggestion);
+                await Within(ideas.PromoteSelectedCommand.Execute().ToTask());
+
+                Assert.Equal(ShellMode.Write, window.ActiveMode);
+                Assert.True(window.IsEditorVisible);
+                await PumpUntilAsync(() => context.Editor.ActiveNode?.RelativePath == "the-lighthouse.md");
+                Assert.Equal("the-lighthouse.md", context.Workspace.SelectedNode?.Node.RelativePath);
+            });
+        }
+        finally { DeleteFolder(root); }
+    }
+
+    [Fact]
+    public async Task Quick_capture_and_close_wait_while_an_idea_is_promoted()
+    {
+        var root = CreateWorkspace(AnthologyJson);
+        try
+        {
+            await SeedIdeaAsync(root, "The Lighthouse");
+
+            await Ui(root, async context =>
+            {
+                var window = context.CreateMainWindow();
+                await context.SettleAsync();
+                var ideas = window.IdeasViewModel!;
+                ideas.Selected = ideas.Cards.Single();
+                ideas.AskFileNameAsync = suggestion => Task.FromResult<string?>(suggestion);
+                Assert.True(await window.QuickCaptureIdeaCommand.CanExecute.FirstAsync());
+
+                // Hold the promoter's pre-flight read of ideas.json.
+                var hold = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+                context.Ideas.LoadHold = hold;
+                var promote = ideas.PromoteSelectedCommand.Execute().ToTask();
+                await PumpUntilAsync(() => context.Ideas.LoadHeld);
+
+                Assert.False(await window.QuickCaptureIdeaCommand.CanExecute.FirstAsync());
+                Assert.False(await Within(window.FlushPendingEditsBeforeCloseAsync(TimeSpan.FromMilliseconds(200))));
+
+                hold.SetResult();
+                await Within(promote);
+
+                Assert.True(await window.QuickCaptureIdeaCommand.CanExecute.FirstAsync());
+                Assert.True(await Within(window.FlushPendingEditsBeforeCloseAsync(TimeSpan.FromSeconds(5))));
+            });
+
+            var saved = Assert.Single(await LoadFromDiskAsync(root));
+            Assert.Equal(IdeaState.Used, saved.State);
+            Assert.NotNull(saved.StoryId);
+        }
+        finally { DeleteFolder(root); }
+    }
+
+    [Fact]
     public async Task Close_flush_succeeds_without_ideas_view_model()
     {
         var root = CreateWorkspace(StoryJson);
@@ -502,6 +571,13 @@ public sealed class IdeasShellModeTests : IDisposable
         LiveContexts.Clear();
         try { if (Directory.Exists(root)) Directory.Delete(root, recursive: true); }
         catch { /* best effort */ }
+    }
+
+    private static async Task SeedIdeaAsync(string root, string title)
+    {
+        var seeded = await new StoryIdeasService(new MetadataStore()).SaveAsync(root,
+            [new StoryIdea("a", title, "", "", [], null, IdeaState.New, new DateOnly(2026, 1, 1), null)]);
+        Assert.True(seeded.IsSuccess, seeded.Error);
     }
 
     private static async Task<IReadOnlyList<StoryIdea>> LoadFromDiskAsync(string root)
@@ -651,8 +727,23 @@ public sealed class IdeasShellModeTests : IDisposable
         public bool FailSaves { get; set; }
         public TaskCompletionSource? SaveHold { get; set; }
 
-        public Task<Hymnal.Core.Common.Result<IReadOnlyList<StoryIdea>>> LoadAsync(string workspaceRoot) =>
-            inner.LoadAsync(workspaceRoot);
+        /// <summary>The next load waits until this is set, then reads the file.</summary>
+        public TaskCompletionSource? LoadHold { get; set; }
+
+        /// <summary>True while a load waits on <see cref="LoadHold"/>.</summary>
+        public bool LoadHeld { get; private set; }
+
+        public async Task<Hymnal.Core.Common.Result<IReadOnlyList<StoryIdea>>> LoadAsync(string workspaceRoot)
+        {
+            if (LoadHold is { } hold)
+            {
+                LoadHold = null;
+                LoadHeld = true;
+                await hold.Task;
+                LoadHeld = false;
+            }
+            return await inner.LoadAsync(workspaceRoot);
+        }
 
         public async Task<Hymnal.Core.Common.Result<Hymnal.Core.Common.Unit>> SaveAsync(
             string workspaceRoot, IReadOnlyList<StoryIdea> ideas)

@@ -368,8 +368,8 @@ public class MainWindowViewModel : ViewModelBase
             ? Observable.Return(false)
             : Observable.CombineLatest(
                 this.WhenAnyValue(x => x.IsIdeasModeAvailable),
-                ideasViewModel.WhenAnyValue(x => x.IsReadOnly),
-                (available, readOnly) => available && !readOnly);
+                ideasViewModel.WhenAnyValue(x => x.CanEdit),
+                (available, canEdit) => available && canEdit);
         QuickCaptureIdeaCommand = ReactiveCommand.CreateFromTask(QuickCaptureIdeaAsync, canQuickCapture);
         Disposables.Add(QuickCaptureIdeaCommand.ThrownExceptions.Subscribe(ex =>
             notificationService.ShowError($"Failed to capture idea: {ex.Message}")));
@@ -470,6 +470,12 @@ public class MainWindowViewModel : ViewModelBase
                     WorkspaceViewModel.SelectedNode = chapter;
                     ActiveMode = ShellMode.Write;
                 }));
+
+        // Promoting an idea brings the author to the new story.
+        if (ideasViewModel != null)
+            Disposables.Add(
+                ideasViewModel.StoryOpened
+                    .Subscribe(_ => ActiveMode = ShellMode.Write));
 
         Disposables.Add(
             SupplementalDocsViewModel.DocumentOpened
@@ -585,8 +591,8 @@ public class MainWindowViewModel : ViewModelBase
     }
 
     /// <summary>
-    /// Writes edits still waiting on a debounced save (story ideas) before the window closes, waiting
-    /// at most <paramref name="timeout"/>. False when they could not be saved in time, so the view can
+    /// Writes edits still waiting on a debounced save (story ideas) before the window closes, after any
+    /// in-flight promote finishes, waiting at most <paramref name="timeout"/> in all. False when they could not be saved in time, so the view can
     /// ask whether to close anyway. Completes synchronously when nothing is pending.
     /// </summary>
     public async Task<bool> FlushPendingEditsBeforeCloseAsync(TimeSpan timeout)
@@ -596,7 +602,7 @@ public class MainWindowViewModel : ViewModelBase
 
         try
         {
-            var flush = IdeasViewModel.TryFlushAsync();
+            var flush = FlushAfterPromoteAsync(IdeasViewModel);
             if (!flush.IsCompleted)
             {
                 using var cancelDelay = new System.Threading.CancellationTokenSource();
@@ -611,6 +617,13 @@ public class MainWindowViewModel : ViewModelBase
         {
             return false;
         }
+    }
+
+    /// <summary>Waits for an in-flight promote (it saves ideas itself), then writes pending idea edits.</summary>
+    private static async Task<bool> FlushAfterPromoteAsync(IdeasViewModel ideas)
+    {
+        await ideas.PromoteCompletion;
+        return await ideas.TryFlushAsync();
     }
 
     // ── Write layout persistence ──────────────────────────────────────────────
