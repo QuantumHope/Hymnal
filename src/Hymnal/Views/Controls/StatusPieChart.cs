@@ -50,7 +50,7 @@ public class StatusPieChart : Control
 
             var nameLabel = new TextBlock
             {
-                Text = s.Status.ToString(),
+                Text = s.DisplayLabel,
                 Width = 76,
                 Foreground = new SolidColorBrush(Color.Parse("#EDE8F5"))
             };

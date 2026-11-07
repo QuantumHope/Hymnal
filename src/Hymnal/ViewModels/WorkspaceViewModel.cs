@@ -1132,10 +1132,11 @@ public class WorkspaceViewModel : ViewModelBase
         BookStatusSummary = ToStatusList(bookStatuses);
     }
 
-    private static IReadOnlyList<StatusCount> ToStatusList(Dictionary<ChapterStatus, int> counts)
+    /// <summary>Counts are keyed by display status; each bucket carries the profile label.</summary>
+    private IReadOnlyList<StatusCount> ToStatusList(Dictionary<ChapterStatus, int> counts)
         => counts.Count == 0
             ? Array.Empty<StatusCount>()
-            : counts.Select(kv => new StatusCount(kv.Key, kv.Value)).ToList();
+            : counts.Select(kv => new StatusCount(kv.Key, kv.Value, Profile.LabelFor(kv.Key))).ToList();
 
     private void UpdateVisibility()
     {

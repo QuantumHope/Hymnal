@@ -146,6 +146,19 @@ public sealed class GanttRowViewModel : ViewModelBase
 
     public string StatusDisplay => IsEditable ? Profile.LabelFor(EditableStatus) : "Rollup";
 
+    /// <summary><see cref="Status"/> mapped onto a status visible in <see cref="Profile"/>.</summary>
+    public ChapterStatus DisplayStatus => Profile.DisplayStatus(Status);
+
+    /// <summary>Profile label for the stored <see cref="Status"/> (Novel: the enum name).</summary>
+    public string StatusLabel => Profile.LabelFor(Status);
+
+    /// <summary>Phase segment for the row's current (display) status, if any.</summary>
+    public PhaseSegment? CurrentSegment => GetCurrentStatusSegment(Status);
+
+    /// <summary>True when <paramref name="phaseName"/> is the phase the row's display status sits in.</summary>
+    public bool IsActivePhase(string phaseName) =>
+        string.Equals(phaseName, DisplayStatus.ToString(), StringComparison.Ordinal);
+
     public string StartDateDisplay
     {
         get

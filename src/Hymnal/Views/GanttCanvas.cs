@@ -488,8 +488,7 @@ public sealed class GanttCanvas : Control
             ctx.DrawText(labelFt, new Point(8, rowY + (RowHeight - labelFt.Height) / 2));
 
             // ── Table cells (status/start/end/progress) ─────────────────────
-            var currentSeg = row.PhaseSegments.FirstOrDefault(s =>
-                string.Equals(s.PhaseName, row.Status.ToString(), StringComparison.Ordinal));
+            var currentSeg = row.CurrentSegment;
 
             var startText = currentSeg?.StartDate?.ToString("yyyy-MM-dd")
                 ?? row.StartDate?.ToString("yyyy-MM-dd")
@@ -503,8 +502,8 @@ public sealed class GanttCanvas : Control
                 ? $"{Math.Round(currentSeg!.Progress * 100.0):0}%"
                 : "--";
 
-            var statusBrush = new SolidColorBrush(StatusToColor(row.Status));
-            DrawCellText(ctx, row.Status.ToString(), StatusColumnLeft, StatusColumnWidth, rowY, 10.5, statusBrush);
+            var statusBrush = new SolidColorBrush(StatusToColor(row.DisplayStatus));
+            DrawCellText(ctx, row.StatusLabel, StatusColumnLeft, StatusColumnWidth, rowY, 10.5, statusBrush);
             DrawCellText(ctx, startText, StartColumnLeft, StartColumnWidth, rowY, 10.0, labelBrush);
             DrawCellText(ctx, endText, EndColumnLeft, EndColumnWidth, rowY, 10.0, labelBrush);
             DrawCellText(ctx, progressText, ProgressColumnLeft, ProgressColumnWidth, rowY, 10.0, labelBrush);
@@ -743,7 +742,7 @@ public sealed class GanttCanvas : Control
         var contentBrush  = new SolidColorBrush(Color.Parse("#CBD5E1"));
         var ruleBrush     = new SolidColorBrush(Color.Parse("#2D1B5E"));
 
-        var statusColor   = StatusToColor(row.Status);
+        var statusColor   = StatusToColor(row.DisplayStatus);
 
         var container = new StackPanel { Spacing = 5, Margin = new Thickness(10, 8, 10, 10) };
 
@@ -769,7 +768,7 @@ public sealed class GanttCanvas : Control
         });
         statusRow.Children.Add(new TextBlock
         {
-            Text = row.Status.ToString(),
+            Text = row.StatusLabel,
             FontSize = 11,
             Foreground = new SolidColorBrush(statusColor),
             VerticalAlignment = VerticalAlignment.Center
@@ -802,7 +801,7 @@ public sealed class GanttCanvas : Control
             foreach (var seg in phases)
             {
                 bool isHovered = seg.PhaseName == hoveredSeg?.PhaseName;
-                bool isActive  = seg.PhaseName == row.Status.ToString();
+                bool isActive  = row.IsActivePhase(seg.PhaseName);
                 var phaseColor = PhaseBarColors.TryGetValue(seg.PhaseName, out var c) ? c : Color.Parse("#64748B");
 
                 var phaseRow = new Grid { Margin = new Thickness(0, 1, 0, 0) };
