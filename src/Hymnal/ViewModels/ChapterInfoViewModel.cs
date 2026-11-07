@@ -59,6 +59,9 @@ public sealed class ChapterInfoViewModel : ViewModelBase, IDisposable
 
     private ChapterViewModel? _activeChapterVm;
     private CancellationTokenSource _saveCts = new();
+    /// <summary>Cancelled on Dispose, ending the "Saved" indicator delay.</summary>
+    private readonly CancellationTokenSource _lifetimeCts = new();
+    private readonly CancellationToken _lifetime;
     private string? _loadedUuid;
 
     /// <summary>Disposables that live only for the active chapter subscription.</summary>
@@ -276,6 +279,7 @@ public sealed class ChapterInfoViewModel : ViewModelBase, IDisposable
         _targetsService = targetsService;
         _settingsStore = settingsStore;
         _notificationService = notificationService;
+        _lifetime = _lifetimeCts.Token;
         _historyService = historyService;
 
         try
@@ -342,7 +346,7 @@ public sealed class ChapterInfoViewModel : ViewModelBase, IDisposable
         Disposables.Add(
             _scheduleSaveSubject
                 .Throttle(TimeSpan.FromMilliseconds(800), TaskPoolScheduler.Default)
-                .Subscribe(async _ => await AutoSaveScheduleAsync().ConfigureAwait(false)));
+                .Subscribe(unit => _ = AutoSaveScheduleAsync()));
 
         Disposables.Add(_scheduleRowSubscriptions);
         RebuildScheduleRows();
@@ -618,14 +622,27 @@ public sealed class ChapterInfoViewModel : ViewModelBase, IDisposable
 
     /// <summary>
     /// Fires after the debounce throttle; saves the schedule and briefly shows the "Saved" indicator.
+    /// Never throws, so fire-and-forget callers are safe.
     /// </summary>
     private async Task AutoSaveScheduleAsync()
     {
-        await SaveScheduleAsync().ConfigureAwait(false);
+        try
+        {
+            await SaveScheduleAsync().ConfigureAwait(false);
 
-        await Avalonia.Threading.Dispatcher.UIThread.InvokeAsync(() => ScheduleSavedRecently = true);
-        await Task.Delay(2000).ConfigureAwait(false);
-        await Avalonia.Threading.Dispatcher.UIThread.InvokeAsync(() => ScheduleSavedRecently = false);
+            // Post never throws once the app is shutting down; InvokeAsync would, killing the process.
+            Avalonia.Threading.Dispatcher.UIThread.Post(() => ScheduleSavedRecently = true);
+            await Task.Delay(2000, _lifetime).ConfigureAwait(false);
+            Avalonia.Threading.Dispatcher.UIThread.Post(() => ScheduleSavedRecently = false);
+        }
+        catch (OperationCanceledException)
+        {
+            // Disposed during the delay.
+        }
+        catch (Exception ex)
+        {
+            Avalonia.Threading.Dispatcher.UIThread.Post(() => _notificationService.ShowError($"Schedule save failed: {ex.Message}"));
+        }
     }
 
     /// <summary>Triggers an immediate (non-debounced) save; called from view LostFocus handler.</summary>
@@ -919,5 +936,7 @@ public sealed class ChapterInfoViewModel : ViewModelBase, IDisposable
         Disposables.Dispose();
         _saveCts.Cancel();
         _saveCts.Dispose();
+        _lifetimeCts.Cancel();
+        _lifetimeCts.Dispose();
     }
 }

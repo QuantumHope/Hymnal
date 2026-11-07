@@ -7,6 +7,7 @@ using System.Reactive.Concurrency;
 using System.Reactive.Disposables;
 using System.Reactive.Linq;
 using System.Reactive.Subjects;
+using System.Threading;
 using System.Threading.Tasks;
 using Hymnal.Core.Interfaces;
 using Hymnal.Core.Models;
@@ -27,10 +28,14 @@ public sealed class ChapterDetailViewModel : ViewModelBase, IDisposable
     private readonly ChapterViewModel _chapterVm;
     private readonly PhaseDataService _phaseDataService;
     private readonly string _workspaceRoot;
+    private readonly INotificationService _notificationService;
 
     private readonly CompositeDisposable _innerDisposables = new();
     private readonly Subject<Unit> _scheduleSaveSubject = new();
     private bool _suppressAutoSave;
+    /// <summary>Cancelled on Dispose, ending the "Saved" indicator delay.</summary>
+    private readonly CancellationTokenSource _lifetimeCts = new();
+    private readonly CancellationToken _lifetime;
 
     // ── Profile-driven data ───────────────────────────────────────────────────
 
@@ -128,6 +133,8 @@ public sealed class ChapterDetailViewModel : ViewModelBase, IDisposable
         _chapterVm = chapterVm;
         _phaseDataService = phaseDataService;
         _workspaceRoot = workspaceRoot;
+        _notificationService = notificationService;
+        _lifetime = _lifetimeCts.Token;
 
         ChapterTitle = chapterVm.Node.Title;
         _status = chapterVm.Status;
@@ -179,7 +186,7 @@ public sealed class ChapterDetailViewModel : ViewModelBase, IDisposable
         _innerDisposables.Add(
             _scheduleSaveSubject
                 .Throttle(TimeSpan.FromMilliseconds(800), TaskPoolScheduler.Default)
-                .Subscribe(async _ => await AutoSaveScheduleAsync().ConfigureAwait(false)));
+                .Subscribe(unit => _ = AutoSaveScheduleAsync()));
 
         // ── Commands ──────────────────────────────────────────────────────────
         SetStatusCommand = ReactiveCommand.CreateFromTask<ChapterStatus>(SetStatusAsync);
@@ -233,13 +240,26 @@ public sealed class ChapterDetailViewModel : ViewModelBase, IDisposable
             _ = AutoSaveScheduleAsync();
     }
 
+    /// <summary>Saves the schedule and flashes the saved hint; never throws, so fire-and-forget callers are safe.</summary>
     private async Task AutoSaveScheduleAsync()
     {
-        await SaveScheduleAsync().ConfigureAwait(false);
+        try
+        {
+            await SaveScheduleAsync().ConfigureAwait(false);
 
-        await Avalonia.Threading.Dispatcher.UIThread.InvokeAsync(() => ScheduleSavedRecently = true);
-        await Task.Delay(2000).ConfigureAwait(false);
-        await Avalonia.Threading.Dispatcher.UIThread.InvokeAsync(() => ScheduleSavedRecently = false);
+            // Post never throws once the app is shutting down; InvokeAsync would, killing the process.
+            Avalonia.Threading.Dispatcher.UIThread.Post(() => ScheduleSavedRecently = true);
+            await Task.Delay(2000, _lifetime).ConfigureAwait(false);
+            Avalonia.Threading.Dispatcher.UIThread.Post(() => ScheduleSavedRecently = false);
+        }
+        catch (OperationCanceledException)
+        {
+            // Disposed during the delay.
+        }
+        catch (Exception ex)
+        {
+            Avalonia.Threading.Dispatcher.UIThread.Post(() => _notificationService.ShowError($"Schedule save failed: {ex.Message}"));
+        }
     }
 
     private async Task SaveScheduleAsync()
@@ -382,5 +402,7 @@ public sealed class ChapterDetailViewModel : ViewModelBase, IDisposable
         _innerDisposables.Dispose();
         _scheduleSaveSubject.Dispose();
         Disposables.Dispose();
+        _lifetimeCts.Cancel();
+        _lifetimeCts.Dispose();
     }
 }
