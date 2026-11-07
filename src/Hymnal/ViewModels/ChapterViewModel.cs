@@ -504,7 +504,8 @@ public sealed class ChapterViewModel : ViewModelBase, IDisposable
             {
                 Status = newStatus,
                 PhaseStartDate = DateTime.UtcNow.ToString("yyyy-MM-dd"),
-                PhaseEndDate = basePhaseData?.PhaseEndDate
+                PhaseEndDate = basePhaseData?.PhaseEndDate,
+                Schedule = basePhaseData?.Schedule
             };
             return updated;
         }).ConfigureAwait(false);
@@ -556,6 +557,9 @@ public sealed class ChapterViewModel : ViewModelBase, IDisposable
     /// <summary>Preset key to persist: the staged preset, or the custom preset once its range was edited.</summary>
     private string? ResolvePresetKey()
     {
+        // A profile without presets (Novel) can't stage one; keep whatever key is already stored.
+        if (TargetPresets.Count == 0) return Target?.Preset;
+
         var preset = PendingPreset;
         if (preset is null) return null;
         if (preset.MinWords is null && preset.MaxWords is null) return preset.Key;
