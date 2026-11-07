@@ -1850,6 +1850,27 @@ public class WorkspaceViewModel : ViewModelBase
         }
     }
 
+    /// <summary>
+    /// Selects (and so opens) the chapter whose relative path matches <paramref name="relativePath"/>,
+    /// ignoring case. Returns false when no such chapter is loaded.
+    /// </summary>
+    public bool SelectChapterByPath(string relativePath)
+    {
+        var match = _nodes.FirstOrDefault(vm =>
+            string.Equals(vm.Node.RelativePath, relativePath, StringComparison.OrdinalIgnoreCase));
+        if (match == null)
+            return false;
+
+        SelectedNode = match;
+        return true;
+    }
+
+    /// <summary>
+    /// Pauses Book.txt change detection until the returned handle is disposed, so writes made
+    /// by the app itself are not reported as external edits.
+    /// </summary>
+    public IDisposable SuppressFileWatcher() => _manuscriptService.SuppressFileWatcher();
+
     private void SelectReplacementNodeIfPresent(string replacementPath)
     {
         if (_nodesByPath.TryGetValue(replacementPath, out var replacementNode))
