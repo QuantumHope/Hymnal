@@ -198,6 +198,19 @@
                                IsVisible="{Binding HasTarget}"
                                FontSize="12"
                                Foreground="{DynamicResource OnSurfaceDimBrush}" />
+                    <!-- Story-length preset (story / anthology only) -->
+                    <ComboBox ItemsSource="{Binding TargetPresets}"
+                              SelectedItem="{Binding SelectedPreset, Mode=TwoWay}"
+                              IsVisible="{Binding HasTargetPresets}"
+                              PlaceholderText="Length preset"
+                              HorizontalAlignment="Stretch"
+                              FontSize="12">
+                        <ComboBox.ItemTemplate>
+                            <DataTemplate x:DataType="models:TargetPreset">
+                                <TextBlock Text="{Binding Label}" />
+                            </DataTemplate>
+                        </ComboBox.ItemTemplate>
+                    </ComboBox>
                     <!-- Input field -->
                     <TextBox Text="{Binding PendingTarget, Mode=TwoWay,
                                             Converter={x:Static conv:NullableIntToStringConverter.Instance}}"

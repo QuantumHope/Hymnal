@@ -179,7 +179,7 @@
                                               IsVisible="{Binding Node.Kind, Converter={StaticResource NodeKindIsChapterConverter}}"
                                               Command="{Binding CompletePhaseCommand}" />
                                     <MenuItem Header="Set Target…"
-                                              IsVisible="{Binding Node.Kind, Converter={StaticResource NodeKindIsChapterConverter}}"
+                                              IsVisible="{Binding CanSetTarget}"
                                               Command="{Binding OpenTargetFlyoutCommand}" />
                                     <Separator IsVisible="{Binding Node.Kind, Converter={StaticResource NodeKindIsChapterConverter}}" />
                                     <MenuItem Header="Include in book"
@@ -466,6 +466,24 @@
                                Foreground="{DynamicResource OnSurfaceBrush}"
                                FontSize="13"
                                FontWeight="SemiBold" />
+                    <StackPanel Orientation="Horizontal" Spacing="8" VerticalAlignment="Center"
+                                IsVisible="{Binding HasTargetPresets}">
+                        <TextBlock Text="Length"
+                                   Width="72"
+                                   Foreground="{DynamicResource OnSurfaceDimBrush}"
+                                   FontSize="12"
+                                   VerticalAlignment="Center" />
+                        <ComboBox ItemsSource="{Binding TargetPresets}"
+                                  SelectedItem="{Binding PendingPreset, Mode=TwoWay}"
+                                  Width="130"
+                                  FontSize="12">
+                            <ComboBox.ItemTemplate>
+                                <DataTemplate x:DataType="models:TargetPreset">
+                                    <TextBlock Text="{Binding Label}" />
+                                </DataTemplate>
+                            </ComboBox.ItemTemplate>
+                        </ComboBox>
+                    </StackPanel>
                     <StackPanel Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
                         <TextBlock Text="Min words"
                                    Width="72"

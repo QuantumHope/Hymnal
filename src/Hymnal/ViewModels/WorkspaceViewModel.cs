@@ -1149,6 +1149,9 @@ public class WorkspaceViewModel : ViewModelBase
 
     internal void OpenTargetFlyout(ChapterViewModel chapter)
     {
+        if (chapter.Node.Kind == NodeKind.Part && !Profile.AllowsPartTargets)
+            return;
+
         if (TargetFlyoutChapter != null && !ReferenceEquals(TargetFlyoutChapter, chapter))
             TargetFlyoutChapter.IsTargetFlyoutOpen = false;
 

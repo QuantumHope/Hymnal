@@ -89,7 +89,11 @@ public sealed class ChapterViewModel : ViewModelBase, IDisposable
     public int WordCount
     {
         get => _wordCount;
-        private set => this.RaiseAndSetIfChanged(ref _wordCount, value);
+        private set
+        {
+            this.RaiseAndSetIfChanged(ref _wordCount, value);
+            this.RaisePropertyChanged(nameof(EffectiveWordCount));
+        }
     }
 
     private bool _wordCountKnown;
@@ -108,7 +112,11 @@ public sealed class ChapterViewModel : ViewModelBase, IDisposable
     public int PartTotalWordCount
     {
         get => _partTotalWordCount;
-        set => this.RaiseAndSetIfChanged(ref _partTotalWordCount, value);
+        set
+        {
+            this.RaiseAndSetIfChanged(ref _partTotalWordCount, value);
+            this.RaisePropertyChanged(nameof(EffectiveWordCount));
+        }
     }
 
     private IReadOnlyList<StatusCount> _partStatusSummary = Array.Empty<StatusCount>();
@@ -152,6 +160,36 @@ public sealed class ChapterViewModel : ViewModelBase, IDisposable
         get => _pendingMaxWords;
         set => this.RaiseAndSetIfChanged(ref _pendingMaxWords, value);
     }
+
+    private TargetPreset? _pendingPreset;
+    /// <summary>
+    /// Story-length preset staged in the target flyout. Picking a non-custom preset fills
+    /// <see cref="PendingMinWords"/>/<see cref="PendingMaxWords"/> with its range.
+    /// </summary>
+    public TargetPreset? PendingPreset
+    {
+        get => _pendingPreset;
+        set
+        {
+            this.RaiseAndSetIfChanged(ref _pendingPreset, value);
+            if (value is { MinWords: not null } or { MaxWords: not null })
+            {
+                PendingMinWords = value.MinWords;
+                PendingMaxWords = value.MaxWords;
+            }
+        }
+    }
+
+    /// <summary>Presets offered by the open project's profile (empty for Novel).</summary>
+    public IReadOnlyList<TargetPreset> TargetPresets => Profile.TargetPresets;
+
+    public bool HasTargetPresets => TargetPresets.Count > 0;
+
+    /// <summary>False for Part nodes unless the profile allows Part targets.</summary>
+    public bool CanSetTarget => Node.Kind != NodeKind.Part || Profile.AllowsPartTargets;
+
+    /// <summary>Words counted against the target: the section total for Part nodes, else the node's own count.</summary>
+    public int EffectiveWordCount => Node.Kind == NodeKind.Part ? PartTotalWordCount : WordCount;
 
     // ── Computed display properties (OAPH) ────────────────────────────────────
 
@@ -304,10 +342,11 @@ public sealed class ChapterViewModel : ViewModelBase, IDisposable
 
         // ── OAPH: ProximityFill ───────────────────────────────────────────────
         _proximityFill = this
-            .WhenAnyValue(x => x.Target, x => x.WordCount,
-                (t, count) =>
+            .WhenAnyValue(x => x.Target, x => x.WordCount, x => x.PartTotalWordCount, x => x.Node,
+                (t, wordCount, partTotal, node) =>
                 {
                     if (t is null) return 0.0;
+                    var count = node.Kind == NodeKind.Part ? partTotal : wordCount;
                     var effectiveMax = t.MaxWords ?? t.MinWords ?? 1;
                     return Math.Min((double)count / effectiveMax, 1.0);
                 })
@@ -481,6 +520,10 @@ public sealed class ChapterViewModel : ViewModelBase, IDisposable
         await Avalonia.Threading.Dispatcher.UIThread.InvokeAsync(() =>
         {
             Target = target;
+            _pendingPreset = target?.Preset is { } key
+                ? Profile.TargetPresets.FirstOrDefault(p => p.Key == key)
+                : null;
+            this.RaisePropertyChanged(nameof(PendingPreset));
             PendingMinWords = target?.MinWords;
             PendingMaxWords = target?.MaxWords;
         });
@@ -491,10 +534,22 @@ public sealed class ChapterViewModel : ViewModelBase, IDisposable
         var newTarget = new WordCountTarget
         {
             MinWords = PendingMinWords,
-            MaxWords = PendingMaxWords
+            MaxWords = PendingMaxWords,
+            Preset = ResolvePresetKey()
         };
         await SetTargetAsync(newTarget).ConfigureAwait(false);
         TargetFlyoutCloseRequested?.Invoke(this);
+    }
+
+    /// <summary>Preset key to persist: the staged preset, or the custom preset once its range was edited.</summary>
+    private string? ResolvePresetKey()
+    {
+        var preset = PendingPreset;
+        if (preset is null) return null;
+        if (preset.MinWords is null && preset.MaxWords is null) return preset.Key;
+        return preset.MinWords == PendingMinWords && preset.MaxWords == PendingMaxWords
+            ? preset.Key
+            : TargetPresets.FirstOrDefault(p => p.MinWords is null && p.MaxWords is null)?.Key;
     }
 
     private async Task ClearTargetAsync()

@@ -153,6 +153,32 @@ public sealed class ChapterInfoViewModel : ViewModelBase, IDisposable
         set => this.RaiseAndSetIfChanged(ref _pendingTarget, value);
     }
 
+    /// <summary>Story-length presets of the current profile (empty for Novel).</summary>
+    public IReadOnlyList<TargetPreset> TargetPresets => Profile.TargetPresets;
+
+    public bool HasTargetPresets => TargetPresets.Count > 0;
+
+    private TargetPreset? _selectedPreset;
+    /// <summary>Preset chosen in the Target section; a non-custom choice fills <see cref="PendingTarget"/>.</summary>
+    public TargetPreset? SelectedPreset
+    {
+        get => _selectedPreset;
+        set
+        {
+            this.RaiseAndSetIfChanged(ref _selectedPreset, value);
+            if (value?.MinWords is { } min)
+                PendingTarget = min;
+        }
+    }
+
+    private void SyncSelectedPreset(WordCountTarget? target)
+    {
+        _selectedPreset = target?.Preset is { } key
+            ? TargetPresets.FirstOrDefault(p => p.Key == key)
+            : null;
+        this.RaisePropertyChanged(nameof(SelectedPreset));
+    }
+
     private double _proximityFill;
     public double ProximityFill
     {
@@ -407,7 +433,11 @@ public sealed class ChapterInfoViewModel : ViewModelBase, IDisposable
 
             _chapterDisposables.Add(
                 chapterVm.WhenAnyValue(x => x.Target)
-                    .Subscribe(t => TargetDisplay = FormatTargetDisplay(t)));
+                    .Subscribe(t =>
+                    {
+                        TargetDisplay = FormatTargetDisplay(t, Profile);
+                        SyncSelectedPreset(t);
+                    }));
 
             _chapterDisposables.Add(
                 chapterVm.WhenAnyValue(x => x.HasTarget)
@@ -478,7 +508,8 @@ public sealed class ChapterInfoViewModel : ViewModelBase, IDisposable
         PhaseEndDate = vm.PhaseData?.PhaseEndDate;
         SyncScheduleRows(vm.PhaseData);
         WordCount = vm.WordCount;
-        TargetDisplay = FormatTargetDisplay(vm.Target);
+        TargetDisplay = FormatTargetDisplay(vm.Target, Profile);
+        SyncSelectedPreset(vm.Target);
         HasTarget = vm.HasTarget;
         ProximityFill = vm.ProximityFill;
     }
@@ -522,6 +553,8 @@ public sealed class ChapterInfoViewModel : ViewModelBase, IDisposable
         this.RaisePropertyChanged(nameof(Profile));
         this.RaisePropertyChanged(nameof(StatusOptions));
         this.RaisePropertyChanged(nameof(PanelTitle));
+        this.RaisePropertyChanged(nameof(TargetPresets));
+        this.RaisePropertyChanged(nameof(HasTargetPresets));
         this.RaisePropertyChanged(nameof(ToggleMenuHeader));
         this.RaisePropertyChanged(nameof(ToggleToolTip));
         this.RaisePropertyChanged(nameof(DisplayStatus));
@@ -746,9 +779,18 @@ public sealed class ChapterInfoViewModel : ViewModelBase, IDisposable
         var chapterVm = _activeChapterVm;
         if (chapterVm == null) return;
 
-        WordCountTarget? target = minWords.HasValue
-            ? new WordCountTarget { MinWords = minWords.Value }
-            : null;
+        var preset = SelectedPreset;
+        WordCountTarget? target;
+        if (!minWords.HasValue)
+            target = null;
+        else if (preset is { MinWords: not null } && preset.MinWords == minWords)
+            target = new WordCountTarget { MinWords = preset.MinWords, MaxWords = preset.MaxWords, Preset = preset.Key };
+        else
+            target = new WordCountTarget
+            {
+                MinWords = minWords.Value,
+                Preset = preset is null ? null : TargetPresets.FirstOrDefault(p => p.MinWords is null && p.MaxWords is null)?.Key
+            };
 
         // Delegate persistence to ChapterViewModel.SetTargetCommand — it owns the lock.
         await chapterVm.SetTargetCommand.Execute(target);
@@ -809,16 +851,21 @@ public sealed class ChapterInfoViewModel : ViewModelBase, IDisposable
 
     // ── Static helpers ───────────────────────────────────────────────────────
 
-    private static string FormatTargetDisplay(WordCountTarget? target)
+    private static string FormatTargetDisplay(WordCountTarget? target, ProjectProfile profile)
     {
         if (target == null) return "—";
+        string text;
         if (target.MinWords.HasValue && target.MaxWords.HasValue)
-            return $"{target.MinWords:N0}–{target.MaxWords:N0} w";
-        if (target.MinWords.HasValue)
-            return $"{target.MinWords:N0} w";
-        if (target.MaxWords.HasValue)
-            return $"≤{target.MaxWords:N0} w";
-        return "—";
+            text = $"{target.MinWords:N0}–{target.MaxWords:N0} w";
+        else if (target.MinWords.HasValue)
+            text = $"{target.MinWords:N0} w";
+        else if (target.MaxWords.HasValue)
+            text = $"≤{target.MaxWords:N0} w";
+        else
+            return "—";
+
+        var label = profile.PresetLabel(target.Preset);
+        return label is not null && target.Preset != "custom" ? $"{label} · {text}" : text;
     }
 
     public async Task RestoreSettingsAsync()

@@ -126,7 +126,7 @@ public sealed class BookStatsViewModel : ViewModelBase
         _targetsService = targetsService;
 
         Disposables.Add(
-            workspace.WhenAnyValue(x => x.SelectedNode, x => x.HasWorkspace)
+            workspace.WhenAnyValue(x => x.SelectedNode, x => x.HasWorkspace, x => x.Profile)
                 .Subscribe(t => OnSelectionChanged(t.Item1, t.Item2)));
 
         Disposables.Add(Disposable.Create(() => _selectionDisposables.Dispose()));
@@ -139,7 +139,7 @@ public sealed class BookStatsViewModel : ViewModelBase
         _selectionDisposables.Dispose();
         _selectionDisposables = new CompositeDisposable();
 
-        if (!hasWorkspace)
+        if (!hasWorkspace || !_workspace.Profile.ShowsBookStats)
         {
             IsVisible = false;
             return;
@@ -162,9 +162,9 @@ public sealed class BookStatsViewModel : ViewModelBase
     private void ActivateBookMode()
     {
         IsVisible = true;
-        PanelTitle = "BOOK STATS";
-        ContextTitle = _workspace.WorkspaceName ?? "Book";
-        BarSectionLabel = "BY PART";
+        PanelTitle = _workspace.Profile.BookStatsTitle;
+        ContextTitle = _workspace.WorkspaceName ?? _workspace.Profile.CollectionNoun;
+        BarSectionLabel = _workspace.Profile.BookStatsBarLabel;
 
         TotalWordCount = _workspace.TotalWordCount;
         StatusSummary = _workspace.BookStatusSummary;
@@ -204,9 +204,9 @@ public sealed class BookStatsViewModel : ViewModelBase
     private void ActivatePartMode(ChapterViewModel partVm)
     {
         IsVisible = true;
-        PanelTitle = "PART STATS";
+        PanelTitle = _workspace.Profile.PartStatsTitle;
         ContextTitle = partVm.Node.Title;
-        BarSectionLabel = "BY CHAPTER";
+        BarSectionLabel = _workspace.Profile.PartStatsBarLabel;
 
         TotalWordCount = partVm.PartTotalWordCount;
         StatusSummary = partVm.PartStatusSummary;
@@ -362,13 +362,14 @@ public sealed class BookStatsViewModel : ViewModelBase
         }).ToList();
     }
 
-    private static ChapterStatus DominantStatus(IReadOnlyList<StatusCount> summary)
+    private ChapterStatus DominantStatus(IReadOnlyList<StatusCount> summary)
     {
+        var profile = _workspace.Profile;
         if (summary.Count == 0) return ChapterStatus.Planned;
-        foreach (var status in Enum.GetValues<ChapterStatus>())
+        foreach (var option in profile.VisibleStatuses)
         {
-            if (summary.Any(s => s.Status == status && s.Count > 0))
-                return status;
+            if (summary.Any(s => profile.DisplayStatus(s.Status) == option.Value && s.Count > 0))
+                return option.Value;
         }
         return summary[0].Status;
     }
