@@ -145,8 +145,10 @@ public class SettingsViewModel : ViewModelBase
 
     /// <summary>
     /// Keeps the beat board with the story across a Short Story ↔ Anthology switch: the Short Story board
-    /// becomes the first story's board, and back. A board is never overwritten; when the destination
-    /// already has one, nothing moves and the author is told.
+    /// becomes the first story's board, and back. The first story is the first included, present node in
+    /// Book.txt order — a Part (a story with scenes) or a chapter. A board is never overwritten; when the
+    /// destination already has one, or the edits on the shown board can't be saved, nothing moves and the
+    /// author is told.
     /// </summary>
     private async Task MoveBeatBoardForKindAsync(ProjectKind from, ProjectKind to)
     {
@@ -154,30 +156,29 @@ public class SettingsViewModel : ViewModelBase
             return;
 
         var root = _workspace.WorkspaceRoot;
-        var stories = _workspace.Nodes.Where(n => !n.Node.IsExcluded).ToList();
-        ChapterViewModel? story;
-        string fromKey, toKey;
+        string fromKey;
         if (from == ProjectKind.Story && to == ProjectKind.Anthology)
-        {
-            story = stories.FirstOrDefault(n => n.Node.Kind == NodeKind.Chapter);
             fromKey = BeatBoardService.ShortStoryBoardKey;
-            toKey = story?.Uuid ?? "";
-        }
         else if (from == ProjectKind.Anthology && to == ProjectKind.Story)
-        {
-            story = stories.FirstOrDefault();
-            fromKey = story?.Uuid ?? "";
-            toKey = BeatBoardService.ShortStoryBoardKey;
-        }
+            fromKey = "";
         else
-        {
             return;
-        }
 
-        if (story is null || string.IsNullOrEmpty(root)
-            || !BeatBoardService.IsValidBoardKey(fromKey) || !BeatBoardService.IsValidBoardKey(toKey)
+        var story = _workspace.Nodes.FirstOrDefault(n => !n.Node.IsExcluded && !n.Node.IsMissing);
+        if (from == ProjectKind.Anthology)
+            fromKey = story?.Uuid ?? "";
+        var toKey = to == ProjectKind.Anthology ? story?.Uuid ?? "" : BeatBoardService.ShortStoryBoardKey;
+
+        if (string.IsNullOrEmpty(root) || !BeatBoardService.IsValidBoardKey(fromKey)
             || !_beatBoards.BoardExists(root, fromKey))
             return;
+
+        if (story is null || !BeatBoardService.IsValidBoardKey(toKey))
+        {
+            _notifications.ShowInfo("The beats were not moved: there is no story to carry them. "
+                + "They are kept under the Short Story project type.");
+            return;
+        }
 
         var title = string.IsNullOrWhiteSpace(story.Node.Title) ? story.Node.RelativePath : story.Node.Title;
         if (_beatBoards.BoardExists(root, toKey))
@@ -189,8 +190,11 @@ public class SettingsViewModel : ViewModelBase
         }
 
         // Pending edits on the shown board are written first, so they move with it.
-        if (_beatBoard is not null)
-            await _beatBoard.FlushAsync();
+        if (_beatBoard is not null && !await _beatBoard.FlushAsync())
+        {
+            _notifications.ShowError("Beat edits couldn't be saved; beats were not moved.");
+            return;
+        }
 
         var moved = await _beatBoards.MoveBoardAsync(root, fromKey, toKey);
         if (!moved.IsSuccess)
