@@ -762,7 +762,6 @@ public class WorkspaceViewModel : ViewModelBase
             var activeNodes = model.Nodes.Items.OrderBy(n => n.Index).ToList();
             var activePaths = activeNodes.Select(n => n.RelativePath).ToList();
 
-            System.IO.File.AppendAllText("/tmp/claude-1000/-home-matteland-Documents-Hymnal-worktrees-short-stories/43c564d7-0489-475f-b155-59932d476ca1/scratchpad/trace.txt", "HYDTRACE 0 gen="+generation+" cur="+_workspaceGeneration+" root="+model.WorkspaceRoot+"\n");
             var registry = await _registryService.LoadAsync(model.WorkspaceRoot).ConfigureAwait(false);
             var originalRegistry = new Dictionary<string, ChapterRegistryEntry>(registry);
 
@@ -798,18 +797,13 @@ public class WorkspaceViewModel : ViewModelBase
                 _registryService.AssignUuid(registry, node.RelativePath, node.Title);
             }
 
-            System.IO.File.AppendAllText("/tmp/claude-1000/-home-matteland-Documents-Hymnal-worktrees-short-stories/43c564d7-0489-475f-b155-59932d476ca1/scratchpad/trace.txt", "HYDTRACE 1 gen="+generation+" cur="+_workspaceGeneration+" root="+model.WorkspaceRoot+"\n");
             if (RegistryChanged(originalRegistry, registry))
                 await _registryService.SaveAsync(model.WorkspaceRoot, registry).ConfigureAwait(false);
 
-            System.IO.File.AppendAllText("/tmp/claude-1000/-home-matteland-Documents-Hymnal-worktrees-short-stories/43c564d7-0489-475f-b155-59932d476ca1/scratchpad/trace.txt", "HYDTRACE 2 gen="+generation+" cur="+_workspaceGeneration+" root="+model.WorkspaceRoot+"\n");
             var phases = await _phaseDataService.LoadAsync(model.WorkspaceRoot).ConfigureAwait(false);
-            System.IO.File.AppendAllText("/tmp/claude-1000/-home-matteland-Documents-Hymnal-worktrees-short-stories/43c564d7-0489-475f-b155-59932d476ca1/scratchpad/trace.txt", "HYDTRACE 3 gen="+generation+" cur="+_workspaceGeneration+" root="+model.WorkspaceRoot+"\n");
             var targets = await _targetsService.LoadAsync(model.WorkspaceRoot).ConfigureAwait(false);
-            System.IO.File.AppendAllText("/tmp/claude-1000/-home-matteland-Documents-Hymnal-worktrees-short-stories/43c564d7-0489-475f-b155-59932d476ca1/scratchpad/trace.txt", "HYDTRACE 4 gen="+generation+" cur="+_workspaceGeneration+" root="+model.WorkspaceRoot+"\n");
             var projectedNodes = await ProjectSidebarNodesAsync(model, activeNodes, activePaths).ConfigureAwait(false);
 
-            System.IO.File.AppendAllText("/tmp/claude-1000/-home-matteland-Documents-Hymnal-worktrees-short-stories/43c564d7-0489-475f-b155-59932d476ca1/scratchpad/trace.txt", "HYDTRACE 5 gen="+generation+" cur="+_workspaceGeneration+" root="+model.WorkspaceRoot+"\n");
             if (generation != _workspaceGeneration)
                 return;
 
@@ -847,7 +841,6 @@ public class WorkspaceViewModel : ViewModelBase
                 vm.TargetFlyoutCloseRequested += CloseTargetFlyout;
             }
 
-            System.IO.File.AppendAllText("/tmp/claude-1000/-home-matteland-Documents-Hymnal-worktrees-short-stories/43c564d7-0489-475f-b155-59932d476ca1/scratchpad/trace.txt", "HYDTRACE 6 gen="+generation+" cur="+_workspaceGeneration+" root="+model.WorkspaceRoot+"\n");
             var countTargets = vms
                 .Where(vm => vm.Node.Kind == NodeKind.Chapter && !vm.Node.IsMissing && !vm.Node.IsExcluded)
                 .Select(vm => (Vm: vm, AbsPath: Path.Combine(model.ManuscriptRoot, vm.Node.RelativePath)))
@@ -893,7 +886,6 @@ public class WorkspaceViewModel : ViewModelBase
                 });
             }
 
-            System.IO.File.AppendAllText("/tmp/claude-1000/-home-matteland-Documents-Hymnal-worktrees-short-stories/43c564d7-0489-475f-b155-59932d476ca1/scratchpad/trace.txt", "HYDTRACE 7 gen="+generation+" cur="+_workspaceGeneration+" root="+model.WorkspaceRoot+"\n");
             await Avalonia.Threading.Dispatcher.UIThread.InvokeAsync(() =>
             {
                 if (generation != _workspaceGeneration)
