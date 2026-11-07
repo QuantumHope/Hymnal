@@ -12,9 +12,9 @@ public interface IBeatBoardService
     bool BoardExists(string workspaceRoot, string boardKey);
 
     /// <summary>
-    /// Moves board <paramref name="fromKey"/> to <paramref name="toKey"/>: writes the destination
-    /// atomically, then deletes the source. Fails, changing nothing, when the source is missing or the
-    /// destination already exists.
+    /// Moves board <paramref name="fromKey"/> to <paramref name="toKey"/> with one rename, which never
+    /// replaces an existing file. Fails, changing nothing, when the source is missing or the destination
+    /// already exists.
     /// </summary>
     Task<Result<Unit>> MoveBoardAsync(string workspaceRoot, string fromKey, string toKey);
 }

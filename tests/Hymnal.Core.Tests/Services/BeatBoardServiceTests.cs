@@ -159,6 +159,33 @@ public class BeatBoardServiceTests
     });
 
     [Fact]
+    public async Task Move_board_refuses_a_destination_created_after_the_checks()
+    {
+        var dir = Path.Combine(Path.GetTempPath(), "hymnal-beats-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(dir);
+        try
+        {
+            var uuid = Guid.NewGuid().ToString();
+            var svc = new BeatBoardService(new MetadataStore())
+            {
+                BeforeMove = () => WriteRaw(dir, uuid, "{\"schemaVersion\":1,\"beats\":[]}")
+            };
+            await svc.SaveAsync(dir, "story", [new Beat("1", "Source", "", null)]);
+            var source = File.ReadAllBytes(BeatBoardService.BoardFilePath(dir, "story"));
+
+            var result = await svc.MoveBoardAsync(dir, "story", uuid);
+
+            Assert.False(result.IsSuccess);
+            Assert.Equal(source, File.ReadAllBytes(BeatBoardService.BoardFilePath(dir, "story")));
+            Assert.Equal("{\"schemaVersion\":1,\"beats\":[]}", File.ReadAllText(BeatBoardService.BoardFilePath(dir, uuid)));
+        }
+        finally
+        {
+            Directory.Delete(dir, true);
+        }
+    }
+
+    [Fact]
     public Task Move_board_with_missing_source_fails() => WithTempDirAsync(async (dir, svc) =>
     {
         var uuid = Guid.NewGuid().ToString();

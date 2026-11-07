@@ -13,6 +13,9 @@ public sealed partial class BeatBoardService(IMetadataStore store) : IBeatBoardS
 
     private const int CurrentSchemaVersion = 1;
 
+    /// <summary>Test seam: runs between MoveBoardAsync's checks and the move itself.</summary>
+    internal Action? BeforeMove { get; init; }
+
     private static readonly JsonSerializerOptions JsonOptions = new()
     {
         PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
@@ -95,34 +98,34 @@ public sealed partial class BeatBoardService(IMetadataStore store) : IBeatBoardS
     public bool BoardExists(string workspaceRoot, string boardKey) =>
         IsValidBoardKey(boardKey) && File.Exists(BoardFilePath(workspaceRoot, boardKey));
 
-    public async Task<Result<Unit>> MoveBoardAsync(string workspaceRoot, string fromKey, string toKey)
+    public Task<Result<Unit>> MoveBoardAsync(string workspaceRoot, string fromKey, string toKey)
     {
         if (!IsValidBoardKey(fromKey) || !IsValidBoardKey(toKey))
-            return Result<Unit>.Fail("Beat board key is not valid.");
+            return Task.FromResult(Result<Unit>.Fail("Beat board key is not valid."));
         if (string.Equals(fromKey, toKey, StringComparison.Ordinal))
-            return Result<Unit>.Fail("A beat board can't be moved onto itself.");
+            return Task.FromResult(Result<Unit>.Fail("A beat board can't be moved onto itself."));
 
         var source = BoardFilePath(workspaceRoot, fromKey);
         var destination = BoardFilePath(workspaceRoot, toKey);
         if (!File.Exists(source))
-            return Result<Unit>.Fail($"{Path.GetFileName(source)} does not exist.");
+            return Task.FromResult(Result<Unit>.Fail($"{Path.GetFileName(source)} does not exist."));
         if (File.Exists(destination))
-            return Result<Unit>.Fail($"{Path.GetFileName(destination)} already exists; it was not overwritten.");
+            return Task.FromResult(Result<Unit>.Fail($"{Path.GetFileName(destination)} already exists; it was not overwritten."));
 
         try
         {
-            var json = await File.ReadAllTextAsync(source).ConfigureAwait(false);
-            await store.WriteTextAtomicAsync(destination, json).ConfigureAwait(false);
-            File.Delete(source);
-            return Result<Unit>.Ok(Unit.Default);
+            BeforeMove?.Invoke();
+            // One rename in the same folder: atomic, and it refuses to replace a board created meanwhile.
+            File.Move(source, destination, overwrite: false);
+            return Task.FromResult(Result<Unit>.Ok(Unit.Default));
         }
         catch (IOException ex)
         {
-            return Result<Unit>.Fail($"{Path.GetFileName(source)} could not be moved: {ex.Message}");
+            return Task.FromResult(Result<Unit>.Fail($"{Path.GetFileName(source)} could not be moved: {ex.Message}"));
         }
         catch (UnauthorizedAccessException ex)
         {
-            return Result<Unit>.Fail($"{Path.GetFileName(source)} could not be moved: {ex.Message}");
+            return Task.FromResult(Result<Unit>.Fail($"{Path.GetFileName(source)} could not be moved: {ex.Message}"));
         }
     }
 
