@@ -1,7 +1,7 @@
 <ResourceDictionary xmlns="https://github.com/avaloniaui"
                     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
 
-    <!-- Project type icons: 24x24 outline paths -->
+    <!-- Project type icons: 24x24 outline paths. Render stroked (Path with Stroke), not with PathIcon, which fills. -->
 
     <!-- Closed book -->
     <StreamGeometry x:Key="Icon.ProjectNovel">M6,3 L18,3 A1,1 0 0 1 19,4 L19,20 A1,1 0 0 1 18,21 L6,21 A1,1 0 0 1 5,20 L5,4 A1,1 0 0 1 6,3 Z M9,3 L9,21 M12,8 L16,8</StreamGeometry>

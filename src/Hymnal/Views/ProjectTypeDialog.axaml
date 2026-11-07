@@ -59,9 +59,15 @@
                                 Command="{Binding $parent[Window].((vm:ProjectTypeDialogViewModel)DataContext).SelectCommand}"
                                 CommandParameter="{Binding}">
                             <StackPanel Spacing="8">
-                                <PathIcon Width="40" Height="40" HorizontalAlignment="Left"
-                                          Foreground="{DynamicResource SynthwavePurpleBrush}"
+                                <!-- Outline icons: stroke on a 24x24 canvas (PathIcon would fill the open subpaths). -->
+                                <Viewbox Width="40" Height="40" HorizontalAlignment="Left">
+                                    <Path Width="24" Height="24"
+                                          Stroke="{DynamicResource SynthwavePurpleBrush}"
+                                          StrokeThickness="1.5"
+                                          StrokeLineCap="Round"
+                                          StrokeJoin="Round"
                                           Data="{Binding Info.IconKey, Converter={x:Static conv:IconKeyToGeometryConverter.Instance}}" />
+                                </Viewbox>
                                 <TextBlock Text="{Binding Info.Title}" FontSize="18" FontWeight="SemiBold"
                                            Foreground="{DynamicResource OnSurfaceBrush}" />
                                 <TextBlock Text="{Binding Info.Description}"
