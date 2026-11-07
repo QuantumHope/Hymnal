@@ -18,7 +18,7 @@
   { …json… }
   -->
   ```
-  JSON (camelCase): `{ "id", "status", "phaseStartDate", "phaseEndDate", "schedule", "target": { "preset", "minWords", "maxWords" }, "notes", "beats": [ { "id", "title", "note", "scenePath" } ] }`. Absent fields mean "none".
+  JSON (camelCase): `{ "id", "status", "phaseStartDate", "phaseEndDate", "schedule", "target": { "preset", "minWords", "maxWords" }, "notes", "beats": [ { "id", "title", "note", "scenePath", "sceneId" } ] }`. Absent fields mean "none".
 - Only the **last** block whose opening line is exactly `<!-- hymnal:v1` (trimmed of trailing whitespace) and which is followed by nothing but whitespace is recognized.
 - Split/merge preserve the prose bytes exactly, and the file's line ending (LF or CRLF, detected from the first line break; default LF).
 - Malformed JSON inside a recognized block → defaults + `ShowInfo` warning; the malformed block is kept as prose (never deleted) and a fresh block is appended after it on the next metadata write.
