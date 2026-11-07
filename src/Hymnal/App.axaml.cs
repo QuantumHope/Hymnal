@@ -114,6 +114,14 @@ public partial class App : Application
                     ? TopLevel.GetTopLevel(dl.MainWindow)
                     : null));
 
+        services.AddSingleton<ProjectSettingsService>();
+        services.AddSingleton<ProjectInitializer>();
+        services.AddSingleton<IProjectInitPrompt>(sp =>
+            new ProjectInitPrompt(() =>
+                App.Current?.ApplicationLifetime is IClassicDesktopStyleApplicationLifetime dl
+                    ? dl.MainWindow
+                    : null));
+
         services.AddSingleton<WorkspaceViewModel>(sp =>
             new WorkspaceViewModel(
                 sp.GetRequiredService<ManuscriptService>(),
@@ -129,7 +137,10 @@ public partial class App : Application
                 sp.GetRequiredService<WordCountService>(),
                 sp.GetRequiredService<WordCountHistoryService>(),
                 sp.GetRequiredService<IExclusionManifestService>(),
-                sp.GetRequiredService<IOrphanFileDiscoveryService>()));
+                sp.GetRequiredService<IOrphanFileDiscoveryService>(),
+                sp.GetRequiredService<ProjectSettingsService>(),
+                sp.GetRequiredService<ProjectInitializer>(),
+                sp.GetRequiredService<IProjectInitPrompt>()));
 
         services.AddSingleton<NotesViewModel>(sp =>
             new NotesViewModel(

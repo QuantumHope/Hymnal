@@ -1,0 +1,32 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        x:Class="Hymnal.Views.ConfirmInitializeDialog"
+        Title="Initialize project"
+        Width="440" Height="180"
+        CanResize="False"
+        ShowInTaskbar="False"
+        WindowStartupLocation="CenterOwner"
+        Background="#120932"
+        FontFamily="{DynamicResource InterFont}">
+
+    <Border BorderBrush="#2D1B5E" BorderThickness="1" Padding="16">
+        <StackPanel Spacing="16">
+            <TextBlock Text="This folder isn't a Hymnal project yet. Initialize it?"
+                       Foreground="{DynamicResource OnSurfaceBrush}"
+                       TextWrapping="Wrap" />
+            <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Spacing="8">
+                <Button Content="Initialize"
+                        IsDefault="True"
+                        Padding="12,6"
+                        Background="{DynamicResource SynthwavePurpleBrush}"
+                        Foreground="{DynamicResource OnSurfaceBrush}"
+                        BorderThickness="0"
+                        Click="InitializeButton_Click" />
+                <Button Content="Cancel"
+                        IsCancel="True"
+                        Padding="12,6"
+                        Click="CancelButton_Click" />
+            </StackPanel>
+        </StackPanel>
+    </Border>
+</Window>

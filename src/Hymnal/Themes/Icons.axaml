@@ -1,6 +1,15 @@
 <ResourceDictionary xmlns="https://github.com/avaloniaui"
                     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
 
-    <!-- Icon resources will be added here in future slices -->
+    <!-- Project type icons: 24x24 outline paths -->
+
+    <!-- Closed book -->
+    <StreamGeometry x:Key="Icon.ProjectNovel">M6,3 L18,3 A1,1 0 0 1 19,4 L19,20 A1,1 0 0 1 18,21 L6,21 A1,1 0 0 1 5,20 L5,4 A1,1 0 0 1 6,3 Z M9,3 L9,21 M12,8 L16,8</StreamGeometry>
+
+    <!-- Single page -->
+    <StreamGeometry x:Key="Icon.ProjectStory">M7,3 L14,3 L19,8 L19,20 A1,1 0 0 1 18,21 L7,21 A1,1 0 0 1 6,20 L6,4 A1,1 0 0 1 7,3 Z M14,3 L14,8 L19,8 M9,13 L16,13 M9,17 L16,17</StreamGeometry>
+
+    <!-- Stacked pages -->
+    <StreamGeometry x:Key="Icon.ProjectAnthology">M8,3 L19,3 A1,1 0 0 1 20,4 L20,15 A1,1 0 0 1 19,16 L8,16 A1,1 0 0 1 7,15 L7,4 A1,1 0 0 1 8,3 Z M4,7 L4,19 A1,1 0 0 0 5,20 L16,20 M10,8 L17,8 M10,12 L17,12</StreamGeometry>
 
 </ResourceDictionary>
