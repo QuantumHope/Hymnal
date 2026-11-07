@@ -119,4 +119,11 @@ public class ProjectProfileTests
     [InlineData(ProjectKind.Anthology, true)]
     public void ShowsIdeas_per_kind(ProjectKind kind, bool expected) =>
         Assert.Equal(expected, ForKind(kind).ShowsIdeas);
+
+    [Theory]
+    [InlineData(ProjectKind.Novel, false)]
+    [InlineData(ProjectKind.Story, true)]
+    [InlineData(ProjectKind.Anthology, true)]
+    public void UsesBeatBoard_per_kind(ProjectKind kind, bool expected) =>
+        Assert.Equal(expected, ForKind(kind).UsesBeatBoard);
 }

@@ -1,0 +1,27 @@
+{
+  "key": "tryFail",
+  "name": "Try/Fail Cycles",
+  "description": "The character pursues a goal through repeated attempts that build toward an outcome.",
+  "beats": [
+    {
+      "title": "Goal",
+      "note": "State what the character wants and why it matters to them."
+    },
+    {
+      "title": "Try 1 (fail)",
+      "note": "Have the character make a first attempt that fails."
+    },
+    {
+      "title": "Try 2 (fail, worse)",
+      "note": "Have a second attempt fail in a way that leaves things worse than before."
+    },
+    {
+      "title": "Try 3 (success or final failure)",
+      "note": "Let the last attempt either succeed or fail for good."
+    },
+    {
+      "title": "Outcome",
+      "note": "Show the consequences of how the attempts ended."
+    }
+  ]
+}

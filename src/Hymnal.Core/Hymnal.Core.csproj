@@ -21,6 +21,7 @@
 
   <ItemGroup>
     <EmbeddedResource Include="Resources\Prompts\*.txt" />
+    <EmbeddedResource Include="Resources\BeatTemplates\*.json" />
   </ItemGroup>
 
 </Project>

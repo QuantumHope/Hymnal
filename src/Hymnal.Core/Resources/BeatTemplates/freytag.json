@@ -1,0 +1,27 @@
+{
+  "key": "freytag",
+  "name": "Freytag's Pyramid",
+  "description": "A five-stage dramatic arc that rises to a climax and falls to a close.",
+  "beats": [
+    {
+      "title": "Exposition",
+      "note": "Establish the characters, setting and starting situation."
+    },
+    {
+      "title": "Rising Action",
+      "note": "Build tension through a series of events that deepen the conflict."
+    },
+    {
+      "title": "Climax",
+      "note": "Reach the turning point where the conflict peaks."
+    },
+    {
+      "title": "Falling Action",
+      "note": "Show the results of the climax as the tension eases."
+    },
+    {
+      "title": "Dénouement",
+      "note": "Tie off the remaining threads and show the new normal."
+    }
+  ]
+}

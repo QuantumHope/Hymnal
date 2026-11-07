@@ -1,0 +1,23 @@
+{
+  "key": "kishotenketsu",
+  "name": "Kishōtenketsu",
+  "description": "A four-part structure that builds through a twist rather than through conflict.",
+  "beats": [
+    {
+      "title": "Introduction",
+      "note": "Present the characters and setting."
+    },
+    {
+      "title": "Development",
+      "note": "Follow the situation forward without changing its direction."
+    },
+    {
+      "title": "Twist",
+      "note": "Introduce an unexpected element that recasts what came before."
+    },
+    {
+      "title": "Reconciliation",
+      "note": "Bring the earlier parts and the twist together into one view."
+    }
+  ]
+}

@@ -1,0 +1,27 @@
+{
+  "key": "threeAct",
+  "name": "Three-Act (short)",
+  "description": "A compact setup, confrontation and resolution structure for a short story.",
+  "beats": [
+    {
+      "title": "Hook",
+      "note": "Open with a moment that makes the reader want to keep reading."
+    },
+    {
+      "title": "Inciting Incident",
+      "note": "Show the event that disrupts the character's situation and starts the story."
+    },
+    {
+      "title": "Rising Complications",
+      "note": "Escalate the problem so each attempt to solve it raises the cost."
+    },
+    {
+      "title": "Climax",
+      "note": "Bring the central conflict to its decisive moment."
+    },
+    {
+      "title": "Resolution",
+      "note": "Show what has changed for the character now that the conflict is settled."
+    }
+  ]
+}

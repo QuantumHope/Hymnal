@@ -1,0 +1,35 @@
+{
+  "key": "sevenPoint",
+  "name": "Seven-Point",
+  "description": "A seven-beat structure that moves from the hook to the resolution through two turns and two pinches.",
+  "beats": [
+    {
+      "title": "Hook",
+      "note": "Start with the character in a state that the story will change."
+    },
+    {
+      "title": "Plot Turn 1",
+      "note": "Introduce the event that sends the character toward the main conflict."
+    },
+    {
+      "title": "Pinch 1",
+      "note": "Apply pressure that shows the strength of the opposing force."
+    },
+    {
+      "title": "Midpoint",
+      "note": "Shift the character from reacting to acting on the conflict."
+    },
+    {
+      "title": "Pinch 2",
+      "note": "Apply a second, heavier pressure that seems to leave no way out."
+    },
+    {
+      "title": "Plot Turn 2",
+      "note": "Give the character the last piece needed to resolve the conflict."
+    },
+    {
+      "title": "Resolution",
+      "note": "Show the final outcome and the state the character ends in."
+    }
+  ]
+}

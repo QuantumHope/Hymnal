@@ -1,0 +1,24 @@
+{
+  "key": "mice",
+  "name": "MICE Quotient",
+  "description": "Opens and closes one story thread, chosen from milieu, inquiry, character or event.",
+  "beats": [
+    {
+      "title": "Open: {thread}",
+      "note": "Introduce the {thread} thread so the reader expects it to be resolved."
+    },
+    {
+      "title": "Close: {thread}",
+      "note": "Resolve the {thread} thread in the way the opening promised."
+    }
+  ],
+  "parameter": {
+    "name": "thread",
+    "options": [
+      "Milieu",
+      "Inquiry",
+      "Character",
+      "Event"
+    ]
+  }
+}
