@@ -223,7 +223,7 @@ public class AiChatViewModel : ViewModelBase, IDisposable
 
         // Build context bundle
         var contextBuilder = GetContextBuilderForCurrentMode();
-        var systemPrompt = _roleProvider.GetSystemPrompt(SelectedRole, ProjectKind.Novel); // TODO(Task 6): use _workspace.Profile.Kind
+        var systemPrompt = _roleProvider.GetSystemPrompt(SelectedRole, _workspace.Profile.Kind);
         var contextRequest = new ContextRequest(
             Scope: SelectedScope,
             WorkspaceRoot: _workspace.WorkspaceRoot,

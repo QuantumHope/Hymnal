@@ -43,4 +43,15 @@ public static class ReactiveUiTestBootstrap
         _session!.Dispatch(() => result = action(), CancellationToken.None).GetAwaiter().GetResult();
         return result!;
     }
+
+    /// <summary>
+    /// Runs an async operation on the headless UI thread; the session keeps the dispatcher
+    /// loop running until the returned task completes, so UI-context continuations and
+    /// <c>Dispatcher.UIThread.InvokeAsync</c> callbacks are processed.
+    /// </summary>
+    public static Task<T> RunOnUiThreadAsync<T>(Func<Task<T>> action)
+    {
+        EnsureInitialized();
+        return _session!.Dispatch(action, CancellationToken.None);
+    }
 }

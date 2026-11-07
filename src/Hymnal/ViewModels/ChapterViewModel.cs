@@ -61,8 +61,19 @@ public sealed class ChapterViewModel : ViewModelBase, IDisposable
     public ChapterStatus Status
     {
         get => _status;
-        private set => this.RaiseAndSetIfChanged(ref _status, value);
+        private set
+        {
+            if (_status == value) return;
+            this.RaiseAndSetIfChanged(ref _status, value);
+            this.RaisePropertyChanged(nameof(StatusLabel));
+        }
     }
+
+    /// <summary>Project profile governing statuses, phases and labels for this chapter.</summary>
+    public ProjectProfile Profile { get; }
+
+    /// <summary>Profile-specific display label for <see cref="Status"/>.</summary>
+    public string StatusLabel => Profile.LabelFor(Status);
 
     private PhaseData? _phaseData;
     public PhaseData? PhaseData
@@ -254,11 +265,13 @@ public sealed class ChapterViewModel : ViewModelBase, IDisposable
         IAppSettingsStore settingsStore,
         INotificationService notificationService,
         string workspaceRoot,
-        WordCountTarget? target = null)
+        WordCountTarget? target = null,
+        ProjectProfile? profile = null)
     {
         _node = node;        Uuid = uuid;
+        Profile = profile ?? ProjectProfile.Novel;
         _phaseData = phaseData;
-        _status = phaseData?.Status ?? ChapterStatus.Outlining;
+        _status = phaseData?.Status ?? Profile.DefaultStatus;
 
         _phaseDataService = phaseDataService;
         _targetsService = targetsService;
@@ -392,7 +405,7 @@ public sealed class ChapterViewModel : ViewModelBase, IDisposable
             var basePhaseData = current ?? _phaseData;
             updated = new PhaseData
             {
-                Status         = basePhaseData?.Status ?? ChapterStatus.Outlining,
+                Status         = basePhaseData?.Status ?? Profile.DefaultStatus,
                 PhaseStartDate = startDate,
                 PhaseEndDate   = endDate
             };
@@ -498,8 +511,8 @@ public sealed class ChapterViewModel : ViewModelBase, IDisposable
 
         await _phaseDataService.UpsertAsync(_workspaceRoot, Uuid, current =>
         {
-            var basePhaseData = current ?? _phaseData ?? PhaseDataService.DefaultPhaseData;
-            var result = PhaseCompletion.CompleteAndAdvance(basePhaseData, today);
+            var basePhaseData = current ?? _phaseData ?? PhaseDataService.DefaultPhaseDataFor(Profile);
+            var result = PhaseCompletion.CompleteAndAdvance(basePhaseData, today, Profile);
             if (!result.IsSuccess)
             {
                 error = result.Error;
@@ -537,7 +550,7 @@ public sealed class ChapterViewModel : ViewModelBase, IDisposable
         return sb.ToString();
     }
 
-    private static string FormatCurrentPhaseDate(
+    private string FormatCurrentPhaseDate(
         ChapterStatus status,
         PhaseData? phaseData,
         Func<PhaseSegment?, DateOnly?> selector)
@@ -547,7 +560,7 @@ public sealed class ChapterViewModel : ViewModelBase, IDisposable
         return date?.ToString("yyyy-MM-dd") ?? "—";
     }
 
-    private static string FormatCurrentPhaseProgress(ChapterStatus status, PhaseData? phaseData)
+    private string FormatCurrentPhaseProgress(ChapterStatus status, PhaseData? phaseData)
     {
         var seg = GetCurrentPhaseSegment(status, phaseData);
         if (seg is null || seg.Progress <= 0)
@@ -556,12 +569,12 @@ public sealed class ChapterViewModel : ViewModelBase, IDisposable
         return $"{Math.Round(seg.Progress * 100.0):0}%";
     }
 
-    private static PhaseSegment? GetCurrentPhaseSegment(ChapterStatus status, PhaseData? phaseData)
+    private PhaseSegment? GetCurrentPhaseSegment(ChapterStatus status, PhaseData? phaseData)
     {
         if (phaseData is null)
             return null;
 
-        return GanttProjection.BuildSegments(phaseData)
+        return GanttProjection.BuildSegments(phaseData, Profile)
             .FirstOrDefault(s => string.Equals(s.PhaseName, status.ToString(), StringComparison.Ordinal));
     }
 

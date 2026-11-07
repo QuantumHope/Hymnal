@@ -37,6 +37,9 @@ public class WorkspaceViewModel : ViewModelBase
     private readonly WordCountHistoryService _historyService;
     private readonly IExclusionManifestService _exclusionManifestService;
     private readonly IOrphanFileDiscoveryService _orphanFileDiscoveryService;
+    private readonly ProjectSettingsService? _projectSettings;
+    private readonly ProjectInitializer? _projectInitializer;
+    private readonly IProjectInitPrompt? _initPrompt;
     private ManuscriptModel? _model;
     private int _workspaceGeneration;
     private Task? _hydrationTask;
@@ -56,6 +59,14 @@ public class WorkspaceViewModel : ViewModelBase
     {
         get => _isLoading;
         private set => this.RaiseAndSetIfChanged(ref _isLoading, value);
+    }
+
+    private ProjectProfile _profile = ProjectProfile.Novel;
+    /// <summary>Profile of the open workspace's project kind (Novel when none is open).</summary>
+    public ProjectProfile Profile
+    {
+        get => _profile;
+        private set => this.RaiseAndSetIfChanged(ref _profile, value);
     }
 
     private bool _hasWorkspace;
@@ -180,7 +191,10 @@ public class WorkspaceViewModel : ViewModelBase
         WordCountService wordCountService,
         WordCountHistoryService historyService,
         IExclusionManifestService? exclusionManifestService = null,
-        IOrphanFileDiscoveryService? orphanFileDiscoveryService = null)
+        IOrphanFileDiscoveryService? orphanFileDiscoveryService = null,
+        ProjectSettingsService? projectSettings = null,
+        ProjectInitializer? projectInitializer = null,
+        IProjectInitPrompt? initPrompt = null)
     {
         _manuscriptService = manuscriptService;
         _structureService = structureService;
@@ -196,6 +210,9 @@ public class WorkspaceViewModel : ViewModelBase
         _historyService = historyService;
         _exclusionManifestService = exclusionManifestService ?? new ExclusionManifestService(new MetadataStore());
         _orphanFileDiscoveryService = orphanFileDiscoveryService ?? new OrphanFileDiscoveryService();
+        _projectSettings = projectSettings;
+        _projectInitializer = projectInitializer;
+        _initPrompt = initPrompt;
         _editor.HasWorkspace = false;
 
         Nodes = new ReadOnlyObservableCollection<ChapterViewModel>(_nodes);
@@ -519,6 +536,8 @@ public class WorkspaceViewModel : ViewModelBase
             return Result<Unit>.Fail(result.Error!);
         }
 
+        await LoadProfileAsync(workspaceRoot);
+
         // Rebuild node list without closing the editor.
         BindModel(result.Value!);
 
@@ -536,6 +555,8 @@ public class WorkspaceViewModel : ViewModelBase
         var path = await _folderPicker.PickFolderAsync();
         if (path == null) return;
 
+        if (!await InitializeProjectIfNeededAsync(path)) return;
+
         IsLoading = true;
         ErrorMessage = null;
         try
@@ -550,6 +571,7 @@ public class WorkspaceViewModel : ViewModelBase
 
             ErrorMessage = null;
             await _settingsStore.SetAsync("lastWorkspacePath", path);
+            await LoadProfileAsync(result.Value!.WorkspaceRoot);
             _editor.HasWorkspace = true;
             BindModel(result.Value!);
         }
@@ -557,6 +579,68 @@ public class WorkspaceViewModel : ViewModelBase
         {
             IsLoading = false;
         }
+    }
+
+    /// <summary>
+    /// Re-reads the workspace's project settings, updates <see cref="Profile"/>, and rebuilds
+    /// the chapter list so every chapter picks up the new profile. The editor's active file is kept.
+    /// </summary>
+    public async Task<Result<Unit>> ReloadProjectAsync()
+    {
+        if (_model == null)
+            return Result<Unit>.Ok(Unit.Default);
+
+        // ReloadWorkspaceAsync re-reads project.json before rebinding.
+        return await ReloadWorkspaceAsync(WorkspaceRoot, BookTxtPath, reselectBook: false);
+    }
+
+    /// <summary>
+    /// Loads project.json for <paramref name="workspaceRoot"/> into <see cref="Profile"/>.
+    /// Missing settings service or file → Novel; unreadable file → Novel plus an info notice.
+    /// </summary>
+    private async Task LoadProfileAsync(string workspaceRoot)
+    {
+        if (_projectSettings == null)
+        {
+            Profile = ProjectProfile.Novel;
+            return;
+        }
+
+        var result = await _projectSettings.LoadAsync(workspaceRoot);
+        if (result.IsSuccess)
+        {
+            Profile = ProjectProfile.For(result.Value!);
+            return;
+        }
+
+        _notificationService.ShowInfo($"Couldn't read project settings ({result.Error}). Opening as a novel.");
+        Profile = ProjectProfile.Novel;
+    }
+
+    /// <summary>
+    /// Offers to initialize a folder that has no Book.txt. Returns false when the user
+    /// declines or cancels, or initialization fails; true when loading should continue.
+    /// </summary>
+    private async Task<bool> InitializeProjectIfNeededAsync(string path)
+    {
+        if (_initPrompt == null || _projectInitializer == null || !ProjectInitializer.NeedsInitialization(path))
+            return true;
+
+        if (!await _initPrompt.ConfirmInitializeAsync(path))
+            return false;
+
+        var kind = await _initPrompt.ChooseProjectKindAsync();
+        if (kind == null)
+            return false;
+
+        var init = await _projectInitializer.InitializeAsync(path, kind.Value);
+        if (!init.IsSuccess)
+        {
+            _notificationService.ShowError(init.Error!);
+            return false;
+        }
+
+        return true;
     }
 
     private async Task CloseWorkspaceAsync()
@@ -582,6 +666,7 @@ public class WorkspaceViewModel : ViewModelBase
         SelectedNode = null;
         HasWorkspace = false;
         WorkspaceName = null;
+        Profile = ProjectProfile.Novel;
         this.RaisePropertyChanged(nameof(WorkspaceRoot));
         this.RaisePropertyChanged(nameof(BookTxtPath));
         _workspaceChanged.OnNext(Unit.Default);
@@ -608,6 +693,7 @@ public class WorkspaceViewModel : ViewModelBase
             var result = await _manuscriptService.LoadWorkspaceAsync(lastPath);
             if (!result.IsSuccess) return;
 
+            await LoadProfileAsync(result.Value!.WorkspaceRoot);
             BindModel(result.Value!);
             _editor.HasWorkspace = true;
 
@@ -666,16 +752,17 @@ public class WorkspaceViewModel : ViewModelBase
 
         // Track registry/phase hydration so restore waits for the active workspace.
         var generation = ++_workspaceGeneration;
-        _hydrationTask = LoadRegistryAndPhaseDataAsync(model, generation);
+        _hydrationTask = LoadRegistryAndPhaseDataAsync(model, generation, Profile);
     }
 
-    private async Task LoadRegistryAndPhaseDataAsync(ManuscriptModel model, int generation)
+    private async Task LoadRegistryAndPhaseDataAsync(ManuscriptModel model, int generation, ProjectProfile profile)
     {
         try
         {
             var activeNodes = model.Nodes.Items.OrderBy(n => n.Index).ToList();
             var activePaths = activeNodes.Select(n => n.RelativePath).ToList();
 
+            System.IO.File.AppendAllText("/tmp/claude-1000/-home-matteland-Documents-Hymnal-worktrees-short-stories/43c564d7-0489-475f-b155-59932d476ca1/scratchpad/trace.txt", "HYDTRACE 0 gen="+generation+" cur="+_workspaceGeneration+" root="+model.WorkspaceRoot+"\n");
             var registry = await _registryService.LoadAsync(model.WorkspaceRoot).ConfigureAwait(false);
             var originalRegistry = new Dictionary<string, ChapterRegistryEntry>(registry);
 
@@ -711,13 +798,18 @@ public class WorkspaceViewModel : ViewModelBase
                 _registryService.AssignUuid(registry, node.RelativePath, node.Title);
             }
 
+            System.IO.File.AppendAllText("/tmp/claude-1000/-home-matteland-Documents-Hymnal-worktrees-short-stories/43c564d7-0489-475f-b155-59932d476ca1/scratchpad/trace.txt", "HYDTRACE 1 gen="+generation+" cur="+_workspaceGeneration+" root="+model.WorkspaceRoot+"\n");
             if (RegistryChanged(originalRegistry, registry))
                 await _registryService.SaveAsync(model.WorkspaceRoot, registry).ConfigureAwait(false);
 
+            System.IO.File.AppendAllText("/tmp/claude-1000/-home-matteland-Documents-Hymnal-worktrees-short-stories/43c564d7-0489-475f-b155-59932d476ca1/scratchpad/trace.txt", "HYDTRACE 2 gen="+generation+" cur="+_workspaceGeneration+" root="+model.WorkspaceRoot+"\n");
             var phases = await _phaseDataService.LoadAsync(model.WorkspaceRoot).ConfigureAwait(false);
+            System.IO.File.AppendAllText("/tmp/claude-1000/-home-matteland-Documents-Hymnal-worktrees-short-stories/43c564d7-0489-475f-b155-59932d476ca1/scratchpad/trace.txt", "HYDTRACE 3 gen="+generation+" cur="+_workspaceGeneration+" root="+model.WorkspaceRoot+"\n");
             var targets = await _targetsService.LoadAsync(model.WorkspaceRoot).ConfigureAwait(false);
+            System.IO.File.AppendAllText("/tmp/claude-1000/-home-matteland-Documents-Hymnal-worktrees-short-stories/43c564d7-0489-475f-b155-59932d476ca1/scratchpad/trace.txt", "HYDTRACE 4 gen="+generation+" cur="+_workspaceGeneration+" root="+model.WorkspaceRoot+"\n");
             var projectedNodes = await ProjectSidebarNodesAsync(model, activeNodes, activePaths).ConfigureAwait(false);
 
+            System.IO.File.AppendAllText("/tmp/claude-1000/-home-matteland-Documents-Hymnal-worktrees-short-stories/43c564d7-0489-475f-b155-59932d476ca1/scratchpad/trace.txt", "HYDTRACE 5 gen="+generation+" cur="+_workspaceGeneration+" root="+model.WorkspaceRoot+"\n");
             if (generation != _workspaceGeneration)
                 return;
 
@@ -744,7 +836,8 @@ public class WorkspaceViewModel : ViewModelBase
                         _settingsStore,
                         _notificationService,
                         model.WorkspaceRoot,
-                        target);
+                        target,
+                        profile);
                 })
                 .ToList();
 
@@ -754,6 +847,7 @@ public class WorkspaceViewModel : ViewModelBase
                 vm.TargetFlyoutCloseRequested += CloseTargetFlyout;
             }
 
+            System.IO.File.AppendAllText("/tmp/claude-1000/-home-matteland-Documents-Hymnal-worktrees-short-stories/43c564d7-0489-475f-b155-59932d476ca1/scratchpad/trace.txt", "HYDTRACE 6 gen="+generation+" cur="+_workspaceGeneration+" root="+model.WorkspaceRoot+"\n");
             var countTargets = vms
                 .Where(vm => vm.Node.Kind == NodeKind.Chapter && !vm.Node.IsMissing && !vm.Node.IsExcluded)
                 .Select(vm => (Vm: vm, AbsPath: Path.Combine(model.ManuscriptRoot, vm.Node.RelativePath)))
@@ -799,6 +893,7 @@ public class WorkspaceViewModel : ViewModelBase
                 });
             }
 
+            System.IO.File.AppendAllText("/tmp/claude-1000/-home-matteland-Documents-Hymnal-worktrees-short-stories/43c564d7-0489-475f-b155-59932d476ca1/scratchpad/trace.txt", "HYDTRACE 7 gen="+generation+" cur="+_workspaceGeneration+" root="+model.WorkspaceRoot+"\n");
             await Avalonia.Threading.Dispatcher.UIThread.InvokeAsync(() =>
             {
                 if (generation != _workspaceGeneration)
