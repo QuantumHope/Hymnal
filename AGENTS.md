@@ -67,7 +67,7 @@ dotnet run --project src/Hymnal/Hymnal.csproj
 dotnet test Hymnal.slnx
 ```
 
-Baseline: 574 tests. That count is the **sum of per-filter runs** (see Tests below), not one full run — a single full `dotnet test Hymnal.slnx` run hangs. Per-filter runs: 573 pass; `GanttView_RowMoveShortcutHelper_DelegatesForEditableChapterRowsAndIgnoresPartRows` always hangs.
+Baseline: 649 tests. That count is the **sum of per-filter runs** (see Tests below; it matches `dotnet test Hymnal.slnx --list-tests`), not one full run — a single full `dotnet test Hymnal.slnx` run hangs. Per-filter runs: 648 pass; `GanttView_RowMoveShortcutHelper_DelegatesForEditableChapterRowsAndIgnoresPartRows` always hangs.
 
 ## Key Patterns
 
@@ -87,7 +87,7 @@ Baseline: 574 tests. That count is the **sum of per-filter runs** (see Tests bel
 - `ManuscriptModel` holds chapters in a `SourceCache<ChapterNode, string>` (DynamicData) keyed by `RelativePath` — bind via `.Connect().AsObservableList()` or `.Bind()` to an `ObservableCollection`
 - **Project kinds** — `.hymnal-data/project.json` (`{schemaVersion, kind: novel|story|anthology, storage: sidecar|embedded}`) is read/written by `ProjectSettingsService` (missing file = Novel/Sidecar). `ProjectProfile.For(settings)` turns it into the profile (statuses, Gantt phases, labels, target presets, feature flags). `WorkspaceViewModel.Profile` exposes the open workspace's profile; `ReloadProjectAsync()` re-reads it and rebuilds the chapter list. Story/anthology statuses relabel a subset of `ChapterStatus` (Planned/Drafting/Editing/Done shown as Idea/Drafting/Revising/Done) — stored values are never rewritten. Switch kind from Settings → Project.
 - `ChapterNode` is an immutable `record` — `Key == RelativePath` (both are forward-slash normalized); `NodeKind.Part` nodes are non-selectable in the sidebar
-- **Story ideas** (story/anthology only, `ProjectProfile.ShowsIdeas`) — `.hymnal-data/ideas.json` (`{schemaVersion: 1, ideas: [...]}`, state `new|developing|used|shelved`) is read/written only through `IStoryIdeasService`; a malformed file makes the Ideas view read-only and is never overwritten. `StoryIdeaPromoter` turns an idea into a new story (Anthology only). `IdeasViewModel` backs the IDEAS shell mode (`ShellMode.Ideas`, shown only while `MainWindowViewModel.IsIdeasModeAvailable`); Ctrl+Shift+I quick-captures an idea from any mode. Pending idea edits are flushed when the main window closes (`MainWindowViewModel.FlushPendingEditsAsync`).
+- **Story ideas** (story/anthology only, `ProjectProfile.ShowsIdeas`) — `.hymnal-data/ideas.json` (`{schemaVersion: 1, ideas: [...]}`, state `new|developing|used|shelved`) is read/written only through `IStoryIdeasService`; a malformed file makes the Ideas view read-only and is never overwritten. `StoryIdeaPromoter` turns an idea into a new story (Anthology only). `IdeasViewModel` backs the IDEAS shell mode (`ShellMode.Ideas`, shown only while `MainWindowViewModel.IsIdeasModeAvailable`); Ctrl+Shift+I quick-captures an idea from any mode. Pending idea edits are flushed when the main window closes (`MainWindowViewModel.FlushPendingEditsBeforeCloseAsync`, bounded wait; on failure the window asks before closing).
 
 ### DI Registration
 - Registration order in `App.axaml.cs` matters: `EditorViewModel` must be registered before `WorkspaceViewModel`; they are both `AddSingleton`

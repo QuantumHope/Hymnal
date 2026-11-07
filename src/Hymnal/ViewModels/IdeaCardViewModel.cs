@@ -107,20 +107,28 @@ public sealed class IdeaCardViewModel : ViewModelBase, IDisposable
     private static readonly IReadOnlyList<IdeaState> UsedStateOptions =
         [IdeaState.New, IdeaState.Developing, IdeaState.Used, IdeaState.Shelved];
 
-    /// <summary>States for this card's editor picker: a used idea also lists Used so it can be shown.</summary>
+    /// <summary>
+    /// States for this card's editor picker: a used idea lists Used so it can be shown. Fixed for the
+    /// card's lifetime, since no edit moves an idea into or out of Used.
+    /// </summary>
     public IReadOnlyList<IdeaState> StateOptions => _state == IdeaState.Used ? UsedStateOptions : SelectableStates;
 
+    /// <summary>False for a used idea: its state is read-only.</summary>
+    public bool IsStateEditable => _state != IdeaState.Used;
+
     private IdeaState _state;
+    /// <summary>
+    /// The idea's state. Used is set only by promoting, never in the editor, and a used idea's state
+    /// is read-only (it keeps its story link and can't be promoted again).
+    /// </summary>
     public IdeaState State
     {
         get => _state;
         set
         {
-            // Used is set only by promoting, never picked in the editor.
-            if (value == IdeaState.Used && _state != IdeaState.Used)
+            if (value == IdeaState.Used || _state == IdeaState.Used)
                 return;
-            if (SetEdited(ref _state, value, nameof(State)))
-                this.RaisePropertyChanged(nameof(StateOptions));
+            SetEdited(ref _state, value, nameof(State));
         }
     }
 

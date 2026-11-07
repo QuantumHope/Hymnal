@@ -585,9 +585,33 @@ public class MainWindowViewModel : ViewModelBase
     }
 
     /// <summary>
-    /// Writes edits still waiting on a debounced save (story ideas), e.g. before the window closes.
+    /// Writes edits still waiting on a debounced save (story ideas) before the window closes, waiting
+    /// at most <paramref name="timeout"/>. False when they could not be saved in time, so the view can
+    /// ask whether to close anyway. Completes synchronously when nothing is pending.
     /// </summary>
-    public Task FlushPendingEditsAsync() => IdeasViewModel?.FlushAsync() ?? Task.CompletedTask;
+    public async Task<bool> FlushPendingEditsBeforeCloseAsync(TimeSpan timeout)
+    {
+        if (IdeasViewModel == null)
+            return true;
+
+        try
+        {
+            var flush = IdeasViewModel.TryFlushAsync();
+            if (!flush.IsCompleted)
+            {
+                using var cancelDelay = new System.Threading.CancellationTokenSource();
+                var finished = await Task.WhenAny(flush, Task.Delay(timeout, cancelDelay.Token));
+                cancelDelay.Cancel();
+                if (finished != flush)
+                    return false;
+            }
+            return await flush;
+        }
+        catch
+        {
+            return false;
+        }
+    }
 
     // ── Write layout persistence ──────────────────────────────────────────────
 

@@ -44,6 +44,7 @@ public sealed class IdeasViewModel : ViewModelBase, IDisposable
     /// <summary>Workspace root the current ideas were loaded from; null when nothing is loaded.</summary>
     private string? _loadedRoot;
     private bool _savePending;
+    private bool _lastSaveFailed;
     private Task _saveChain = Task.CompletedTask;
     private ProjectKind? _loadedKind;
     private int _loadGeneration;
@@ -91,7 +92,8 @@ public sealed class IdeasViewModel : ViewModelBase, IDisposable
         _canPromote = Observable.CombineLatest(
                 profile, selectedState, this.WhenAnyValue(x => x.IsReadOnly), showsOpenWorkspace,
                 (p, state, readOnly, current) =>
-                    p.Kind == ProjectKind.Anthology && state is { } s && s != IdeaState.Used && !readOnly && current)
+                    p.Kind == ProjectKind.Anthology && state is { } s && s != IdeaState.Used
+                    && Selected?.StoryId == null && !readOnly && current)
             .DistinctUntilChanged()
             .ToProperty(this, x => x.CanPromote);
         Disposables.Add(_canPromote);
@@ -450,7 +452,7 @@ public sealed class IdeasViewModel : ViewModelBase, IDisposable
     public async Task PromoteSelectedAsync()
     {
         var card = Selected;
-        if (card == null || !CanPromote || !ShowsOpenWorkspace)
+        if (card == null || card.StoryId != null || !CanPromote || !ShowsOpenWorkspace)
             return;
         var root = _loadedRoot!;
 
@@ -508,17 +510,28 @@ public sealed class IdeasViewModel : ViewModelBase, IDisposable
         return _saveChain;
     }
 
+    /// <summary>
+    /// Writes pending edits now; true when nothing is left unsaved (the latest write succeeded).
+    /// </summary>
+    public async Task<bool> TryFlushAsync()
+    {
+        await FlushAsync();
+        return !_savePending && !_lastSaveFailed;
+    }
+
     private async Task SaveAfterAsync(Task previous, string root, IReadOnlyList<StoryIdea> snapshot)
     {
         await previous;
         try
         {
             var result = await _ideas.SaveAsync(root, snapshot);
+            _lastSaveFailed = !result.IsSuccess;
             if (!result.IsSuccess)
                 _notifications.ShowError(result.Error!);
         }
         catch (Exception ex)
         {
+            _lastSaveFailed = true;
             _notifications.ShowError($"Failed to save ideas: {ex.Message}");
         }
     }

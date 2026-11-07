@@ -159,7 +159,7 @@ public sealed class IdeasShellModeTests : IDisposable
                     Task.FromResult<(string Title, string Premise)?>(("The Lighthouse", "A keeper sees a ship that sank."));
 
                 await Within(window.QuickCaptureIdeaCommand.Execute().ToTask());
-                await Within(window.FlushPendingEditsAsync());
+                Assert.True(await Within(window.FlushPendingEditsBeforeCloseAsync(TimeSpan.FromSeconds(5))));
 
                 // Capturing doesn't leave the current view.
                 Assert.Equal(ShellMode.Write, window.ActiveMode);
@@ -192,7 +192,7 @@ public sealed class IdeasShellModeTests : IDisposable
                 };
 
                 await Within(window.QuickCaptureIdeaCommand.Execute().ToTask());
-                await Within(window.FlushPendingEditsAsync());
+                Assert.True(await Within(window.FlushPendingEditsBeforeCloseAsync(TimeSpan.FromSeconds(5))));
 
                 Assert.True(asked);
                 Assert.Empty(window.IdeasViewModel!.Cards);
@@ -222,7 +222,7 @@ public sealed class IdeasShellModeTests : IDisposable
 
                 // The debounce never fires: the test scheduler is not advanced.
                 ideas.Selected.Notes = "Typed just before closing";
-                await Within(window.FlushPendingEditsAsync());
+                Assert.True(await Within(window.FlushPendingEditsBeforeCloseAsync(TimeSpan.FromSeconds(5))));
             });
 
             Assert.Equal("Typed just before closing", Assert.Single(await LoadFromDiskAsync(root)).Notes);
@@ -231,7 +231,7 @@ public sealed class IdeasShellModeTests : IDisposable
     }
 
     [Fact]
-    public async Task Ideas_view_state_picker_shows_used_and_keeps_selection_when_options_change()
+    public async Task Ideas_view_state_picker_shows_used_read_only_and_keeps_each_cards_state()
     {
         var root = CreateWorkspace(AnthologyJson);
         try
@@ -253,12 +253,12 @@ public sealed class IdeasShellModeTests : IDisposable
                 ideas.ShowUsedAndShelved = true;
 
                 var view = new Hymnal.Views.IdeasView { DataContext = ideas };
-                var host = new Avalonia.Controls.Window { Content = view, Width = 1280, Height = 800 };
+                var host = new Window { Content = view, Width = 1280, Height = 800 };
                 host.Show();
                 try
                 {
-                    var statePicker = view.FindControl<Avalonia.Controls.ComboBox>("IdeaStatePicker")!;
-                    var targetPicker = view.FindControl<Avalonia.Controls.ComboBox>("IdeaTargetPicker")!;
+                    var statePicker = view.FindControl<ComboBox>("IdeaStatePicker")!;
+                    var targetPicker = view.FindControl<ComboBox>("IdeaTargetPicker")!;
                     var used1 = ideas.Cards.Single(c => c.Id == "u1");
                     var fresh = ideas.Cards.Single(c => c.Id == "n");
                     var used2 = ideas.Cards.Single(c => c.Id == "u2");
@@ -266,20 +266,26 @@ public sealed class IdeasShellModeTests : IDisposable
                     ideas.Selected = used1;
                     Avalonia.Threading.Dispatcher.UIThread.RunJobs();
                     Assert.Equal(IdeaState.Used, statePicker.SelectedItem);
+                    Assert.False(statePicker.IsEnabled);
                     Assert.Same(IdeasViewModel.NoTarget, targetPicker.SelectedItem);
 
-                    // Used → Developing swaps the picker's options; the new state stays selected.
+                    // A used idea's state is read-only: a picker write is refused and the picker shows Used again.
                     statePicker.SelectedItem = IdeaState.Developing;
                     Avalonia.Threading.Dispatcher.UIThread.RunJobs();
-                    Assert.Equal(IdeaState.Developing, used1.State);
-                    Assert.Same(IdeaCardViewModel.SelectableStates, statePicker.ItemsSource);
-                    Assert.Equal(IdeaState.Developing, statePicker.SelectedItem);
+                    Assert.Equal(IdeaState.Used, used1.State);
+                    Assert.Equal("story-uuid", used1.StoryId);
+                    Assert.False(ideas.CanPromote);
+                    Assert.Equal(IdeaState.Used, statePicker.SelectedItem);
 
-                    // Moving between cards with different options shows each card's own state
-                    // and changes neither.
+                    // Moving between cards with different options shows each card's own state and changes neither.
                     ideas.Selected = fresh;
                     Avalonia.Threading.Dispatcher.UIThread.RunJobs();
                     Assert.Equal(IdeaState.New, statePicker.SelectedItem);
+                    Assert.True(statePicker.IsEnabled);
+
+                    statePicker.SelectedItem = IdeaState.Developing;
+                    Avalonia.Threading.Dispatcher.UIThread.RunJobs();
+                    Assert.Equal(IdeaState.Developing, fresh.State);
 
                     ideas.Selected = used2;
                     Avalonia.Threading.Dispatcher.UIThread.RunJobs();
@@ -287,14 +293,20 @@ public sealed class IdeasShellModeTests : IDisposable
 
                     ideas.Selected = fresh;
                     Avalonia.Threading.Dispatcher.UIThread.RunJobs();
-                    Assert.Equal(IdeaState.New, statePicker.SelectedItem);
+                    Assert.Equal(IdeaState.Developing, statePicker.SelectedItem);
 
-                    Assert.Equal(IdeaState.New, fresh.State);
+                    ideas.Selected = used1;
+                    Avalonia.Threading.Dispatcher.UIThread.RunJobs();
+                    Assert.Equal(IdeaState.Used, statePicker.SelectedItem);
+
+                    Assert.Equal(IdeaState.Developing, fresh.State);
+                    Assert.Equal(IdeaState.Used, used1.State);
                     Assert.Equal(IdeaState.Used, used2.State);
-                    Assert.Equal(IdeaState.Developing, used1.State);
-                    Assert.Null(fresh.TargetPreset);
+                    Assert.Equal("other-uuid", used2.StoryId);
 
                     // The target picker sets the selected card's preset, and only that card's.
+                    ideas.Selected = fresh;
+                    Avalonia.Threading.Dispatcher.UIThread.RunJobs();
                     var preset = ideas.TargetOptions[1];
                     targetPicker.SelectedItem = preset;
                     Avalonia.Threading.Dispatcher.UIThread.RunJobs();
@@ -314,7 +326,131 @@ public sealed class IdeasShellModeTests : IDisposable
                     host.Close();
                 }
 
-                await Within(mainWindow.FlushPendingEditsAsync());
+                Assert.True(await Within(mainWindow.FlushPendingEditsBeforeCloseAsync(TimeSpan.FromSeconds(5))));
+            });
+        }
+        finally { DeleteFolder(root); }
+    }
+
+    [Fact]
+    public async Task Tag_filter_survives_tag_list_changes_in_the_view()
+    {
+        var root = CreateWorkspace(StoryJson);
+        try
+        {
+            var day = new DateOnly(2026, 1, 1);
+            var seeded = await new StoryIdeasService(new MetadataStore()).SaveAsync(root,
+            [
+                new StoryIdea("a", "Alpha", "", "", ["x"], null, IdeaState.New, day, null),
+                new StoryIdea("b", "Bravo", "", "", ["z"], null, IdeaState.New, day, null),
+            ]);
+            Assert.True(seeded.IsSuccess, seeded.Error);
+
+            await Ui(root, async context =>
+            {
+                var mainWindow = context.CreateMainWindow();
+                await context.SettleAsync();
+                var ideas = mainWindow.IdeasViewModel!;
+
+                var view = new Hymnal.Views.IdeasView { DataContext = ideas };
+                var host = new Window { Content = view, Width = 1280, Height = 800 };
+                host.Show();
+                try
+                {
+                    var tagPicker = view.FindControl<ComboBox>("TagFilterPicker")!;
+                    tagPicker.SelectedItem = "x";
+                    Avalonia.Threading.Dispatcher.UIThread.RunJobs();
+                    Assert.Equal("x", ideas.TagFilter);
+                    var alpha = Assert.Single(ideas.Cards);
+
+                    // Adding a tag replaces the tag list the picker shows.
+                    alpha.TagsText = "x, y";
+                    Avalonia.Threading.Dispatcher.UIThread.RunJobs();
+                    Assert.Equal(["x", "y", "z"], ideas.AllTags);
+                    Assert.Equal("x", ideas.TagFilter);
+                    Assert.Equal("x", tagPicker.SelectedItem);
+                    Assert.Equal(["Alpha"], ideas.Cards.Select(c => c.Title));
+                }
+                finally
+                {
+                    host.Close();
+                }
+
+                Assert.True(await Within(mainWindow.FlushPendingEditsBeforeCloseAsync(TimeSpan.FromSeconds(5))));
+            });
+        }
+        finally { DeleteFolder(root); }
+    }
+
+    [Fact]
+    public async Task Close_flush_reports_failure_when_ideas_cannot_be_saved()
+    {
+        var root = CreateWorkspace(StoryJson);
+        try
+        {
+            await Ui(root, async context =>
+            {
+                var window = context.CreateMainWindow();
+                await context.SettleAsync();
+                window.ShowQuickIdeaDialogAsync = () =>
+                    Task.FromResult<(string Title, string Premise)?>(("Draft", ""));
+                await Within(window.QuickCaptureIdeaCommand.Execute().ToTask());
+                Assert.True(await Within(window.FlushPendingEditsBeforeCloseAsync(TimeSpan.FromSeconds(5))));
+
+                context.Ideas.FailSaves = true;
+                window.IdeasViewModel!.Cards.Single().Notes = "Won't save";
+
+                Assert.False(await Within(window.FlushPendingEditsBeforeCloseAsync(TimeSpan.FromSeconds(5))));
+            });
+        }
+        finally { DeleteFolder(root); }
+    }
+
+    [Fact]
+    public async Task Close_flush_gives_up_after_the_timeout()
+    {
+        var root = CreateWorkspace(StoryJson);
+        try
+        {
+            await Ui(root, async context =>
+            {
+                var window = context.CreateMainWindow();
+                await context.SettleAsync();
+                window.ShowQuickIdeaDialogAsync = () =>
+                    Task.FromResult<(string Title, string Premise)?>(("Draft", ""));
+                await Within(window.QuickCaptureIdeaCommand.Execute().ToTask());
+                Assert.True(await Within(window.FlushPendingEditsBeforeCloseAsync(TimeSpan.FromSeconds(5))));
+
+                var hold = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+                context.Ideas.SaveHold = hold;
+                window.IdeasViewModel!.Cards.Single().Notes = "Slow disk";
+
+                Assert.False(await Within(window.FlushPendingEditsBeforeCloseAsync(TimeSpan.FromMilliseconds(200))));
+
+                // Once the write finishes, a later close goes through.
+                hold.SetResult();
+                context.Ideas.SaveHold = null;
+                Assert.True(await Within(window.FlushPendingEditsBeforeCloseAsync(TimeSpan.FromSeconds(5))));
+            });
+
+            Assert.Equal("Slow disk", Assert.Single(await LoadFromDiskAsync(root)).Notes);
+        }
+        finally { DeleteFolder(root); }
+    }
+
+    [Fact]
+    public async Task Close_flush_succeeds_without_ideas_view_model()
+    {
+        var root = CreateWorkspace(StoryJson);
+        try
+        {
+            await Ui(root, async context =>
+            {
+                var window = context.CreateMainWindow(withIdeas: false);
+                await context.SettleAsync();
+                var flush = window.FlushPendingEditsBeforeCloseAsync(TimeSpan.FromSeconds(5));
+                Assert.True(flush.IsCompleted);
+                Assert.True(await flush);
             });
         }
         finally { DeleteFolder(root); }
@@ -391,7 +527,7 @@ public sealed class IdeasShellModeTests : IDisposable
         private readonly ManuscriptService _manuscript;
         private readonly MetadataStore _store = new();
         private readonly StoryIdeaPromoter _promoter;
-        private readonly StoryIdeasService _ideas;
+        public ControllableIdeasService Ideas { get; }
         private IdeasViewModel? _ideasVm;
         private readonly List<IDisposable> _windowParts = new();
 
@@ -414,8 +550,8 @@ public sealed class IdeasShellModeTests : IDisposable
             var wordCount = new WordCountService();
             _structure = new BookTxtStructureService(_store, exclusions, registry);
             ProjectSettings = new ProjectSettingsService(_store);
-            _ideas = new StoryIdeasService(_store);
-            _promoter = new StoryIdeaPromoter(_structure, registry, _phases, _targets, new NotesService(_store), _ideas);
+            Ideas = new ControllableIdeasService(new StoryIdeasService(_store));
+            _promoter = new StoryIdeaPromoter(_structure, registry, _phases, _targets, new NotesService(_store), Ideas);
             Editor = new EditorViewModel(_store, Notifications, wordCount);
             _manuscript = new ManuscriptService(Notifications, exclusions);
             LiveContexts.Add(this);
@@ -484,7 +620,7 @@ public sealed class IdeasShellModeTests : IDisposable
         public MainWindowViewModel CreateMainWindow(bool withIdeas = true)
         {
             if (withIdeas)
-                _ideasVm = new IdeasViewModel(Workspace, _ideas, _promoter, Notifications, Scheduler);
+                _ideasVm = new IdeasViewModel(Workspace, Ideas, _promoter, Notifications, Scheduler);
 
             var docs = new SupplementalDocsViewModel(
                 Workspace, new SupplementalDocsService(_store), Editor, Notifications, _settings, new StubFilePickerService());
@@ -506,6 +642,26 @@ public sealed class IdeasShellModeTests : IDisposable
                 AiTestDoubles.CreateStubAiChatViewModel(Editor, Workspace, Notifications),
                 AiTestDoubles.CreateStubSettingsFactory(Notifications),
                 _ideasVm);
+        }
+    }
+
+    /// <summary>Wraps the real ideas service; saves can be made to fail or wait.</summary>
+    private sealed class ControllableIdeasService(IStoryIdeasService inner) : IStoryIdeasService
+    {
+        public bool FailSaves { get; set; }
+        public TaskCompletionSource? SaveHold { get; set; }
+
+        public Task<Hymnal.Core.Common.Result<IReadOnlyList<StoryIdea>>> LoadAsync(string workspaceRoot) =>
+            inner.LoadAsync(workspaceRoot);
+
+        public async Task<Hymnal.Core.Common.Result<Hymnal.Core.Common.Unit>> SaveAsync(
+            string workspaceRoot, IReadOnlyList<StoryIdea> ideas)
+        {
+            if (SaveHold is { } hold)
+                await hold.Task;
+            if (FailSaves)
+                return Hymnal.Core.Common.Result<Hymnal.Core.Common.Unit>.Fail("Disk is full.");
+            return await inner.SaveAsync(workspaceRoot, ideas);
         }
     }
 

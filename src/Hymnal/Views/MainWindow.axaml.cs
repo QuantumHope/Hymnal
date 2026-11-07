@@ -71,28 +71,31 @@ public partial class MainWindow : Window
         };
     }
 
+    private static readonly TimeSpan CloseFlushTimeout = TimeSpan.FromSeconds(5);
+
+    /// <summary>Set once pending edits are saved (or the author chose to close anyway).</summary>
+    private bool _closeAllowed;
+
     /// <summary>
-    /// Holds the close until debounced edits (story ideas) are written, then closes again.
+    /// Holds the close until debounced edits (story ideas) are written; if they can't be written in
+    /// time, asks whether to close anyway. Cancelling keeps the window open.
     /// </summary>
     private async void OnClosingFlushPendingEdits(object? sender, WindowClosingEventArgs e)
     {
-        if (DataContext is not MainWindowViewModel vm)
+        if (_closeAllowed || DataContext is not MainWindowViewModel vm)
             return;
 
-        var flush = vm.FlushPendingEditsAsync();
-        if (flush.IsCompleted)
+        var flush = vm.FlushPendingEditsBeforeCloseAsync(CloseFlushTimeout);
+        if (flush.IsCompleted && flush.Result)
             return;
 
         e.Cancel = true;
-        try
-        {
-            await flush;
-        }
-        finally
-        {
-            // Save failures are reported by the view model; closing goes ahead either way.
-            Close();
-        }
+        if (!await flush
+            && !await ConfirmDialog.ShowAsync(this, "Unsaved Ideas", "Idea edits couldn't be saved. Close anyway?", "Close"))
+            return;
+
+        _closeAllowed = true;
+        Close();
     }
 
     public static async Task ExecuteGitSyncActionAsync(GitPanelViewModel gitPanelViewModel, string? commitMessage)

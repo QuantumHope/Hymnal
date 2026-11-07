@@ -372,6 +372,30 @@ public sealed class IdeasViewModelTests : IDisposable
     }
 
     [Fact]
+    public async Task CanPromote_false_for_idea_already_linked_to_a_story()
+    {
+        var root = CreateWorkspace(AnthologyJson);
+        try
+        {
+            await SeedAsync(root,
+                new StoryIdea("a", "Linked", "", "", [], null, IdeaState.Developing, Day1, "story-uuid"));
+
+            await Ui(root, async context =>
+            {
+                var vm = await Within(context.CreateIdeasAsync());
+                var asked = false;
+                vm.AskFileNameAsync = suggestion => { asked = true; return Task.FromResult<string?>(suggestion); };
+                vm.Selected = vm.Cards.Single();
+
+                Assert.False(vm.CanPromote);
+                await Within(vm.PromoteSelectedAsync());
+                Assert.False(asked);
+            });
+        }
+        finally { DeleteFolder(root); }
+    }
+
+    [Fact]
     public async Task Promote_failure_shows_error()
     {
         var root = CreateWorkspace(AnthologyJson);
@@ -510,6 +534,12 @@ public sealed class IdeasViewModelTests : IDisposable
 
                 var spent = vm.Cards.Single(c => c.Id == "b");
                 Assert.Contains(IdeaState.Used, spent.StateOptions);
+                Assert.Equal(IdeaState.Used, spent.State);
+
+                // A used idea's state is read-only.
+                Assert.True(fresh.IsStateEditable);
+                Assert.False(spent.IsStateEditable);
+                spent.State = IdeaState.New;
                 Assert.Equal(IdeaState.Used, spent.State);
             });
         }

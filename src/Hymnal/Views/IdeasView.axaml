@@ -220,6 +220,8 @@
                                  stale writes while the options swap between cards. -->
                             <ComboBox x:Name="IdeaStatePicker"
                                       HorizontalAlignment="Stretch"
+                                      IsEnabled="{Binding Selected.IsStateEditable}"
+                                      ToolTip.Tip="A used idea's state can't be changed."
                                       ItemsSource="{Binding Selected.StateOptions}"
                                       SelectedItem="{Binding SelectedState, Mode=TwoWay}" />
                         </StackPanel>

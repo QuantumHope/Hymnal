@@ -36,6 +36,6 @@ public partial class IdeasView : UserControl
             return;
 
         if (await QuickIdeaDialog.ShowAsync(owner) is { } idea)
-            vm.NewIdeaCommand.Execute(idea).Subscribe();
+            vm.NewIdeaCommand.Execute(idea).Subscribe(_ => { }, _ => { /* reported via ThrownExceptions */ });
     }
 }
