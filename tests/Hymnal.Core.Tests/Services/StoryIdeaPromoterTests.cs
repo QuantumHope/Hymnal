@@ -370,6 +370,44 @@ public class StoryIdeaPromoterTests
         Assert.Empty((await env.Ideas.LoadAsync(env.Root)).Value!);
     });
 
+    [Theory]
+    [InlineData(IdeaState.Used, "other-story")]
+    [InlineData(IdeaState.Used, null)]
+    [InlineData(IdeaState.Developing, "other-story")]
+    public Task Promote_fails_after_creation_when_idea_was_used_meanwhile(IdeaState stateMeanwhile, string? storyIdMeanwhile) =>
+        WithEnvAsync(async env =>
+        {
+            await SeedAsync(env, Idea());
+            var promoter = env.Promoter(notes: new RewritingNotesService(env,
+                i => i with { State = stateMeanwhile, StoryId = storyIdMeanwhile }));
+
+            var result = await promoter.PromoteAsync(env.Root, env.BookTxtPath, Idea(), "the-lighthouse.md", Anthology);
+
+            Assert.False(result.IsSuccess);
+            Assert.True(result.FileCreated);
+            Assert.Contains("the-lighthouse.md", result.Error);
+            Assert.Contains("used by another story", result.Error);
+            // The other writer's state and StoryId are left as they wrote them.
+            var loaded = Assert.Single((await env.Ideas.LoadAsync(env.Root)).Value!);
+            Assert.Equal(stateMeanwhile, loaded.State);
+            Assert.Equal(storyIdMeanwhile, loaded.StoryId);
+        });
+
+    /// <summary>Saving notes also rewrites every idea, as if another writer changed it mid-promote.</summary>
+    private sealed class RewritingNotesService(Env env, Func<StoryIdea, StoryIdea> rewrite) : INotesService
+    {
+        public Task<string> LoadAsync(string absoluteNotesPath) => Task.FromResult("");
+
+        public async Task SaveAsync(string absoluteNotesPath, string content)
+        {
+            await env.Notes.SaveAsync(absoluteNotesPath, content);
+            var current = await env.Ideas.LoadAsync(env.Root);
+            Assert.True(current.IsSuccess, current.Error);
+            var save = await env.Ideas.SaveAsync(env.Root, current.Value!.Select(rewrite).ToList());
+            Assert.True(save.IsSuccess, save.Error);
+        }
+    }
+
     /// <summary>Saving notes also deletes every idea, as if another writer removed the idea mid-promote.</summary>
     private sealed class DeletingNotesService(Env env) : INotesService
     {

@@ -113,8 +113,12 @@ public sealed class StoryIdeaPromoter
             if (!current.IsSuccess)
                 return CreatedButFailed(fileName, current.Error!);
             var ideaId = idea.Id;
-            if (current.Value!.All(i => i.Id != ideaId))
+            var latest = current.Value!.FirstOrDefault(i => i.Id == ideaId);
+            if (latest is null)
                 return CreatedButFailed(fileName, $"idea '{idea.Title}' is no longer in the ideas file");
+            // Another writer promoted it meanwhile: keep their StoryId rather than overwrite it.
+            if (latest.State == IdeaState.Used || latest.StoryId is not null)
+                return CreatedButFailed(fileName, $"idea '{latest.Title}' was used by another story meanwhile");
             var updated = current.Value!
                 .Select(i => i.Id == ideaId ? i with { State = IdeaState.Used, StoryId = uuid } : i)
                 .ToList();
