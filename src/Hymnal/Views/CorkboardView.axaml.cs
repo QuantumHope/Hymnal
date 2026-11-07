@@ -501,13 +501,14 @@ public partial class CorkboardView : UserControl
         if (DataContext is not CorkboardViewModel vm)
             return;
 
+        var unit = vm.Profile.UnitNoun;
         var flyout = new MenuFlyout
         {
             Items =
             {
-                new MenuItem { Header = "New Chapter", Tag = "chapter" },
-                new MenuItem { Header = "New Chapter (advanced)…", Tag = "chapter-advanced" },
-                new MenuItem { Header = "New Part…", Tag = "part" },
+                new MenuItem { Header = $"New {unit}", Tag = "chapter" },
+                new MenuItem { Header = $"New {unit} (advanced)…", Tag = "chapter-advanced" },
+                new MenuItem { Header = $"New {vm.Profile.PartNoun}…", Tag = "part" },
                 new MenuItem { Header = "Include Existing File…", Tag = "include" }
             }
         };
@@ -557,12 +558,14 @@ public partial class CorkboardView : UserControl
             || DataContext is not CorkboardViewModel vm)
             return;
 
+        var unit = vm.Profile.UnitNoun;
+        var partNoun = vm.Profile.PartNoun;
         var flyout = new MenuFlyout
         {
             Items =
             {
-                new MenuItem { Header = "New Chapter in Part", Tag = ("chapter", part) },
-                new MenuItem { Header = "New Chapter in Part (advanced)…", Tag = ("chapter-advanced", part) },
+                new MenuItem { Header = $"New {unit} in {partNoun}", Tag = ("chapter", part) },
+                new MenuItem { Header = $"New {unit} in {partNoun} (advanced)…", Tag = ("chapter-advanced", part) },
                 new MenuItem { Header = "Include Existing File…", Tag = ("include", part) }
             }
         };
@@ -613,10 +616,10 @@ public partial class CorkboardView : UserControl
         var dialogResult = await NewChapterDialog.ShowAsync(
             TopLevel.GetTopLevel(this) as Window ?? throw new InvalidOperationException("No window owner."),
             NewManuscriptEntryKind.Chapter,
-            "New Chapter",
+            $"New {vm.Profile.UnitNoun}",
             part == null
-                ? "Enter the new chapter path relative to the manuscript root."
-                : $"Enter the new chapter path for {part.Title}.",
+                ? $"Enter the new {vm.Profile.UnitNoun.ToLowerInvariant()} path relative to the manuscript root."
+                : $"Enter the new {vm.Profile.UnitNoun.ToLowerInvariant()} path for {part.Title}.",
             suggestedPath);
 
         if (dialogResult is null)
@@ -639,8 +642,8 @@ public partial class CorkboardView : UserControl
         var dialogResult = await NewChapterDialog.ShowAsync(
             TopLevel.GetTopLevel(this) as Window ?? throw new InvalidOperationException("No window owner."),
             NewManuscriptEntryKind.Part,
-            "New Part",
-            "Enter the part divider path and title.",
+            $"New {vm.Profile.PartNoun}",
+            $"Enter the {vm.Profile.PartNoun.ToLowerInvariant()} divider path and title.",
             "part-two/part.md");
 
         if (dialogResult is null || string.IsNullOrWhiteSpace(dialogResult.Title))

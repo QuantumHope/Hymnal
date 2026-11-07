@@ -101,7 +101,7 @@
                 <!-- 3-column grid matching the list items so word counts align -->
                 <Grid ColumnDefinitions="*,60,30">
                     <TextBlock Grid.Column="0"
-                               Text="Book"
+                               Text="{Binding Profile.CollectionNoun}"
                                Foreground="{DynamicResource PinkBrush}"
                                FontSize="14"
                                FontWeight="Bold"
@@ -346,7 +346,7 @@
                                                      Fill="{Binding Status, Converter={StaticResource StatusToBrushConverter}}"
                                                      VerticalAlignment="Center" />
                                             <StackPanel Spacing="1">
-                                                <TextBlock Text="{Binding Status}"
+                                                <TextBlock Text="{Binding StatusLabel}"
                                                            Foreground="{DynamicResource OnSurfaceBrush}"
                                                            FontWeight="SemiBold" />
                                                 <TextBlock Text="Click to change status"
@@ -358,7 +358,8 @@
                                 </ToolTip.Tip>
                                 <Button.Flyout>
                                     <MenuFlyout>
-                                        <MenuItem Header="Planned"
+                                        <MenuItem Header="{Binding Profile, Converter={x:Static conv:ProfileStatusLabelConverter.Instance}, ConverterParameter={x:Static models:ChapterStatus.Planned}}"
+                                                  IsVisible="{Binding Profile, Converter={x:Static conv:ProfileShowsStatusConverter.Instance}, ConverterParameter={x:Static models:ChapterStatus.Planned}}"
                                                   Command="{Binding ChangeStatusCommand}"
                                                   CommandParameter="{x:Static models:ChapterStatus.Planned}">
                                             <MenuItem.Icon>
@@ -366,7 +367,8 @@
                                                          Fill="{DynamicResource OrangeBrush}" />
                                             </MenuItem.Icon>
                                         </MenuItem>
-                                        <MenuItem Header="Outlining"
+                                        <MenuItem Header="{Binding Profile, Converter={x:Static conv:ProfileStatusLabelConverter.Instance}, ConverterParameter={x:Static models:ChapterStatus.Outlining}}"
+                                                  IsVisible="{Binding Profile, Converter={x:Static conv:ProfileShowsStatusConverter.Instance}, ConverterParameter={x:Static models:ChapterStatus.Outlining}}"
                                                   Command="{Binding ChangeStatusCommand}"
                                                   CommandParameter="{x:Static models:ChapterStatus.Outlining}">
                                             <MenuItem.Icon>
@@ -374,7 +376,8 @@
                                                          Fill="{DynamicResource OnSurfaceDimBrush}" />
                                             </MenuItem.Icon>
                                         </MenuItem>
-                                        <MenuItem Header="Drafting"
+                                        <MenuItem Header="{Binding Profile, Converter={x:Static conv:ProfileStatusLabelConverter.Instance}, ConverterParameter={x:Static models:ChapterStatus.Drafting}}"
+                                                  IsVisible="{Binding Profile, Converter={x:Static conv:ProfileShowsStatusConverter.Instance}, ConverterParameter={x:Static models:ChapterStatus.Drafting}}"
                                                   Command="{Binding ChangeStatusCommand}"
                                                   CommandParameter="{x:Static models:ChapterStatus.Drafting}">
                                             <MenuItem.Icon>
@@ -382,7 +385,8 @@
                                                          Fill="{DynamicResource CyanBrush}" />
                                             </MenuItem.Icon>
                                         </MenuItem>
-                                        <MenuItem Header="Editing"
+                                        <MenuItem Header="{Binding Profile, Converter={x:Static conv:ProfileStatusLabelConverter.Instance}, ConverterParameter={x:Static models:ChapterStatus.Editing}}"
+                                                  IsVisible="{Binding Profile, Converter={x:Static conv:ProfileShowsStatusConverter.Instance}, ConverterParameter={x:Static models:ChapterStatus.Editing}}"
                                                   Command="{Binding ChangeStatusCommand}"
                                                   CommandParameter="{x:Static models:ChapterStatus.Editing}">
                                             <MenuItem.Icon>
@@ -390,7 +394,8 @@
                                                          Fill="{DynamicResource SynthwavePurpleBrush}" />
                                             </MenuItem.Icon>
                                         </MenuItem>
-                                        <MenuItem Header="Polishing"
+                                        <MenuItem Header="{Binding Profile, Converter={x:Static conv:ProfileStatusLabelConverter.Instance}, ConverterParameter={x:Static models:ChapterStatus.Polishing}}"
+                                                  IsVisible="{Binding Profile, Converter={x:Static conv:ProfileShowsStatusConverter.Instance}, ConverterParameter={x:Static models:ChapterStatus.Polishing}}"
                                                   Command="{Binding ChangeStatusCommand}"
                                                   CommandParameter="{x:Static models:ChapterStatus.Polishing}">
                                             <MenuItem.Icon>
@@ -398,7 +403,8 @@
                                                          Fill="{DynamicResource YellowBrush}" />
                                             </MenuItem.Icon>
                                         </MenuItem>
-                                        <MenuItem Header="Reviewing"
+                                        <MenuItem Header="{Binding Profile, Converter={x:Static conv:ProfileStatusLabelConverter.Instance}, ConverterParameter={x:Static models:ChapterStatus.Reviewing}}"
+                                                  IsVisible="{Binding Profile, Converter={x:Static conv:ProfileShowsStatusConverter.Instance}, ConverterParameter={x:Static models:ChapterStatus.Reviewing}}"
                                                   Command="{Binding ChangeStatusCommand}"
                                                   CommandParameter="{x:Static models:ChapterStatus.Reviewing}">
                                             <MenuItem.Icon>
@@ -406,7 +412,8 @@
                                                          Fill="{DynamicResource PinkBrush}" />
                                             </MenuItem.Icon>
                                         </MenuItem>
-                                        <MenuItem Header="Done"
+                                        <MenuItem Header="{Binding Profile, Converter={x:Static conv:ProfileStatusLabelConverter.Instance}, ConverterParameter={x:Static models:ChapterStatus.Done}}"
+                                                  IsVisible="{Binding Profile, Converter={x:Static conv:ProfileShowsStatusConverter.Instance}, ConverterParameter={x:Static models:ChapterStatus.Done}}"
                                                   Command="{Binding ChangeStatusCommand}"
                                                   CommandParameter="{x:Static models:ChapterStatus.Done}">
                                             <MenuItem.Icon>

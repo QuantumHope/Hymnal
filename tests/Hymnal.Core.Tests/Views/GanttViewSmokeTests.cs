@@ -193,6 +193,9 @@ public sealed class GanttViewSmokeTests
         var readOnly = new ReadOnlyObservableCollection<ChapterViewModel>(backing);
 
         SetAutoPropertyBackingField(workspace, "Nodes", readOnly);
+        typeof(WorkspaceViewModel)
+            .GetField("_profile", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!
+            .SetValue(workspace, ProjectProfile.Novel);
 
         var requests = new Collection<ReorderCardRequest>();
         reorderRequests = requests;

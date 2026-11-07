@@ -74,8 +74,8 @@ public sealed class GanttViewModel : ViewModelBase
         private set => this.RaiseAndSetIfChanged(ref _editingStatus, value);
     }
 
-    public static IReadOnlyList<ChapterStatus> EditableStatuses { get; } =
-        Enum.GetValues<ChapterStatus>();
+    /// <summary>Statuses visible in the workspace profile.</summary>
+    public IReadOnlyList<StatusOption> AvailableStatuses => _workspace.Profile.VisibleStatuses;
 
     private string _editingPhaseName = string.Empty;
     public string EditingPhaseName
@@ -165,6 +165,9 @@ public sealed class GanttViewModel : ViewModelBase
         Disposables.Add(_phaseSubscriptions);
         Disposables.Add(Disposable.Create(() => _rowEditRequested.OnCompleted()));
         Disposables.Add(_rowEditRequested.Subscribe(OpenEditForRow));
+        Disposables.Add(workspace.WhenAnyValue(x => x.Profile)
+            .Skip(1)
+            .Subscribe(_ => this.RaisePropertyChanged(nameof(AvailableStatuses))));
 
         CommitEditCommand = ReactiveCommand.CreateFromTask(CommitEditAsync);
         CancelEditCommand = ReactiveCommand.Create(CancelEdit);
@@ -520,7 +523,7 @@ public sealed class GanttViewModel : ViewModelBase
         PhaseData? updated = null;
         await _phaseDataService.UpsertAsync(_workspace.WorkspaceRoot, chapterVm.Uuid, current =>
         {
-            var basePhaseData = current ?? chapterVm.PhaseData ?? PhaseDataService.DefaultPhaseData;
+            var basePhaseData = current ?? chapterVm.PhaseData ?? PhaseDataService.DefaultPhaseDataFor(_workspace.Profile);
             var schedule = new Dictionary<string, PhaseScheduleEntry>(
                 basePhaseData.Schedule ?? new Dictionary<string, PhaseScheduleEntry>(),
                 StringComparer.Ordinal);
@@ -649,7 +652,7 @@ public sealed class GanttViewModel : ViewModelBase
         PhaseData? updated = null;
         await _phaseDataService.UpsertAsync(_workspace.WorkspaceRoot, chapterVm.Uuid, current =>
         {
-            var basePhaseData = current ?? chapterVm.PhaseData ?? PhaseDataService.DefaultPhaseData;
+            var basePhaseData = current ?? chapterVm.PhaseData ?? PhaseDataService.DefaultPhaseDataFor(_workspace.Profile);
             var schedule = new Dictionary<string, PhaseScheduleEntry>(
                 basePhaseData.Schedule ?? new Dictionary<string, PhaseScheduleEntry>(),
                 StringComparer.Ordinal);
@@ -694,18 +697,13 @@ public sealed class GanttViewModel : ViewModelBase
             await Avalonia.Threading.Dispatcher.UIThread.InvokeAsync(CancelEdit);
     }
 
-    private static bool IsPhaseStatus(ChapterStatus status) =>
-        status is ChapterStatus.Outlining
-            or ChapterStatus.Drafting
-            or ChapterStatus.Editing
-            or ChapterStatus.Polishing
-            or ChapterStatus.Reviewing;
+    private bool IsPhaseStatus(ChapterStatus status) => _workspace.Profile.IsTrackablePhase(status);
 
-    private static (ChapterStatus Status, string? Start, string? End, double Progress) GetPersistedInlineValues(
+    private (ChapterStatus Status, string? Start, string? End, double Progress) GetPersistedInlineValues(
         ChapterViewModel chapterVm,
         ChapterStatus status)
     {
-        var phaseData = chapterVm.PhaseData ?? PhaseDataService.DefaultPhaseData;
+        var phaseData = chapterVm.PhaseData ?? PhaseDataService.DefaultPhaseDataFor(_workspace.Profile);
         var phaseName = status.ToString();
 
         if (IsPhaseStatus(status)
@@ -727,8 +725,9 @@ public sealed class GanttViewModel : ViewModelBase
         var allChapters = nodes
             .Where(n => !n.Node.IsMissing && n.Node.Kind == NodeKind.Chapter)
             .ToList();
-        var bookRowData = BuildBookRollup(allChapters);
-        _rows.Add(new GanttRowViewModel(bookRowData));
+        var profile = _workspace.Profile;
+        var bookRowData = BuildBookRollup(allChapters, profile);
+        _rows.Add(new GanttRowViewModel(bookRowData, profile));
 
         for (int i = 0; i < nodes.Count; i++)
         {
@@ -752,14 +751,14 @@ public sealed class GanttViewModel : ViewModelBase
                     if (nodes[j].Node.Kind == NodeKind.Part) break;
                     children.Add(nodes[j]);
                 }
-                rowData = BuildPartRollup(vm.Node, children);
+                rowData = BuildPartRollup(vm.Node, children, profile);
             }
             else
             {
-                rowData = GanttProjection.Project(vm.Node, vm.PhaseData);
+                rowData = GanttProjection.Project(vm.Node, vm.PhaseData, profile);
             }
 
-            var rowVm = new GanttRowViewModel(rowData);
+            var rowVm = new GanttRowViewModel(rowData, profile);
             if (rowVm.IsChapter)
             {
                 var captured = rowVm;
@@ -773,7 +772,8 @@ public sealed class GanttViewModel : ViewModelBase
         _phaseSubscriptions.Disposable = phaseSubscriptions;
     }
 
-    private static GanttRowData BuildPartRollup(ChapterNode partNode, IReadOnlyList<ChapterViewModel> children)
+    private static GanttRowData BuildPartRollup(
+        ChapterNode partNode, IReadOnlyList<ChapterViewModel> children, ProjectProfile profile)
     {
         DateOnly? minStart = null;
         DateOnly? maxEnd = null;
@@ -782,7 +782,7 @@ public sealed class GanttViewModel : ViewModelBase
 
         foreach (var child in children)
         {
-            var childRow = GanttProjection.Project(child.Node, child.PhaseData);
+            var childRow = GanttProjection.Project(child.Node, child.PhaseData, profile);
 
             if (childRow.StartDate.HasValue &&
                 (minStart is null || childRow.StartDate.Value < minStart.Value))
@@ -792,7 +792,7 @@ public sealed class GanttViewModel : ViewModelBase
                 (maxEnd is null || childRow.EndDate.Value > maxEnd.Value))
                 maxEnd = childRow.EndDate;
 
-            if (childRow.Status == ChapterStatus.Done)
+            if (profile.DisplayStatus(childRow.Status) == ChapterStatus.Done)
                 done++;
         }
 
@@ -810,7 +810,7 @@ public sealed class GanttViewModel : ViewModelBase
             CompletionPercentage: completion);
     }
 
-    private static GanttRowData BuildBookRollup(IReadOnlyList<ChapterViewModel> chapters)
+    private static GanttRowData BuildBookRollup(IReadOnlyList<ChapterViewModel> chapters, ProjectProfile profile)
     {
         DateOnly? minStart = null;
         DateOnly? maxEnd = null;
@@ -819,7 +819,7 @@ public sealed class GanttViewModel : ViewModelBase
 
         foreach (var ch in chapters)
         {
-            var row = GanttProjection.Project(ch.Node, ch.PhaseData);
+            var row = GanttProjection.Project(ch.Node, ch.PhaseData, profile);
 
             foreach (var seg in row.PhaseSegments ?? Array.Empty<PhaseSegment>())
             {
@@ -834,7 +834,7 @@ public sealed class GanttViewModel : ViewModelBase
             if (row.EndDate.HasValue && (maxEnd is null || row.EndDate.Value > maxEnd.Value))
                 maxEnd = row.EndDate;
 
-            if (row.Status == ChapterStatus.Done)
+            if (profile.DisplayStatus(row.Status) == ChapterStatus.Done)
                 done++;
         }
 

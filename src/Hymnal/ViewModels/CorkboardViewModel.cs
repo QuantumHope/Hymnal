@@ -166,6 +166,11 @@ public sealed class CorkboardViewModel : ViewModelBase, IDisposable
         Disposables.Add(
             _workspace.WorkspaceChanged.Subscribe(_ => RequestRebuild()));
 
+        Disposables.Add(
+            _workspace.WhenAnyValue(x => x.Profile)
+                .Skip(1)
+                .Subscribe(_ => this.RaisePropertyChanged(nameof(Profile))));
+
         Disposables.Add(_openChapterRequested);
 
         SelectCardCommand = ReactiveCommand.CreateFromTask<CorkboardItemViewModel?>(SelectCardAsync);
@@ -224,6 +229,9 @@ public sealed class CorkboardViewModel : ViewModelBase, IDisposable
         ApplyProjection(_orphanFiles);
         _ = DiscoverOrphansAndRebuildAsync();
     }
+
+    /// <summary>Profile of the open workspace; supplies UI nouns for board menus.</summary>
+    public ProjectProfile Profile => _workspace.Profile;
 
     public Task<string?> PickManuscriptFileAsync() => _workspace.PickManuscriptFileAsync();
 

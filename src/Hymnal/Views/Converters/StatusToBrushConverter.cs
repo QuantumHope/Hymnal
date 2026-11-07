@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Globalization;
+using System.Linq;
 using Avalonia;
 using Avalonia.Data.Converters;
 using Avalonia.Media;
@@ -74,6 +75,35 @@ public sealed class StatusEqualsConverter : IValueConverter
         => throw new NotSupportedException();
 }
 
+/// <summary>
+/// Maps a <see cref="ProjectProfile"/> to the profile's label for the
+/// <see cref="ChapterStatus"/> passed as the converter parameter.
+/// </summary>
+public sealed class ProfileStatusLabelConverter : IValueConverter
+{
+    public static readonly ProfileStatusLabelConverter Instance = new();
+    public object? Convert(object? value, Type targetType, object? parameter, CultureInfo culture)
+        => parameter is ChapterStatus status
+            ? (value as ProjectProfile ?? ProjectProfile.Novel).LabelFor(status)
+            : null;
+    public object ConvertBack(object? value, Type targetType, object? parameter, CultureInfo culture)
+        => throw new NotSupportedException();
+}
+
+/// <summary>
+/// True when the <see cref="ChapterStatus"/> passed as the converter parameter is one of the
+/// bound <see cref="ProjectProfile"/>'s visible statuses.
+/// </summary>
+public sealed class ProfileShowsStatusConverter : IValueConverter
+{
+    public static readonly ProfileShowsStatusConverter Instance = new();
+    public object Convert(object? value, Type targetType, object? parameter, CultureInfo culture)
+        => parameter is ChapterStatus status
+           && (value as ProjectProfile ?? ProjectProfile.Novel).VisibleStatuses.Any(o => o.Value == status);
+    public object ConvertBack(object? value, Type targetType, object? parameter, CultureInfo culture)
+        => throw new NotSupportedException();
+}
+
 public sealed class StatusDotTooltipConverter : IMultiValueConverter
 {
     public static readonly StatusDotTooltipConverter Instance = new();
@@ -86,7 +116,12 @@ public sealed class StatusDotTooltipConverter : IMultiValueConverter
         if (values[0] is bool isMissing && isMissing)
             return "File not found";
 
-        return values[1] is ChapterStatus status ? $"Change status: {status}" : null;
+        if (values[1] is not ChapterStatus status)
+            return null;
+
+        // Optional third value: the profile-specific label for the status.
+        var label = values.Count > 2 && values[2] is string s && s.Length > 0 ? s : status.ToString();
+        return $"Change status: {label}";
     }
 }
 

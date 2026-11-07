@@ -13,8 +13,8 @@ public partial class ChapterInfoView : UserControl
         InitializeComponent();
 
         // Wire the status ComboBox SelectionChanged → SetStatusCommand.
-        // SelectedItem is bound OneWay (Status has private setter), so user selections must be
-        // forwarded to the command manually.  The guard `status != vm.Status` prevents the
+        // SelectedValue is bound OneWay (Status has private setter), so user selections must be
+        // forwarded to the command manually.  The guard `status != vm.DisplayStatus` prevents the
         // feedback loop when the VM itself updates Status (which re-selects the item).
         StatusComboBox.SelectionChanged += OnStatusSelectionChanged;
 
@@ -30,8 +30,8 @@ public partial class ChapterInfoView : UserControl
     {
         if (DataContext is ChapterInfoViewModel vm
             && e.AddedItems.Count > 0
-            && e.AddedItems[0] is ChapterStatus status
-            && status != vm.Status)
+            && e.AddedItems[0] is StatusOption { Value: var status }
+            && status != vm.DisplayStatus)
         {
             // Fire-and-forget; command ThrownExceptions are handled inside the ViewModel.
             vm.SetStatusCommand.Execute(status).Subscribe(_ => { });

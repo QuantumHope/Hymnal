@@ -28,11 +28,22 @@ namespace Hymnal.ViewModels;
 /// </summary>
 public sealed class ChapterInfoViewModel : ViewModelBase, IDisposable
 {
-    // ── Static view-model data (consumed by ChapterInfoView ComboBox) ────────
+    // ── Profile-driven view-model data (consumed by ChapterInfoView) ──────────
 
-    /// <summary>All valid chapter statuses; bound to the status ComboBox ItemsSource.</summary>
-    public static IReadOnlyList<ChapterStatus> AllStatuses { get; } =
-        Enum.GetValues<ChapterStatus>();
+    /// <summary>Profile of the open workspace.</summary>
+    public ProjectProfile Profile => _workspaceViewModel.Profile;
+
+    /// <summary>Statuses visible in the current profile; bound to the status ComboBox ItemsSource.</summary>
+    public IReadOnlyList<StatusOption> StatusOptions => Profile.VisibleStatuses;
+
+    /// <summary>Panel heading for the current profile ("Chapter Info" / "Story Info").</summary>
+    public string PanelTitle => Profile.InfoPanelTitle;
+
+    /// <summary>View-menu header for the panel toggle, with access key.</summary>
+    public string ToggleMenuHeader => $"Toggle _{PanelTitle}";
+
+    /// <summary>Tooltip for the panel toggle buttons.</summary>
+    public string ToggleToolTip => $"{PanelTitle} (F3)";
     // ── Injected services ────────────────────────────────────────────────────
 
     private readonly EditorViewModel _editorViewModel;
@@ -57,6 +68,9 @@ public sealed class ChapterInfoViewModel : ViewModelBase, IDisposable
 
     private readonly Subject<Unit> _scheduleSaveSubject = new();
 
+    /// <summary>Change subscriptions for the current <see cref="PhaseScheduleRows"/>.</summary>
+    private readonly SerialDisposable _scheduleRowSubscriptions = new();
+
     // ── Public observable properties ─────────────────────────────────────────
 
     private bool _isVisible;
@@ -79,8 +93,15 @@ public sealed class ChapterInfoViewModel : ViewModelBase, IDisposable
     public ChapterStatus Status
     {
         get => _status;
-        private set => this.RaiseAndSetIfChanged(ref _status, value);
+        private set
+        {
+            this.RaiseAndSetIfChanged(ref _status, value);
+            this.RaisePropertyChanged(nameof(DisplayStatus));
+        }
     }
+
+    /// <summary><see cref="Status"/> mapped onto a status visible in <see cref="Profile"/>.</summary>
+    public ChapterStatus DisplayStatus => Profile.DisplayStatus(Status);
 
     private string? _phaseStartDate;
     /// <summary>ISO 8601 date string, e.g. "2025-06-01". Editable in the pane.</summary>
@@ -99,11 +120,11 @@ public sealed class ChapterInfoViewModel : ViewModelBase, IDisposable
     }
 
     /// <summary>
-    /// One row per authoring phase (Outlining → Reviewing). Bound to the per-phase
-    /// schedule table in ChapterInfoView. Edit in place; save via SaveScheduleCommand.
+    /// One row per Gantt phase of the current profile (Novel: Outlining → Reviewing).
+    /// Bound to the per-phase schedule table in ChapterInfoView. Edit in place; save via
+    /// SaveScheduleCommand. Rebuilt when the workspace profile changes.
     /// </summary>
-    public ObservableCollection<PhaseScheduleRowViewModel> PhaseScheduleRows { get; } = new(
-        GanttProjection.PhaseNames.Select(n => new PhaseScheduleRowViewModel(n)));
+    public ObservableCollection<PhaseScheduleRowViewModel> PhaseScheduleRows { get; } = new();
 
     private int _wordCount;
     public int WordCount
@@ -296,7 +317,15 @@ public sealed class ChapterInfoViewModel : ViewModelBase, IDisposable
                 .Throttle(TimeSpan.FromMilliseconds(800), TaskPoolScheduler.Default)
                 .Subscribe(async _ => await AutoSaveScheduleAsync().ConfigureAwait(false)));
 
-        SubscribeToScheduleRowChanges();
+        Disposables.Add(_scheduleRowSubscriptions);
+        RebuildScheduleRows();
+
+        // ── Rebuild profile-driven state when the workspace profile changes ──
+        Disposables.Add(
+            workspaceViewModel
+                .WhenAnyValue(x => x.Profile)
+                .Skip(1)
+                .Subscribe(_ => OnProfileChanged()));
 
         // ── Observe active node ──────────────────────────────────────────────
         Disposables.Add(
@@ -488,11 +517,29 @@ public sealed class ChapterInfoViewModel : ViewModelBase, IDisposable
         }
     }
 
-    private void SubscribeToScheduleRowChanges()
+    private void OnProfileChanged()
     {
+        this.RaisePropertyChanged(nameof(Profile));
+        this.RaisePropertyChanged(nameof(StatusOptions));
+        this.RaisePropertyChanged(nameof(PanelTitle));
+        this.RaisePropertyChanged(nameof(ToggleMenuHeader));
+        this.RaisePropertyChanged(nameof(ToggleToolTip));
+        this.RaisePropertyChanged(nameof(DisplayStatus));
+        RebuildScheduleRows();
+        SyncScheduleRows(_activeChapterVm?.PhaseData);
+    }
+
+    /// <summary>Recreates <see cref="PhaseScheduleRows"/> from the current profile's Gantt phases.</summary>
+    private void RebuildScheduleRows()
+    {
+        PhaseScheduleRows.Clear();
+        foreach (var name in Profile.GanttPhases)
+            PhaseScheduleRows.Add(new PhaseScheduleRowViewModel(name));
+
+        var subscriptions = new CompositeDisposable();
         foreach (var row in PhaseScheduleRows)
         {
-            Disposables.Add(
+            subscriptions.Add(
                 row.WhenAnyValue(x => x.StartDate, x => x.EndDate, x => x.Progress)
                     .Skip(1)
                     .Subscribe(_ =>
@@ -501,6 +548,7 @@ public sealed class ChapterInfoViewModel : ViewModelBase, IDisposable
                             _scheduleSaveSubject.OnNext(Unit.Default);
                     }));
         }
+        _scheduleRowSubscriptions.Disposable = subscriptions;
     }
 
     /// <summary>
@@ -529,6 +577,7 @@ public sealed class ChapterInfoViewModel : ViewModelBase, IDisposable
         var chapterVm = _activeChapterVm;
         var uuid = _loadedUuid;
         var workspaceRoot = _workspaceViewModel.WorkspaceRoot;
+        var phases = Profile.GanttPhases;
 
         if (chapterVm == null || string.IsNullOrEmpty(uuid) || string.IsNullOrEmpty(workspaceRoot))
             return;
@@ -552,7 +601,7 @@ public sealed class ChapterInfoViewModel : ViewModelBase, IDisposable
                 if (isAdvancing)
                 {
                     var oldPhaseName = current?.Status.ToString();
-                    if (oldPhaseName != null && Array.IndexOf(GanttProjection.PhaseNames, oldPhaseName) >= 0)
+                    if (oldPhaseName != null && phases.Contains(oldPhaseName))
                     {
                         schedule.TryGetValue(oldPhaseName, out var old);
                         schedule[oldPhaseName] = new PhaseScheduleEntry
@@ -566,7 +615,7 @@ public sealed class ChapterInfoViewModel : ViewModelBase, IDisposable
 
                 // Open the new phase (fill start date if not already set).
                 var newPhaseName = newStatus.ToString();
-                if (Array.IndexOf(GanttProjection.PhaseNames, newPhaseName) >= 0)
+                if (phases.Contains(newPhaseName))
                 {
                     schedule.TryGetValue(newPhaseName, out var newEntry);
                     if (newEntry?.StartDate == null)
@@ -652,7 +701,12 @@ public sealed class ChapterInfoViewModel : ViewModelBase, IDisposable
         PhaseData? updated = null;
         await _phaseDataService.UpsertAsync(workspaceRoot, uuid, current =>
         {
-            var schedule = new Dictionary<string, PhaseScheduleEntry>();
+            // Keep entries for phases this profile doesn't show (e.g. novel phases in a story).
+            var rowNames = rows.Select(r => r.PhaseName).ToHashSet(StringComparer.Ordinal);
+            var schedule = current?.Schedule?
+                .Where(kv => !rowNames.Contains(kv.Key))
+                .ToDictionary(kv => kv.Key, kv => kv.Value)
+                ?? new Dictionary<string, PhaseScheduleEntry>();
             foreach (var row in rows)
             {
                 // Only persist rows that have at least some data entered.

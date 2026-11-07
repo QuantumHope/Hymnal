@@ -61,18 +61,37 @@ public sealed class GanttRowViewModel : ViewModelBase
     public bool IsEditable => IsChapter && !IsBook;
     public GanttEditableColumn PendingEditColumn { get; set; } = GanttEditableColumn.None;
 
-    public static IReadOnlyList<ChapterStatus> AvailableStatuses { get; } =
-        Enum.GetValues<ChapterStatus>();
+    /// <summary>Project profile this row was built for.</summary>
+    public ProjectProfile Profile { get; }
+
+    /// <summary>Statuses visible in <see cref="Profile"/>; bound to the inline status ComboBox.</summary>
+    public IReadOnlyList<StatusOption> AvailableStatuses => Profile.VisibleStatuses;
 
     private ChapterStatus _editableStatus;
+    /// <summary>Stored status being edited (may be one the profile only displays via mapping).</summary>
     public ChapterStatus EditableStatus
     {
         get => _editableStatus;
         set
         {
             this.RaiseAndSetIfChanged(ref _editableStatus, value);
+            this.RaisePropertyChanged(nameof(EditableDisplayStatus));
             this.RaisePropertyChanged(nameof(StatusDisplay));
             this.RaisePropertyChanged(nameof(StatusForeground));
+        }
+    }
+
+    /// <summary>
+    /// <see cref="EditableStatus"/> as shown by <see cref="Profile"/>. Setting a value in the same
+    /// display bucket keeps the stored status unchanged.
+    /// </summary>
+    public ChapterStatus EditableDisplayStatus
+    {
+        get => Profile.DisplayStatus(EditableStatus);
+        set
+        {
+            if (value != Profile.DisplayStatus(EditableStatus))
+                EditableStatus = value;
         }
     }
 
@@ -125,7 +144,7 @@ public sealed class GanttRowViewModel : ViewModelBase
         ? StatusToColorHex(EditableStatus)
         : RowForeground;
 
-    public string StatusDisplay => IsEditable ? EditableStatus.ToString() : "Rollup";
+    public string StatusDisplay => IsEditable ? Profile.LabelFor(EditableStatus) : "Rollup";
 
     public string StartDateDisplay
     {
@@ -167,8 +186,9 @@ public sealed class GanttRowViewModel : ViewModelBase
 
     // ── Constructor ───────────────────────────────────────────────────────────
 
-    public GanttRowViewModel(GanttRowData data)
+    public GanttRowViewModel(GanttRowData data, ProjectProfile? profile = null)
     {
+        Profile              = profile ?? ProjectProfile.Novel;
         RelativePath         = data.RelativePath;
         Title                = data.Title;
         Kind                 = data.Kind;

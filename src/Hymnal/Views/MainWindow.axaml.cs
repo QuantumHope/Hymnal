@@ -406,8 +406,8 @@ public partial class MainWindow : Window
         {
             Items =
             {
-                new MenuItem { Header = "New Chapter…", Tag = "chapter" },
-                new MenuItem { Header = "New Part…", Tag = "part" },
+                new MenuItem { Header = $"New {workspace.Profile.UnitNoun}…", Tag = "chapter" },
+                new MenuItem { Header = $"New {workspace.Profile.PartNoun}…", Tag = "part" },
                 new MenuItem { Header = "Include Existing File…", Tag = "include" }
             }
         };
@@ -453,8 +453,8 @@ public partial class MainWindow : Window
         var dialogResult = await NewChapterDialog.ShowAsync(
             this,
             NewManuscriptEntryKind.Chapter,
-            "New Chapter",
-            "Enter the new chapter path relative to the manuscript root.",
+            $"New {workspace.Profile.UnitNoun}",
+            $"Enter the new {workspace.Profile.UnitNoun.ToLowerInvariant()} path relative to the manuscript root.",
             "new-chapter.md");
 
         if (dialogResult is null)
@@ -474,8 +474,8 @@ public partial class MainWindow : Window
         var dialogResult = await NewChapterDialog.ShowAsync(
             this,
             NewManuscriptEntryKind.Part,
-            "New Part",
-            "Enter the part divider path and title.",
+            $"New {workspace.Profile.PartNoun}",
+            $"Enter the {workspace.Profile.PartNoun.ToLowerInvariant()} divider path and title.",
             "part-two/part.md");
 
         if (dialogResult is null || string.IsNullOrWhiteSpace(dialogResult.Title))

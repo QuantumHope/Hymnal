@@ -125,7 +125,7 @@
                         <MenuItem Header="Toggle _Sidebar"
                                   Command="{Binding ToggleSidebarCommand}"
                                   InputGesture="Ctrl+B" />
-                        <MenuItem Header="Toggle _Chapter Info"
+                        <MenuItem Header="{Binding ChapterInfoViewModel.ToggleMenuHeader}"
                                   Command="{Binding ChapterInfoViewModel.ToggleCommand}"
                                   InputGesture="F3" />
                         <MenuItem Header="Toggle _Notes"
@@ -479,7 +479,7 @@
                             <!-- F3: Chapter Info -->
                             <Button Classes="nav-icon"
                                     Command="{Binding ChapterInfoViewModel.ToggleCommand}"
-                                    ToolTip.Tip="Chapter Info (F3)">
+                                    ToolTip.Tip="{Binding ChapterInfoViewModel.ToggleToolTip}">
                                 <Path Data="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-6h2v6zm0-8h-2V7h2v2z"
                                       Fill="{DynamicResource OnSurfaceDimBrush}"
                                       Width="18" Height="18"
@@ -536,7 +536,7 @@
                                         <Button Grid.Column="0"
                                                 Classes="nav-icon"
                                                 Command="{Binding ChapterInfoViewModel.ToggleCommand}"
-                                                ToolTip.Tip="Chapter Info (F3)">
+                                                ToolTip.Tip="{Binding ChapterInfoViewModel.ToggleToolTip}">
                                             <Path Data="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-6h2v6zm0-8h-2V7h2v2z"
                                                   Fill="{DynamicResource SynthwavePurpleBrush}"
                                                   Width="18" Height="18"

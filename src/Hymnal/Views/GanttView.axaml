@@ -164,7 +164,8 @@
                             <dg:DataGridTemplateColumn.CellEditingTemplate>
                                 <DataTemplate x:DataType="vm:GanttRowViewModel">
                                     <ComboBox ItemsSource="{Binding AvailableStatuses}"
-                                              SelectedItem="{Binding EditableStatus, Mode=TwoWay}"
+                                              SelectedValueBinding="{Binding Value, DataType=models:StatusOption}"
+                                              SelectedValue="{Binding EditableDisplayStatus, Mode=TwoWay}"
                                               FontSize="10.5"
                                               MinHeight="24"
                                               Height="24"
@@ -173,17 +174,17 @@
                                               IsEnabled="{Binding IsEditable}"
                                               DropDownClosed="InlineStatus_DropDownClosed">
                                         <ComboBox.ItemTemplate>
-                                            <DataTemplate x:DataType="models:ChapterStatus">
+                                            <DataTemplate x:DataType="models:StatusOption">
                                                 <StackPanel Orientation="Horizontal"
                                                             Spacing="6"
                                                             VerticalAlignment="Center">
                                                     <Border Width="8"
                                                             Height="8"
                                                             CornerRadius="2"
-                                                            Background="{Binding Converter={x:Static conv:StatusToBrushConverter.Instance}}"
+                                                            Background="{Binding Value, Converter={x:Static conv:StatusToBrushConverter.Instance}}"
                                                             VerticalAlignment="Center" />
-                                                    <TextBlock Text="{Binding}"
-                                                               Foreground="{Binding Converter={x:Static conv:StatusToBrushConverter.Instance}}"
+                                                    <TextBlock Text="{Binding Label}"
+                                                               Foreground="{Binding Value, Converter={x:Static conv:StatusToBrushConverter.Instance}}"
                                                                VerticalAlignment="Center"
                                                                FontSize="10.5" />
                                                 </StackPanel>

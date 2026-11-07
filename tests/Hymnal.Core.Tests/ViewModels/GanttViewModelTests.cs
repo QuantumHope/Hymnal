@@ -57,6 +57,11 @@ public class GanttViewModelTests
             ?? throw new InvalidOperationException("Unable to locate WorkspaceViewModel.Nodes backing field.");
 
         nodesField.SetValue(workspace, readOnly);
+
+        // Uninitialized objects skip field initializers; give the workspace its default profile.
+        typeof(WorkspaceViewModel)
+            .GetField("_profile", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!
+            .SetValue(workspace, ProjectProfile.Novel);
         return workspace;
     }
 

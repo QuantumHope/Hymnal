@@ -37,7 +37,7 @@ public sealed class CardViewModel : ViewModelBase, IDisposable
         private set => this.RaiseAndSetIfChanged(ref _status, value);
     }
 
-    public string StatusDisplay => Status.ToString();
+    public string StatusDisplay => _chapter.StatusLabel;
 
     public string StatusBrushKey => $"corkboard-status-{Status.ToString().ToLowerInvariant()}";
 

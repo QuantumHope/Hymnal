@@ -32,10 +32,13 @@ public sealed class ChapterDetailViewModel : ViewModelBase, IDisposable
     private readonly Subject<Unit> _scheduleSaveSubject = new();
     private bool _suppressAutoSave;
 
-    // ── Static data ───────────────────────────────────────────────────────────
+    // ── Profile-driven data ───────────────────────────────────────────────────
 
-    public static IReadOnlyList<ChapterStatus> AllStatuses { get; } =
-        Enum.GetValues<ChapterStatus>();
+    /// <summary>Project profile of the backing chapter.</summary>
+    public ProjectProfile Profile => _chapterVm.Profile;
+
+    /// <summary>Statuses visible in this profile; bound to the status ComboBox ItemsSource.</summary>
+    public IReadOnlyList<StatusOption> StatusOptions => Profile.VisibleStatuses;
 
     // ── Bindable properties ───────────────────────────────────────────────────
 
@@ -45,8 +48,15 @@ public sealed class ChapterDetailViewModel : ViewModelBase, IDisposable
     public ChapterStatus Status
     {
         get => _status;
-        private set => this.RaiseAndSetIfChanged(ref _status, value);
+        private set
+        {
+            this.RaiseAndSetIfChanged(ref _status, value);
+            this.RaisePropertyChanged(nameof(DisplayStatus));
+        }
     }
+
+    /// <summary><see cref="Status"/> mapped onto a status visible in <see cref="Profile"/>.</summary>
+    public ChapterStatus DisplayStatus => Profile.DisplayStatus(Status);
 
     public ObservableCollection<PhaseScheduleRowViewModel> PhaseScheduleRows { get; }
 
@@ -128,7 +138,7 @@ public sealed class ChapterDetailViewModel : ViewModelBase, IDisposable
         _pendingTarget = chapterVm.Target?.MinWords;
 
         PhaseScheduleRows = new ObservableCollection<PhaseScheduleRowViewModel>(
-            GanttProjection.PhaseNames.Select(n => new PhaseScheduleRowViewModel(n)));
+            chapterVm.Profile.GanttPhases.Select(n => new PhaseScheduleRowViewModel(n)));
 
         SyncScheduleRows(chapterVm.PhaseData);
 
@@ -240,7 +250,12 @@ public sealed class ChapterDetailViewModel : ViewModelBase, IDisposable
         PhaseData? updated = null;
         await _phaseDataService.UpsertAsync(_workspaceRoot, _chapterVm.Uuid, current =>
         {
-            var schedule = new Dictionary<string, PhaseScheduleEntry>();
+            // Keep entries for phases this profile doesn't show (e.g. novel phases in a story).
+            var rowNames = rows.Select(r => r.PhaseName).ToHashSet(StringComparer.Ordinal);
+            var schedule = current?.Schedule?
+                .Where(kv => !rowNames.Contains(kv.Key))
+                .ToDictionary(kv => kv.Key, kv => kv.Value)
+                ?? new Dictionary<string, PhaseScheduleEntry>();
             foreach (var row in rows)
             {
                 if (!string.IsNullOrWhiteSpace(row.StartDate) ||
@@ -292,7 +307,7 @@ public sealed class ChapterDetailViewModel : ViewModelBase, IDisposable
                 if (isAdvancing)
                 {
                     var oldPhaseName = current?.Status.ToString();
-                    if (oldPhaseName != null && Array.IndexOf(GanttProjection.PhaseNames, oldPhaseName) >= 0)
+                    if (oldPhaseName != null && Profile.GanttPhases.Contains(oldPhaseName))
                     {
                         schedule.TryGetValue(oldPhaseName, out var old);
                         schedule[oldPhaseName] = new PhaseScheduleEntry
@@ -305,7 +320,7 @@ public sealed class ChapterDetailViewModel : ViewModelBase, IDisposable
                 }
 
                 var newPhaseName = newStatus.ToString();
-                if (Array.IndexOf(GanttProjection.PhaseNames, newPhaseName) >= 0)
+                if (Profile.GanttPhases.Contains(newPhaseName))
                 {
                     schedule.TryGetValue(newPhaseName, out var newEntry);
                     if (newEntry?.StartDate == null)

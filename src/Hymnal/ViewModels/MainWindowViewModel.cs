@@ -173,7 +173,7 @@ public class MainWindowViewModel : ViewModelBase
     public object? ChapterPanelContent => _chapterPanelContent.Value;
 
     private readonly ObservableAsPropertyHelper<string> _chapterPanelTitle;
-    /// <summary>Header label for the right-sidebar top panel: "CHAPTER INFO", "PART STATS", or "BOOK STATS".</summary>
+    /// <summary>Header label for the right-sidebar top panel: the info panel title (e.g. "CHAPTER INFO"), "PART STATS", or "BOOK STATS".</summary>
     public string ChapterPanelTitle => _chapterPanelTitle.Value;
 
     private readonly ObservableAsPropertyHelper<bool> _isChapterPanelOpen;
@@ -354,7 +354,7 @@ public class MainWindowViewModel : ViewModelBase
         _chapterPanelTitle = this.WhenAnyValue(x => x.ChapterPanelContent)
             .Select(content => content is BookStatsViewModel bsvm
                 ? bsvm.WhenAnyValue(x => x.PanelTitle)
-                : Observable.Return("CHAPTER INFO"))
+                : chapterInfoViewModel.WhenAnyValue(x => x.PanelTitle).Select(t => t.ToUpperInvariant()))
             .Switch()
             .ToProperty(this, x => x.ChapterPanelTitle, initialValue: "CHAPTER INFO");
         Disposables.Add(_chapterPanelTitle);

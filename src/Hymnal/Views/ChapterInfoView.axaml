@@ -45,8 +45,9 @@
                                Foreground="{DynamicResource OnSurfaceDimBrush}" />
                     <!-- x:Name="StatusComboBox" — SelectionChanged is wired in code-behind -->
                     <ComboBox x:Name="StatusComboBox"
-                              ItemsSource="{x:Static vm:ChapterInfoViewModel.AllStatuses}"
-                              SelectedItem="{Binding Status, Mode=OneWay}"
+                              ItemsSource="{Binding StatusOptions}"
+                              SelectedValueBinding="{Binding Value, DataType=models:StatusOption}"
+                              SelectedValue="{Binding DisplayStatus, Mode=OneWay}"
                               HorizontalAlignment="Stretch"
                               Padding="8,6"
                               Background="{DynamicResource SurfaceBaseBrush}"
@@ -54,12 +55,12 @@
                               BorderBrush="{DynamicResource BorderSubtleBrush}"
                               BorderThickness="1">
                         <ComboBox.ItemTemplate>
-                            <DataTemplate x:DataType="models:ChapterStatus">
+                            <DataTemplate x:DataType="models:StatusOption">
                                 <StackPanel Orientation="Horizontal" Spacing="8">
                                     <Ellipse Width="8" Height="8"
-                                             Fill="{Binding Converter={x:Static conv:StatusToBrushConverter.Instance}}"
+                                             Fill="{Binding Value, Converter={x:Static conv:StatusToBrushConverter.Instance}}"
                                              VerticalAlignment="Center" />
-                                    <TextBlock Text="{Binding}"
+                                    <TextBlock Text="{Binding Label}"
                                                VerticalAlignment="Center"
                                                FontSize="12" />
                                 </StackPanel>

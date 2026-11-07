@@ -1101,8 +1101,9 @@ public class WorkspaceViewModel : ViewModelBase
             {
                 total += vm.WordCount;
                 accumulated += vm.WordCount;
-                bookStatuses[vm.Status] = bookStatuses.GetValueOrDefault(vm.Status) + 1;
-                partStatuses[vm.Status] = partStatuses.GetValueOrDefault(vm.Status) + 1;
+                var status = Profile.DisplayStatus(vm.Status);
+                bookStatuses[status] = bookStatuses.GetValueOrDefault(status) + 1;
+                partStatuses[status] = partStatuses.GetValueOrDefault(status) + 1;
             }
         }
 

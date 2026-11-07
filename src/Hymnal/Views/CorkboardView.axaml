@@ -488,7 +488,7 @@
                         <Separator />
                         <MenuItem Header="Rename…"
                                   Click="RenameCard_Click" />
-                        <MenuItem Header="New Chapter…"
+                        <MenuItem Header="{Binding DataContext.Profile.UnitNoun, ElementName=Root, StringFormat='New {0}…'}"
                                   Click="NewChapter_Click" />
                         <MenuItem Header="Include Existing Chapter…"
                                   Click="IncludeExistingChapter_Click" />

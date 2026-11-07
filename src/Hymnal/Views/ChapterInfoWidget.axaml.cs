@@ -24,8 +24,8 @@ public partial class ChapterInfoWidget : UserControl
     {
         if (DataContext is ChapterDetailViewModel vm
             && e.AddedItems.Count > 0
-            && e.AddedItems[0] is ChapterStatus status
-            && status != vm.Status)
+            && e.AddedItems[0] is StatusOption { Value: var status }
+            && status != vm.DisplayStatus)
         {
             vm.SetStatusCommand.Execute(status).Subscribe(_ => { }, _ => { });
         }
