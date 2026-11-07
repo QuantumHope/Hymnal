@@ -13,19 +13,22 @@ namespace Hymnal.Core.Services;
 public static class GanttProjection
 {
     /// <summary>Canonical ordered authoring phases shown as columns in the Gantt.</summary>
-    public static readonly string[] PhaseNames =
-        ["Outlining", "Drafting", "Editing", "Polishing", "Reviewing"];
+    public static readonly string[] PhaseNames = ProjectProfile.NovelPhases;
 
     /// <summary>
     /// Project a chapter node and its phase metadata into a Gantt row.
     /// If <paramref name="phase"/> is null, <see cref="PhaseDataService.DefaultPhaseData"/> is used.
     /// </summary>
-    public static GanttRowData Project(ChapterNode node, PhaseData? phase)
+    public static GanttRowData Project(ChapterNode node, PhaseData? phase) =>
+        Project(node, phase, ProjectProfile.Novel);
+
+    /// <summary>Profile-aware projection: only the profile's Gantt phases produce segments.</summary>
+    public static GanttRowData Project(ChapterNode node, PhaseData? phase, ProjectProfile profile)
     {
         var pd = phase ?? PhaseDataService.DefaultPhaseData;
 
         // Build per-phase segments from Schedule; fall back to legacy fields for the active phase.
-        var segments = BuildSegments(pd);
+        var segments = BuildSegments(pd, profile);
 
         // Overall start/end span across all phases for rollup purposes.
         var allStarts = segments.Where(s => s.StartDate.HasValue).Select(s => s.StartDate!.Value).ToList();
@@ -52,10 +55,14 @@ public static class GanttProjection
     /// Schedule entries take priority; the legacy <see cref="PhaseData.PhaseStartDate"/> /
     /// <see cref="PhaseData.PhaseEndDate"/> fields are used as a fallback for the active status phase.
     /// </summary>
-    public static IReadOnlyList<PhaseSegment> BuildSegments(PhaseData pd)
+    public static IReadOnlyList<PhaseSegment> BuildSegments(PhaseData pd) =>
+        BuildSegments(pd, ProjectProfile.Novel);
+
+    /// <summary>Profile-aware variant of <see cref="BuildSegments(PhaseData)"/>.</summary>
+    public static IReadOnlyList<PhaseSegment> BuildSegments(PhaseData pd, ProjectProfile profile)
     {
-        var segments = new List<PhaseSegment>(PhaseNames.Length);
-        foreach (var name in PhaseNames)
+        var segments = new List<PhaseSegment>(profile.GanttPhases.Count);
+        foreach (var name in profile.GanttPhases)
         {
             PhaseScheduleEntry? entry = null;
             pd.Schedule?.TryGetValue(name, out entry);

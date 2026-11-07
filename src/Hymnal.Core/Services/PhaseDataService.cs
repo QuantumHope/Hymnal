@@ -36,6 +36,8 @@ public sealed class PhaseDataService
 
     public static PhaseData DefaultPhaseData => new() { Status = ChapterStatus.Outlining };
 
+    public static PhaseData DefaultPhaseDataFor(ProjectProfile profile) => new() { Status = profile.DefaultStatus };
+
     // -------------------------------------------------------------------------
     // Load / Save
     // -------------------------------------------------------------------------

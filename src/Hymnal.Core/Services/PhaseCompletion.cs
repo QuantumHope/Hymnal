@@ -34,12 +34,16 @@ public static class PhaseCompletion
     /// Marks the current phase 100% complete (with dates), then advances to the next status.
     /// Does not prefill start dates on the newly active phase.
     /// </summary>
-    public static Result<PhaseData> CompleteAndAdvance(PhaseData current, DateOnly today)
+    public static Result<PhaseData> CompleteAndAdvance(PhaseData current, DateOnly today) =>
+        CompleteAndAdvance(current, today, ProjectProfile.Novel);
+
+    /// <summary>Profile-aware variant: status sequence and trackable phases come from <paramref name="profile"/>.</summary>
+    public static Result<PhaseData> CompleteAndAdvance(PhaseData current, DateOnly today, ProjectProfile profile)
     {
-        if (current.Status == ChapterStatus.Done)
+        if (profile.DisplayStatus(current.Status) == ChapterStatus.Done)
             return Result<PhaseData>.Fail("Chapter is already done.");
 
-        var nextStatus = GetNextStatus(current.Status);
+        var nextStatus = profile.NextStatus(current.Status);
         if (nextStatus is null)
             return Result<PhaseData>.Fail("Chapter is already done.");
 
@@ -51,7 +55,7 @@ public static class PhaseCompletion
         string? phaseStart = current.PhaseStartDate;
         string? phaseEnd = current.PhaseEndDate;
 
-        if (IsTrackablePhase(current.Status))
+        if (profile.IsTrackablePhase(current.Status))
         {
             var phaseName = current.Status.ToString();
             schedule.TryGetValue(phaseName, out var existing);
@@ -79,7 +83,7 @@ public static class PhaseCompletion
         {
             phaseEnd = phaseEnd ?? todayStr;
         }
-        else if (IsTrackablePhase(newStatus))
+        else if (profile.IsTrackablePhase(newStatus))
         {
             phaseStart = null;
             phaseEnd = null;

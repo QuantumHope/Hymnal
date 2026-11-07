@@ -10,7 +10,7 @@ namespace Hymnal.Core.Models;
 /// </summary>
 public sealed class ProjectProfile
 {
-    private static readonly string[] NovelPhases =
+    internal static readonly string[] NovelPhases =
         ["Outlining", "Drafting", "Editing", "Polishing", "Reviewing"];
 
     private static readonly string[] ShortFormPhases = ["Drafting", "Editing"];
