@@ -188,6 +188,8 @@ public sealed class CorkboardViewModel : ViewModelBase, IDisposable
                 {
                     this.RaisePropertyChanged(nameof(Profile));
                     this.RaisePropertyChanged(nameof(IsAnthology));
+                    foreach (var item in _items)
+                        item.ShowsBeatsAction = CanShowBeats(item);
                 }));
 
         Disposables.Add(_openChapterRequested);
@@ -517,6 +519,7 @@ public sealed class CorkboardViewModel : ViewModelBase, IDisposable
                      orphans,
                      ShowExcludedFiles))
         {
+            item.ShowsBeatsAction = CanShowBeats(item);
             _items.Add(item);
         }
 
@@ -554,6 +557,10 @@ public sealed class CorkboardViewModel : ViewModelBase, IDisposable
         if (SelectedCard == null)
             return Task.CompletedTask;
 
+        // In an anthology Enter does what a double-click does: a story card opens its beats.
+        if (IsAnthology && _items.OfType<ChapterCardItemViewModel>().FirstOrDefault(i => ReferenceEquals(i.Card, SelectedCard)) is { } item)
+            return OpenCardAsync(item);
+
         _openChapterRequested.OnNext(SelectedCard.Chapter);
         return Task.CompletedTask;
     }
@@ -588,10 +595,14 @@ public sealed class CorkboardViewModel : ViewModelBase, IDisposable
         if (item is ChapterCardItemViewModel cardItem)
             SetSelectedCard(cardItem.Card);
 
-        if (FindStory(item) is { } story)
+        if (FindStory(item) is { Node.IsExcluded: false } story)
             _beatsRequested.OnNext(story);
         return Task.CompletedTask;
     }
+
+    /// <summary>True when <paramref name="item"/> offers a Beats action: in an anthology, for a story that is in the book.</summary>
+    public bool CanShowBeats(CorkboardItemViewModel? item) =>
+        IsAnthology && FindStory(item) is { Node.IsExcluded: false };
 
     /// <summary>The story an item belongs to: a Part divider's Part, a scene's Part, or a top-level card itself.</summary>
     private ChapterViewModel? FindStory(CorkboardItemViewModel? item) => item switch

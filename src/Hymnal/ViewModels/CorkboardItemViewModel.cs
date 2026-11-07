@@ -84,6 +84,14 @@ public abstract class CorkboardItemViewModel : ViewModelBase, IDisposable
 
     public virtual bool IsVisibleOnBoard => true;
 
+    private bool _showsBeatsAction;
+    /// <summary>Anthology: true when the item's story (itself or its Part) is in the book, so Beats applies.</summary>
+    public bool ShowsBeatsAction
+    {
+        get => _showsBeatsAction;
+        internal set => this.RaiseAndSetIfChanged(ref _showsBeatsAction, value);
+    }
+
 
 
     public static IReadOnlyList<CorkboardItemViewModel> Project(

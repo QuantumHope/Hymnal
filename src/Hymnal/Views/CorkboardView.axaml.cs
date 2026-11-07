@@ -8,6 +8,7 @@ using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Input;
 using Avalonia.Interactivity;
+using Avalonia.Threading;
 using Avalonia.VisualTree;
 using Hymnal.ViewModels;
 
@@ -21,6 +22,8 @@ public partial class CorkboardView : UserControl
     private Point _dragStart;
     private bool _dragOperationStarted;
     private Panel? _lastDropIndicator;
+    /// <summary>Anthology: a Part header click waiting to see whether it is the first half of a double-click.</summary>
+    private DispatcherTimer? _pendingPartToggle;
 
     public CorkboardView()
     {
@@ -263,6 +266,44 @@ public partial class CorkboardView : UserControl
         await ExecuteCommandAsync(vm.OpenCardCommand.Execute(card));
     }
 
+    /// <summary>
+    /// Toggles the Part. In an anthology a double-click opens the story's beats instead, so the toggle waits
+    /// out the double-click time and a second click cancels it (no collapse-and-expand flicker).
+    /// </summary>
+    private async void PartHeader_Click(object? sender, RoutedEventArgs e)
+    {
+        if (sender is not Control { DataContext: PartDividerItemViewModel part }
+            || DataContext is not CorkboardViewModel vm)
+            return;
+
+        if (!vm.IsAnthology)
+        {
+            await ExecuteCommandAsync(vm.TogglePartExpandedCommand.Execute(part));
+            return;
+        }
+
+        if (_pendingPartToggle is { } pending)
+        {
+            pending.Stop();
+            _pendingPartToggle = null;
+            if (ReferenceEquals(pending.Tag, part))
+                return;
+        }
+
+        var interval = Application.Current?.PlatformSettings?.GetDoubleTapTime(PointerType.Mouse)
+            ?? TimeSpan.FromMilliseconds(500);
+        var timer = new DispatcherTimer { Interval = interval, Tag = part };
+        timer.Tick += async (_, _) =>
+        {
+            timer.Stop();
+            if (ReferenceEquals(_pendingPartToggle, timer))
+                _pendingPartToggle = null;
+            await ExecuteCommandAsync(vm.TogglePartExpandedCommand.Execute(part));
+        };
+        _pendingPartToggle = timer;
+        timer.Start();
+    }
+
     private async void PartHeader_DoubleTapped(object? sender, TappedEventArgs e)
     {
         if (sender is not Control { DataContext: PartDividerItemViewModel part }
@@ -271,6 +312,8 @@ public partial class CorkboardView : UserControl
             return;
 
         e.Handled = true;
+        _pendingPartToggle?.Stop();
+        _pendingPartToggle = null;
         await ExecuteCommandAsync(vm.OpenCardCommand.Execute(part));
     }
 

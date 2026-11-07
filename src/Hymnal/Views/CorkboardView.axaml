@@ -361,8 +361,7 @@
                     Focusable="False"
                     Loaded="PartHeader_Loaded"
                     DoubleTapped="PartHeader_DoubleTapped"
-                    Command="{Binding DataContext.TogglePartExpandedCommand, ElementName=Root}"
-                    CommandParameter="{Binding}"
+                    Click="PartHeader_Click"
                     ToolTip.Tip="Click to show or hide chapters in this part">
                 <Grid ColumnDefinitions="Auto,*,Auto,Auto"
                       ColumnSpacing="12">
@@ -390,7 +389,7 @@
                             Content="Beats"
                             VerticalAlignment="Center"
                             ToolTip.Tip="Open this story's beat board"
-                            IsVisible="{Binding DataContext.IsAnthology, ElementName=Root}"
+                            IsVisible="{Binding ShowsBeatsAction}"
                             Command="{Binding DataContext.ShowBeatsCommand, ElementName=Root}"
                             CommandParameter="{Binding}" />
                     <Button Grid.Column="3"
@@ -501,7 +500,7 @@
                                   Command="{Binding DataContext.OpenInEditorCommand, ElementName=Root}"
                                   CommandParameter="{Binding}" />
                         <MenuItem Header="Beats"
-                                  IsVisible="{Binding DataContext.IsAnthology, ElementName=Root}"
+                                  IsVisible="{Binding ShowsBeatsAction}"
                                   Command="{Binding DataContext.ShowBeatsCommand, ElementName=Root}"
                                   CommandParameter="{Binding}" />
                         <MenuItem Header="Mark complete"
@@ -696,6 +695,7 @@
                                 IsVisible="{Binding DataContext.IsAnthology, ElementName=Root}">
                         <Button Classes="cork-card-action"
                                 Content="Beats"
+                                IsVisible="{Binding ShowsBeatsAction}"
                                 ToolTip.Tip="Open this story's beat board"
                                 Command="{Binding DataContext.ShowBeatsCommand, ElementName=Root}"
                                 CommandParameter="{Binding}" />
