@@ -56,7 +56,7 @@
                             Background="{DynamicResource SynthwavePurpleBrush}"
                             Foreground="{DynamicResource OnSurfaceBrush}"
                             BorderThickness="0"
-                            IsEnabled="{Binding !IsReadOnly}"
+                            IsEnabled="{Binding CanEdit}"
                             ToolTip.Tip="New idea (Ctrl+Shift+I)"
                             Click="NewIdeaButton_Click" />
                     <CheckBox x:Name="ShowUsedAndShelvedToggle"
@@ -178,7 +178,7 @@
                            Foreground="{DynamicResource OnSurfaceMutedBrush}" />
                 <ScrollViewer x:Name="IdeaEditor"
                               IsVisible="{Binding Selected, Converter={x:Static ObjectConverters.IsNotNull}}">
-                    <StackPanel Margin="16" Spacing="12" IsEnabled="{Binding !IsReadOnly}">
+                    <StackPanel Margin="16" Spacing="12" IsEnabled="{Binding CanEdit}">
                         <StackPanel Spacing="4">
                             <TextBlock Classes="field-label" Text="TITLE" />
                             <TextBox x:Name="IdeaTitleInput" Text="{Binding Selected.Title, Mode=TwoWay}" />

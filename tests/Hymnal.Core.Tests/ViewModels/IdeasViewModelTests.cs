@@ -306,14 +306,20 @@ public sealed class IdeasViewModelTests : IDisposable
                 vm.Selected = vm.Cards.Single();
                 Assert.True(vm.CanPromote);
                 vm.AskFileNameAsync = suggestion => { suggested = suggestion; return Task.FromResult<string?>(suggestion); };
+                var opened = new List<string>();
+                using var openedSubscription = vm.StoryOpened.Subscribe(opened.Add);
 
                 await Within(vm.PromoteSelectedCommand.Execute().ToTask());
 
                 Assert.Empty(context.Notifications.Errors);
+                Assert.Equal(["the-lighthouse.md"], opened);
+                Assert.False(vm.IsPromoting);
                 Assert.Equal("the-lighthouse.md", context.Workspace.SelectedNode?.Node.RelativePath);
                 await PumpUntilAsync(() => context.Editor.ActiveNode?.RelativePath == "the-lighthouse.md");
                 Assert.Equal("the-lighthouse.md", context.Editor.ActiveNode?.RelativePath);
                 Assert.Empty(vm.Cards);
+                // The now-used idea is filtered out, so it isn't left selected behind the list.
+                Assert.Null(vm.Selected);
 
                 vm.ShowUsedAndShelved = true;
                 Assert.Equal(IdeaState.Used, vm.Cards.Single().State);
@@ -419,6 +425,194 @@ public sealed class IdeasViewModelTests : IDisposable
             Assert.Equal(IdeaState.New, Assert.Single(await LoadFromDiskAsync(root)).State);
         }
         finally { DeleteFolder(root); }
+    }
+
+    [Fact]
+    public async Task Promote_keeps_selection_when_the_used_idea_stays_visible()
+    {
+        var root = CreateWorkspace(AnthologyJson);
+        try
+        {
+            await SeedAsync(root, Idea("a", "The Lighthouse", Day1));
+
+            await Ui(root, async context =>
+            {
+                var vm = await Within(context.CreateIdeasAsync());
+                vm.ShowUsedAndShelved = true;
+                vm.Selected = vm.Cards.Single();
+                vm.AskFileNameAsync = suggestion => Task.FromResult<string?>(suggestion);
+
+                await Within(vm.PromoteSelectedCommand.Execute().ToTask());
+
+                Assert.Empty(context.Notifications.Errors);
+                Assert.Equal("a", vm.Selected?.Id);
+                Assert.Equal(IdeaState.Used, vm.Selected!.State);
+            });
+        }
+        finally { DeleteFolder(root); }
+    }
+
+    [Fact]
+    public async Task Edit_during_promote_is_not_saved_over_the_used_idea()
+    {
+        var root = CreateWorkspace(AnthologyJson);
+        try
+        {
+            await SeedAsync(root, Idea("a", "The Lighthouse", Day1));
+
+            await Ui(root, async context =>
+            {
+                var vm = await Within(context.CreateIdeasAsync());
+                var card = vm.Cards.Single();
+                vm.Selected = card;
+                vm.AskFileNameAsync = suggestion => Task.FromResult<string?>(suggestion);
+                Assert.True(vm.CanEdit);
+
+                // Hold the promoter's pre-flight read of ideas.json.
+                var hold = context.Ideas.HoldNextLoad(root);
+                var promote = vm.PromoteSelectedCommand.Execute().ToTask();
+                await PumpUntilAsync(() => context.Ideas.IsHeld(root));
+
+                Assert.True(vm.IsPromoting);
+                Assert.False(vm.CanEdit);
+                Assert.False(await vm.NewIdeaCommand.CanExecute.FirstAsync());
+                Assert.False(await vm.DeleteSelectedCommand.CanExecute.FirstAsync());
+                Assert.False(await vm.PromoteSelectedCommand.CanExecute.FirstAsync());
+                Assert.False(vm.CanPromote);
+
+                card.Title = "Edited mid-promote";
+                context.Scheduler.AdvanceBy(TimeSpan.FromSeconds(1));
+
+                hold.SetResult();
+                await Within(promote);
+                context.Scheduler.AdvanceBy(TimeSpan.FromSeconds(1));
+                await Within(vm.FlushAsync());
+
+                Assert.Empty(context.Notifications.Errors);
+                Assert.False(vm.IsPromoting);
+                Assert.True(vm.CanEdit);
+                Assert.True(await vm.NewIdeaCommand.CanExecute.FirstAsync());
+            });
+
+            var saved = Assert.Single(await LoadFromDiskAsync(root));
+            Assert.Equal(IdeaState.Used, saved.State);
+            Assert.NotNull(saved.StoryId);
+            Assert.Equal("The Lighthouse", saved.Title);
+        }
+        finally { DeleteFolder(root); }
+    }
+
+    [Fact]
+    public async Task Promote_failure_after_creating_the_file_still_lists_the_story()
+    {
+        var root = CreateWorkspace(AnthologyJson);
+        try
+        {
+            await SeedAsync(root, Idea("a", "The Lighthouse", Day1) with { Notes = "Some notes." });
+
+            await Ui(root, async context =>
+            {
+                context.PromoterNotes = new ThrowingNotesService();
+                var vm = await Within(context.CreateIdeasAsync());
+                vm.Selected = vm.Cards.Single();
+                vm.AskFileNameAsync = suggestion => Task.FromResult<string?>(suggestion);
+                var opened = new List<string>();
+                using var openedSubscription = vm.StoryOpened.Subscribe(opened.Add);
+
+                await Within(vm.PromoteSelectedCommand.Execute().ToTask());
+                await PumpUntilAsync(() => context.Workspace.Nodes.Count == 2);
+
+                Assert.Contains(context.Workspace.Nodes, n => n.Node.RelativePath == "the-lighthouse.md");
+                var error = Assert.Single(context.Notifications.Errors);
+                Assert.Contains("notes boom", error);
+                Assert.Empty(opened);
+                Assert.Equal(IdeaState.New, vm.Cards.Single().State);
+            });
+
+            Assert.True(File.Exists(Path.Combine(root, "the-lighthouse.md")));
+            Assert.Equal(IdeaState.New, Assert.Single(await LoadFromDiskAsync(root)).State);
+        }
+        finally { DeleteFolder(root); }
+    }
+
+    [Fact]
+    public async Task Promote_aborts_when_pending_edits_cannot_be_saved()
+    {
+        var root = CreateWorkspace(AnthologyJson);
+        try
+        {
+            await SeedAsync(root, Idea("a", "The Lighthouse", Day1));
+
+            await Ui(root, async context =>
+            {
+                var vm = await Within(context.CreateIdeasAsync());
+                vm.Selected = vm.Cards.Single();
+                var asked = false;
+                vm.AskFileNameAsync = suggestion => { asked = true; return Task.FromResult<string?>(suggestion); };
+
+                context.Ideas.FailSaves = true;
+                vm.Selected.Notes = "Unsaved";
+                await Within(vm.PromoteSelectedCommand.Execute().ToTask());
+
+                Assert.False(asked);
+                Assert.Contains(context.Notifications.Errors, e => e.Contains("wasn't promoted"));
+                Assert.Equal(IdeaState.New, vm.Cards.Single().State);
+            });
+
+            Assert.False(File.Exists(Path.Combine(root, "the-lighthouse.md")));
+            Assert.Equal(IdeaState.New, Assert.Single(await LoadFromDiskAsync(root)).State);
+        }
+        finally { DeleteFolder(root); }
+    }
+
+    [Fact]
+    public async Task Promote_finishing_after_another_workspace_opened_leaves_that_workspace_alone()
+    {
+        var first = CreateWorkspace(AnthologyJson);
+        var second = CreateWorkspace(AnthologyJson);
+        try
+        {
+            await SeedAsync(first, Idea("a", "The Lighthouse", Day1));
+            await SeedAsync(second, Idea("b", "Bravo", Day1));
+
+            await Ui(first, async context =>
+            {
+                var vm = await Within(context.CreateIdeasAsync());
+                vm.Selected = vm.Cards.Single();
+                vm.AskFileNameAsync = suggestion => Task.FromResult<string?>(suggestion);
+                var opened = new List<string>();
+                using var openedSubscription = vm.StoryOpened.Subscribe(opened.Add);
+
+                var hold = context.Ideas.HoldNextLoad(first);
+                var promote = vm.PromoteSelectedCommand.Execute().ToTask();
+                await PumpUntilAsync(() => context.Ideas.IsHeld(first));
+
+                context.FolderPicker.Folder = second;
+                await Within(context.OpenWorkspaceInCurrentDispatchAsync());
+                var selectedBefore = context.Workspace.SelectedNode;
+
+                hold.SetResult();
+                await Within(promote);
+                await Within(CurrentLoad(vm));
+
+                Assert.Empty(context.Notifications.Errors);
+                Assert.Empty(opened);
+                Assert.Equal(Path.GetFullPath(second), Path.GetFullPath(context.Workspace.WorkspaceRoot!));
+                Assert.Same(selectedBefore, context.Workspace.SelectedNode);
+                Assert.DoesNotContain(context.Workspace.Nodes, n => n.Node.RelativePath == "the-lighthouse.md");
+                Assert.Equal(["Bravo"], vm.Cards.Select(c => c.Title));
+            });
+
+            // The promote itself completed in the workspace it started in.
+            Assert.True(File.Exists(Path.Combine(first, "the-lighthouse.md")));
+            Assert.Equal(IdeaState.Used, Assert.Single(await LoadFromDiskAsync(first)).State);
+            Assert.False(File.Exists(Path.Combine(second, "the-lighthouse.md")));
+        }
+        finally
+        {
+            DeleteFolder(first);
+            DeleteFolder(second);
+        }
     }
 
     [Fact]
@@ -728,8 +922,15 @@ public sealed class IdeasViewModelTests : IDisposable
     private sealed class TestContext : IDisposable
     {
         private readonly ManuscriptService _manuscript;
-        private readonly StoryIdeaPromoter _promoter;
+        private readonly MetadataStore _store = new();
+        private readonly BookTxtStructureService _structure;
+        private readonly ChapterRegistryService _registry;
+        private readonly PhaseDataService _phases;
+        private readonly TargetsService _targets;
         private readonly List<IdeasViewModel> _ideasViewModels = new();
+
+        /// <summary>Notes service the promoter uses; set before <see cref="CreateIdeasAsync"/>.</summary>
+        public INotesService? PromoterNotes { get; set; }
 
         public RecordingNotificationService Notifications { get; } = new();
         public ProjectSettingsService ProjectSettings { get; }
@@ -741,16 +942,15 @@ public sealed class IdeasViewModelTests : IDisposable
 
         public TestContext(string folder)
         {
-            var store = new MetadataStore();
+            var store = _store;
             var exclusions = new ExclusionManifestService(store);
-            var registry = new ChapterRegistryService(store);
-            var phases = new PhaseDataService(store);
-            var targets = new TargetsService(store);
+            var registry = _registry = new ChapterRegistryService(store);
+            var phases = _phases = new PhaseDataService(store);
+            var targets = _targets = new TargetsService(store);
             var wordCount = new WordCountService();
-            var structure = new BookTxtStructureService(store, exclusions, registry);
+            var structure = _structure = new BookTxtStructureService(store, exclusions, registry);
             ProjectSettings = new ProjectSettingsService(store);
             Ideas = new CountingIdeasService(new StoryIdeasService(store));
-            _promoter = new StoryIdeaPromoter(structure, registry, phases, targets, new NotesService(store), Ideas);
             var editor = Editor = new EditorViewModel(store, Notifications, wordCount);
             FolderPicker = new MutableFolderPickerService { Folder = folder };
             _manuscript = new ManuscriptService(Notifications, exclusions);
@@ -779,6 +979,7 @@ public sealed class IdeasViewModelTests : IDisposable
         public void Dispose()
         {
             foreach (var vm in _ideasViewModels) vm.Dispose();
+            Editor.Dispose();
             _manuscript.Dispose();
         }
 
@@ -798,7 +999,9 @@ public sealed class IdeasViewModelTests : IDisposable
         /// <summary>Creates and loads an ideas view model; call on the UI thread.</summary>
         public async Task<IdeasViewModel> CreateIdeasAsync()
         {
-            var vm = new IdeasViewModel(Workspace, Ideas, _promoter, Notifications, Scheduler);
+            var promoter = new StoryIdeaPromoter(
+                _structure, _registry, _phases, _targets, PromoterNotes ?? new NotesService(_store), Ideas);
+            var vm = new IdeasViewModel(Workspace, Ideas, promoter, Notifications, Scheduler);
             _ideasViewModels.Add(vm);
             await Within(vm.LoadAsync());
             // Run the change handler the constructor posted, so no stray reload starts mid-test.
@@ -812,6 +1015,7 @@ public sealed class IdeasViewModelTests : IDisposable
     {
         public int SaveCount { get; set; }
         public IReadOnlyList<StoryIdea>? LastSaved { get; private set; }
+        public bool FailSaves { get; set; }
 
         private readonly Dictionary<string, TaskCompletionSource> _holds = new(StringComparer.Ordinal);
         private readonly HashSet<string> _held = new(StringComparer.Ordinal);
@@ -847,8 +1051,16 @@ public sealed class IdeasViewModelTests : IDisposable
         {
             SaveCount++;
             LastSaved = ideas;
+            if (FailSaves)
+                return Task.FromResult(Result<Unit>.Fail("Disk is full."));
             return inner.SaveAsync(workspaceRoot, ideas);
         }
+    }
+
+    private sealed class ThrowingNotesService : INotesService
+    {
+        public Task<string> LoadAsync(string absoluteNotesPath) => Task.FromResult("");
+        public Task SaveAsync(string absoluteNotesPath, string content) => throw new IOException("notes boom");
     }
 
     private sealed class NeverInitPrompt : IProjectInitPrompt

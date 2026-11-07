@@ -40,6 +40,7 @@ public sealed class IdeasViewModel : ViewModelBase, IDisposable
     private readonly ObservableCollectionExtended<IdeaCardViewModel> _cards = new();
     private readonly Subject<Unit> _saveRequests = new();
     private readonly Subject<Unit> _loadedRootChanged = new();
+    private readonly Subject<string> _storyOpened = new();
 
     /// <summary>Workspace root the current ideas were loaded from; null when nothing is loaded.</summary>
     private string? _loadedRoot;
@@ -49,6 +50,7 @@ public sealed class IdeasViewModel : ViewModelBase, IDisposable
     private ProjectKind? _loadedKind;
     private int _loadGeneration;
     private Task _currentLoad = Task.CompletedTask;
+    private Task _promoteCompletion = Task.CompletedTask;
 
     public IdeasViewModel(
         WorkspaceViewModel workspace,
@@ -89,11 +91,16 @@ public sealed class IdeasViewModel : ViewModelBase, IDisposable
             .StartWith(Unit.Default)
             .Select(_ => ShowsOpenWorkspace);
 
+        var readOnlyOrPromoting = this.WhenAnyValue(x => x.IsReadOnly, x => x.IsPromoting, (r, p) => r || p);
+
+        _canEdit = readOnlyOrPromoting.Select(blocked => !blocked).ToProperty(this, x => x.CanEdit);
+        Disposables.Add(_canEdit);
+
         _canPromote = Observable.CombineLatest(
-                profile, selectedState, this.WhenAnyValue(x => x.IsReadOnly), showsOpenWorkspace,
-                (p, state, readOnly, current) =>
+                profile, selectedState, readOnlyOrPromoting, showsOpenWorkspace,
+                (p, state, blocked, current) =>
                     p.Kind == ProjectKind.Anthology && state is { } s && s != IdeaState.Used
-                    && Selected?.StoryId == null && !readOnly && current)
+                    && Selected?.StoryId == null && !blocked && current)
             .DistinctUntilChanged()
             .ToProperty(this, x => x.CanPromote);
         Disposables.Add(_canPromote);
@@ -104,11 +111,11 @@ public sealed class IdeasViewModel : ViewModelBase, IDisposable
         Disposables.Add(_showsPromote);
 
         var canCreate = Observable.CombineLatest(
-            profile, this.WhenAnyValue(x => x.IsReadOnly),
-            (p, readOnly) => p.ShowsIdeas && !readOnly);
+            profile, readOnlyOrPromoting,
+            (p, blocked) => p.ShowsIdeas && !blocked);
         var canDelete = Observable.CombineLatest(
-            this.WhenAnyValue(x => x.Selected), this.WhenAnyValue(x => x.IsReadOnly),
-            (selected, readOnly) => selected != null && !readOnly);
+            this.WhenAnyValue(x => x.Selected), readOnlyOrPromoting,
+            (selected, blocked) => selected != null && !blocked);
 
         NewIdeaCommand = ReactiveCommand.CreateFromTask<(string Title, string Premise)>(
             request => NewIdeaAsync(request.Title, request.Premise), canCreate);
@@ -254,6 +261,27 @@ public sealed class IdeasViewModel : ViewModelBase, IDisposable
         private set => this.RaiseAndSetIfChanged(ref _isReadOnly, value);
     }
 
+    private bool _isPromoting;
+    /// <summary>
+    /// True from the start of a promote until the workspace and ideas are reloaded; ideas can't be
+    /// edited, created or deleted meanwhile.
+    /// </summary>
+    public bool IsPromoting
+    {
+        get => _isPromoting;
+        private set => this.RaiseAndSetIfChanged(ref _isPromoting, value);
+    }
+
+    private readonly ObservableAsPropertyHelper<bool> _canEdit;
+    /// <summary>True when ideas can be edited: not read-only and no promote in flight.</summary>
+    public bool CanEdit => _canEdit.Value;
+
+    /// <summary>Completes when no promote is in flight.</summary>
+    public Task PromoteCompletion => _promoteCompletion;
+
+    /// <summary>Fires with the story's path once a promoted idea's new story is selected in the workspace.</summary>
+    public IObservable<string> StoryOpened => _storyOpened.AsObservable();
+
     private readonly ObservableAsPropertyHelper<bool> _canPromote;
     public bool CanPromote => _canPromote.Value;
 
@@ -396,18 +424,20 @@ public sealed class IdeasViewModel : ViewModelBase, IDisposable
             AddCard(new IdeaCardViewModel(idea, presets));
 
         RefreshCards();
+        // A card the filters now hide (e.g. a just-promoted, now used idea) is not reselected.
         if (selectedId != null)
-            Selected = _allCards.FirstOrDefault(c => c.Id == selectedId);
+            Selected = _cards.FirstOrDefault(c => c.Id == selectedId);
     }
 
     // ── Commands ──────────────────────────────────────────────────────────────
 
     public async Task NewIdeaAsync(string title, string premise)
     {
-        // Quick capture can arrive while the open workspace's ideas are still loading; add the
-        // idea to that workspace's list, not the one being replaced.
+        // Quick capture can arrive while the open workspace's ideas are still loading (or a promote
+        // is reloading them); add the idea to the reloaded list, not the one being replaced.
+        await _promoteCompletion;
         await _currentLoad;
-        if (IsReadOnly || _loadedRoot == null)
+        if (IsReadOnly || IsPromoting || _loadedRoot == null)
             return;
 
         title = title?.Trim() ?? "";
@@ -434,7 +464,7 @@ public sealed class IdeasViewModel : ViewModelBase, IDisposable
     public async Task DeleteSelectedAsync()
     {
         var card = Selected;
-        if (card == null || IsReadOnly || _loadedRoot == null)
+        if (card == null || IsReadOnly || IsPromoting || _loadedRoot == null)
             return;
 
         var title = string.IsNullOrWhiteSpace(card.Title) ? "this idea" : $"\"{card.Title}\"";
@@ -457,35 +487,63 @@ public sealed class IdeasViewModel : ViewModelBase, IDisposable
         var root = _loadedRoot!;
 
         // The promoter re-reads the idea from disk, so pending edits must land first.
-        await FlushAsync();
-
-        var fileName = await AskFileNameAsync(StoryIdeaPromoter.SuggestFileName(card.Title));
-        if (string.IsNullOrWhiteSpace(fileName) || root != _loadedRoot || !ShowsOpenWorkspace)
+        if (!await TryFlushPendingEditsBeforePromoteAsync())
             return;
 
+        var fileName = await AskFileNameAsync(StoryIdeaPromoter.SuggestFileName(card.Title));
+        if (string.IsNullOrWhiteSpace(fileName) || root != _loadedRoot || !ShowsOpenWorkspace || IsPromoting)
+            return;
+
+        var completion = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        _promoteCompletion = completion.Task;
+        IsPromoting = true;
+        var promoterRan = false;
         try
         {
+            // Edits made while the file name was asked for; nothing more is saved until the reload.
+            if (!await TryFlushPendingEditsBeforePromoteAsync())
+                return;
+
             using var suppressFileWatcher = _workspace.SuppressFileWatcher();
+            promoterRan = true;
             var result = await _promoter.PromoteAsync(
                 root, _workspace.BookTxtPath, card.ToIdea(), fileName.Trim(), _workspace.Profile);
 
-            if (result.IsSuccess)
-            {
-                var reload = await _workspace.ReloadProjectAsync();
-                if (reload.IsSuccess)
-                    _workspace.SelectChapterByPath(result.Value!);
-                else
-                    _notifications.ShowError(reload.Error!);
-            }
-            else
-            {
+            if (!result.IsSuccess)
                 _notifications.ShowError(result.Error!);
+
+            // Another workspace opened meanwhile: its sidebar and editor aren't this story's.
+            if (root == _workspace.WorkspaceRoot && result.FileCreated)
+            {
+                // Even when setup failed after creating the file, the sidebar must list the new story.
+                var reload = await _workspace.ReloadProjectAsync();
+                if (!reload.IsSuccess)
+                    _notifications.ShowError(reload.Error!);
+                else if (result.IsSuccess && _workspace.SelectChapterByPath(result.Value!))
+                    _storyOpened.OnNext(result.Value!);
             }
         }
         finally
         {
-            await LoadAsync();
+            try
+            {
+                if (promoterRan)
+                    await LoadAsync();
+            }
+            finally
+            {
+                IsPromoting = false;
+                completion.SetResult();
+            }
         }
+    }
+
+    private async Task<bool> TryFlushPendingEditsBeforePromoteAsync()
+    {
+        if (await TryFlushAsync())
+            return true;
+        _notifications.ShowError("The idea wasn't promoted because its latest edits couldn't be saved.");
+        return false;
     }
 
     // ── Saving ────────────────────────────────────────────────────────────────
@@ -538,7 +596,9 @@ public sealed class IdeasViewModel : ViewModelBase, IDisposable
 
     private void OnCardEdited()
     {
-        if (IsReadOnly || _loadedRoot == null)
+        // While promoting, the cards are about to be replaced by the reloaded file; saving them
+        // would write back a stale copy of the promoted idea.
+        if (IsReadOnly || IsPromoting || _loadedRoot == null)
             return;
         _savePending = true;
         _saveRequests.OnNext(Unit.Default);
@@ -598,5 +658,7 @@ public sealed class IdeasViewModel : ViewModelBase, IDisposable
         _saveRequests.Dispose();
         _loadedRootChanged.OnCompleted();
         _loadedRootChanged.Dispose();
+        _storyOpened.OnCompleted();
+        _storyOpened.Dispose();
     }
 }
