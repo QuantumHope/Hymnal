@@ -192,10 +192,7 @@ public sealed class IdeasViewModel : ViewModelBase, IDisposable
 
     private async Task LoadCoreAsync(int generation)
     {
-        Result<IReadOnlyList<StoryIdea>> result;
-        string root;
-        ProjectProfile profile;
-        do
+        while (true)
         {
             await FlushAsync();
             if (generation != _loadGeneration)
@@ -204,9 +201,13 @@ public sealed class IdeasViewModel : ViewModelBase, IDisposable
                 return;
             }
 
-            root = _workspace.WorkspaceRoot;
-            profile = _workspace.Profile;
+            var root = _workspace.WorkspaceRoot;
+            var profile = _workspace.Profile;
             this.RaisePropertyChanged(nameof(TargetPresets));
+
+            // Edits made during the flush belong to the loaded cards; write them before replacing.
+            if (_savePending)
+                continue;
 
             if (!_workspace.HasWorkspace || string.IsNullOrEmpty(root) || !profile.ShowsIdeas)
             {
@@ -215,43 +216,44 @@ public sealed class IdeasViewModel : ViewModelBase, IDisposable
                 return;
             }
 
-            result = await _ideas.LoadAsync(root);
+            var result = await _ideas.LoadAsync(root);
             if (generation != _loadGeneration)
             {
                 await _currentLoad;
                 return;
             }
 
-            // Edits made while the file was being read must be written (and re-read) first.
-        } while (_savePending && root == _loadedRoot);
+            // The workspace or project kind changed while reading: load the current one instead.
+            if (root != _workspace.WorkspaceRoot || profile.Kind != _workspace.Profile.Kind)
+                continue;
 
-        // Edits still pending belong to the previously loaded workspace; write them there.
-        if (_savePending)
-        {
-            await FlushAsync();
-            if (generation != _loadGeneration)
+            // Edits made while reading are flushed (to the root they belong to) and the file re-read,
+            // so replacing the cards never drops them. Nothing below awaits, so none can slip in after.
+            if (_savePending)
+                continue;
+
+            if (!result.IsSuccess)
             {
-                await _currentLoad;
+                ReplaceIdeas(null, null, [], profile.TargetPresets);
+                IsReadOnly = true;
+                _notifications.ShowInfo(ReadOnlyNotice);
                 return;
             }
-        }
 
-        if (!result.IsSuccess)
-        {
-            ReplaceIdeas(null, null, [], profile.TargetPresets);
-            IsReadOnly = true;
-            _notifications.ShowInfo(ReadOnlyNotice);
+            IsReadOnly = false;
+            ReplaceIdeas(root, profile.Kind, result.Value!, profile.TargetPresets);
             return;
         }
-
-        IsReadOnly = false;
-        ReplaceIdeas(root, profile.Kind, result.Value!, profile.TargetPresets);
     }
 
-    /// <summary>Reloads unless the same workspace and project kind are already loaded.</summary>
+    /// <summary>
+    /// Reloads unless the same workspace and project kind are already loaded and no load is in
+    /// flight (an in-flight load may be for a workspace that is no longer open).
+    /// </summary>
     private async Task ReloadIfWorkspaceChangedAsync()
     {
-        if (_loadedRoot != null
+        if (_currentLoad.IsCompleted
+            && _loadedRoot != null
             && _loadedRoot == _workspace.WorkspaceRoot
             && _loadedKind == _workspace.Profile.Kind)
             return;
@@ -272,7 +274,8 @@ public sealed class IdeasViewModel : ViewModelBase, IDisposable
         var sameRoot = root != null && root == _loadedRoot;
         var selectedId = sameRoot ? Selected?.Id : null;
 
-        _savePending = false;
+        // Callers only get here synchronously after checking no save is pending, so no edit
+        // to the outgoing cards can be lost.
         _loadedRoot = root;
         _loadedKind = kind;
         Selected = null;

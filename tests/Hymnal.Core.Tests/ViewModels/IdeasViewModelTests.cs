@@ -4,7 +4,9 @@ using System.IO;
 using System.Linq;
 using System.Reactive.Concurrency;
 using System.Reactive.Linq;
+using System.Reactive.Threading.Tasks;
 using System.Reflection;
+using System.Runtime.CompilerServices;
 using System.Threading.Tasks;
 using Hymnal.Core.Common;
 using Hymnal.Core.Infrastructure;
@@ -51,11 +53,10 @@ public sealed class IdeasViewModelTests : IDisposable
                 Idea("b", "Bravo", Day1, IdeaState.Developing),
                 Idea("c", "Charlie", Day1, IdeaState.Used),
                 Idea("d", "Delta", Day1, IdeaState.Shelved));
-            var context = await OpenAsync(root);
 
-            await Ui(async () =>
+            await Ui(root, async context =>
             {
-                var vm = await context.CreateIdeasAsync();
+                var vm = await Within(context.CreateIdeasAsync());
                 Assert.False(vm.ShowUsedAndShelved);
                 Assert.Equal(["Alpha", "Bravo"], vm.Cards.Select(c => c.Title));
 
@@ -77,11 +78,10 @@ public sealed class IdeasViewModelTests : IDisposable
                 Idea("b", "Zulu", Day3),
                 Idea("c", "Middle", Day2),
                 Idea("d", "Alpha", Day3));
-            var context = await OpenAsync(root);
 
-            await Ui(async () =>
+            await Ui(root, async context =>
             {
-                var vm = await context.CreateIdeasAsync();
+                var vm = await Within(context.CreateIdeasAsync());
                 Assert.Equal(["Alpha", "Zulu", "Middle", "Old"], vm.Cards.Select(c => c.Title));
             });
         }
@@ -97,11 +97,10 @@ public sealed class IdeasViewModelTests : IDisposable
             await SeedAsync(root,
                 Idea("a", "Ghost ship", Day1, IdeaState.New, "Horror", "sea"),
                 Idea("b", "Love letter", Day2, IdeaState.New, "romance"));
-            var context = await OpenAsync(root);
 
-            await Ui(async () =>
+            await Ui(root, async context =>
             {
-                var vm = await context.CreateIdeasAsync();
+                var vm = await Within(context.CreateIdeasAsync());
                 Assert.Equal(["Horror", "romance", "sea"], vm.AllTags);
 
                 vm.TagFilter = "horror";
@@ -120,12 +119,11 @@ public sealed class IdeasViewModelTests : IDisposable
         var root = CreateWorkspace(StoryJson);
         try
         {
-            var context = await OpenAsync(root);
 
-            await Ui(async () =>
+            await Ui(root, async context =>
             {
-                var vm = await context.CreateIdeasAsync();
-                await vm.NewIdeaCommand.Execute(("The Lighthouse", "A keeper sees a ship that sank."));
+                var vm = await Within(context.CreateIdeasAsync());
+                await Within(vm.NewIdeaCommand.Execute(("The Lighthouse", "A keeper sees a ship that sank.")).ToTask());
 
                 Assert.Equal("The Lighthouse", vm.Selected?.Title);
                 Assert.Contains(vm.Selected, vm.Cards);
@@ -146,11 +144,10 @@ public sealed class IdeasViewModelTests : IDisposable
         try
         {
             await SeedAsync(root, Idea("a", "Draft", Day1));
-            var context = await OpenAsync(root);
 
-            await Ui(async () =>
+            await Ui(root, async context =>
             {
-                var vm = await context.CreateIdeasAsync();
+                var vm = await Within(context.CreateIdeasAsync());
                 vm.Selected = vm.Cards.Single();
                 context.Ideas.SaveCount = 0;
 
@@ -165,7 +162,7 @@ public sealed class IdeasViewModelTests : IDisposable
                 Assert.Equal(1, context.Ideas.SaveCount);
                 Assert.Equal("Third", Assert.Single(context.Ideas.LastSaved!).Title);
 
-                await vm.FlushAsync(); // let the write finish
+                await Within(vm.FlushAsync()); // let the write finish
                 Assert.Equal(1, context.Ideas.SaveCount);
             });
 
@@ -181,11 +178,10 @@ public sealed class IdeasViewModelTests : IDisposable
         try
         {
             await SeedAsync(root, Idea("a", "One", Day1), Idea("b", "Two", Day2));
-            var context = await OpenAsync(root);
 
-            await Ui(async () =>
+            await Ui(root, async context =>
             {
-                var vm = await context.CreateIdeasAsync();
+                var vm = await Within(context.CreateIdeasAsync());
                 var one = vm.Cards.Single(c => c.Id == "a");
                 vm.Selected = one;
                 context.Ideas.SaveCount = 0;
@@ -194,11 +190,11 @@ public sealed class IdeasViewModelTests : IDisposable
                 vm.Selected = vm.Cards.Single(c => c.Id == "b");
                 Assert.Equal(1, context.Ideas.SaveCount);
                 Assert.Equal("Pending notes", context.Ideas.LastSaved!.Single(i => i.Id == "a").Notes);
-                await vm.FlushAsync(); // let the write finish
+                await Within(vm.FlushAsync()); // let the write finish
 
                 // The debounce window passing afterwards does not write again.
                 context.Scheduler.AdvanceBy(TimeSpan.FromSeconds(1));
-                await vm.FlushAsync();
+                await Within(vm.FlushAsync());
                 Assert.Equal(1, context.Ideas.SaveCount);
             });
 
@@ -214,28 +210,27 @@ public sealed class IdeasViewModelTests : IDisposable
         try
         {
             await SeedAsync(root, Idea("a", "Keep or toss", Day1));
-            var context = await OpenAsync(root);
             var prompts = new List<string>();
 
-            await Ui(async () =>
+            await Ui(root, async context =>
             {
-                var vm = await context.CreateIdeasAsync();
+                var vm = await Within(context.CreateIdeasAsync());
                 vm.Selected = vm.Cards.Single();
 
                 vm.ConfirmAsync = message => { prompts.Add(message); return Task.FromResult(false); };
-                await vm.DeleteSelectedCommand.Execute();
+                await Within(vm.DeleteSelectedCommand.Execute().ToTask());
                 Assert.Single(vm.Cards);
             });
             Assert.Single(prompts);
             Assert.Single(await LoadFromDiskAsync(root));
 
-            await Ui(async () =>
+            await Ui(root, async context =>
             {
-                var vm = await context.CreateIdeasAsync();
+                var vm = await Within(context.CreateIdeasAsync());
                 vm.Selected = vm.Cards.Single();
 
                 vm.ConfirmAsync = _ => Task.FromResult(true);
-                await vm.DeleteSelectedCommand.Execute();
+                await Within(vm.DeleteSelectedCommand.Execute().ToTask());
                 Assert.Empty(vm.Cards);
                 Assert.Null(vm.Selected);
             });
@@ -253,11 +248,10 @@ public sealed class IdeasViewModelTests : IDisposable
         var before = await File.ReadAllBytesAsync(ideasPath);
         try
         {
-            var context = await OpenAsync(root);
 
-            await Ui(async () =>
+            await Ui(root, async context =>
             {
-                var vm = await context.CreateIdeasAsync();
+                var vm = await Within(context.CreateIdeasAsync());
 
                 Assert.True(vm.IsReadOnly);
                 Assert.Contains(IdeasViewModel.ReadOnlyNotice, context.Notifications.Infos);
@@ -267,8 +261,8 @@ public sealed class IdeasViewModelTests : IDisposable
                 Assert.False(await vm.PromoteSelectedCommand.CanExecute.FirstAsync());
                 Assert.False(vm.CanPromote);
 
-                await vm.NewIdeaAsync("Sneaky", "");
-                await vm.FlushAsync();
+                await Within(vm.NewIdeaAsync("Sneaky", ""));
+                await Within(vm.FlushAsync());
                 Assert.Equal(0, context.Ideas.SaveCount);
             });
 
@@ -284,11 +278,10 @@ public sealed class IdeasViewModelTests : IDisposable
         try
         {
             await SeedAsync(root, Idea("a", "The Lighthouse", Day1));
-            var context = await OpenAsync(root);
 
-            await Ui(async () =>
+            await Ui(root, async context =>
             {
-                var vm = await context.CreateIdeasAsync();
+                var vm = await Within(context.CreateIdeasAsync());
                 vm.Selected = vm.Cards.Single();
 
                 Assert.False(vm.CanPromote);
@@ -305,17 +298,16 @@ public sealed class IdeasViewModelTests : IDisposable
         try
         {
             await SeedAsync(root, Idea("a", "The Lighthouse", Day1));
-            var context = await OpenAsync(root);
             string? suggested = null;
 
-            await Ui(async () =>
+            await Ui(root, async context =>
             {
-                var vm = await context.CreateIdeasAsync();
+                var vm = await Within(context.CreateIdeasAsync());
                 vm.Selected = vm.Cards.Single();
                 Assert.True(vm.CanPromote);
                 vm.AskFileNameAsync = suggestion => { suggested = suggestion; return Task.FromResult<string?>(suggestion); };
 
-                await vm.PromoteSelectedCommand.Execute();
+                await Within(vm.PromoteSelectedCommand.Execute().ToTask());
 
                 Assert.Empty(context.Notifications.Errors);
                 Assert.Equal("the-lighthouse.md", context.Workspace.SelectedNode?.Node.RelativePath);
@@ -341,16 +333,15 @@ public sealed class IdeasViewModelTests : IDisposable
         try
         {
             await SeedAsync(root, Idea("a", "The Lighthouse", Day1));
-            var context = await OpenAsync(root);
 
-            await Ui(async () =>
+            await Ui(root, async context =>
             {
-                var vm = await context.CreateIdeasAsync();
+                var vm = await Within(context.CreateIdeasAsync());
                 vm.Selected = vm.Cards.Single();
                 // A name already on disk collides, so nothing is created.
                 vm.AskFileNameAsync = _ => Task.FromResult<string?>("story-one.md");
 
-                await vm.PromoteSelectedCommand.Execute();
+                await Within(vm.PromoteSelectedCommand.Execute().ToTask());
 
                 Assert.Single(context.Notifications.Errors);
                 Assert.Equal(IdeaState.New, vm.Cards.Single().State);
@@ -368,16 +359,15 @@ public sealed class IdeasViewModelTests : IDisposable
         try
         {
             await SeedAsync(root, Idea("a", "Alpha", Day1));
-            var context = await OpenAsync(root);
 
-            await Ui(async () =>
+            await Ui(root, async context =>
             {
-                var vm = await context.CreateIdeasAsync();
+                var vm = await Within(context.CreateIdeasAsync());
                 Assert.Single(vm.Cards);
 
                 var save = await context.ProjectSettings.SaveAsync(root, new ProjectSettings(ProjectKind.Novel));
                 Assert.True(save.IsSuccess, save.Error);
-                var reload = await context.Workspace.ReloadProjectAsync();
+                var reload = await Within(context.Workspace.ReloadProjectAsync());
                 Assert.True(reload.IsSuccess, reload.Error);
                 await PumpUntilAsync(() => vm.Cards.Count == 0);
 
@@ -397,22 +387,21 @@ public sealed class IdeasViewModelTests : IDisposable
         try
         {
             await SeedAsync(root, Idea("a", "Draft", Day1));
-            var context = await OpenAsync(root);
 
-            await Ui(async () =>
+            await Ui(root, async context =>
             {
-                var vm = await context.CreateIdeasAsync();
+                var vm = await Within(context.CreateIdeasAsync());
                 var card = vm.Cards.Single();
                 vm.Selected = card;
                 context.Ideas.SaveCount = 0;
 
                 card.Title = "Edited during reload";
-                var reorder = await context.Workspace.ReorderNodesAsync(); // raises WorkspaceChanged, same root
+                var reorder = await Within(context.Workspace.ReorderNodesAsync()); // raises WorkspaceChanged, same root
                 Assert.True(reorder.IsSuccess, reorder.Error);
                 // Run the posted change handler, then wait for any reload it started.
                 Avalonia.Threading.Dispatcher.UIThread.RunJobs();
-                await CurrentLoad(vm);
-                await vm.FlushAsync();
+                await Within(CurrentLoad(vm));
+                await Within(vm.FlushAsync());
 
                 Assert.Same(card, vm.Selected);
                 Assert.Equal("Edited during reload", vm.Selected!.Title);
@@ -433,16 +422,15 @@ public sealed class IdeasViewModelTests : IDisposable
         {
             await SeedAsync(first, Idea("a", "Ghost ship", Day1, IdeaState.New, "horror"));
             await SeedAsync(second, Idea("b", "Love letter", Day1, IdeaState.New, "romance"));
-            var context = await OpenAsync(first);
 
-            await Ui(async () =>
+            await Ui(first, async context =>
             {
-                var vm = await context.CreateIdeasAsync();
+                var vm = await Within(context.CreateIdeasAsync());
                 vm.TagFilter = "horror";
                 Assert.Single(vm.Cards);
 
                 context.FolderPicker.Folder = second;
-                await context.OpenWorkspaceInCurrentDispatchAsync();
+                await Within(context.OpenWorkspaceInCurrentDispatchAsync());
                 await PumpUntilAsync(() => vm.Cards.Any(c => c.Id == "b"));
 
                 Assert.Null(vm.TagFilter);
@@ -463,11 +451,10 @@ public sealed class IdeasViewModelTests : IDisposable
         try
         {
             await SeedAsync(root, Idea("a", "Fresh", Day1), Idea("b", "Spent", Day1, IdeaState.Used));
-            var context = await OpenAsync(root);
 
-            await Ui(async () =>
+            await Ui(root, async context =>
             {
-                var vm = await context.CreateIdeasAsync();
+                var vm = await Within(context.CreateIdeasAsync());
                 vm.ShowUsedAndShelved = true;
                 Assert.DoesNotContain(IdeaState.Used, vm.States);
 
@@ -484,17 +471,119 @@ public sealed class IdeasViewModelTests : IDisposable
         finally { DeleteFolder(root); }
     }
 
+    [Fact]
+    public async Task Switching_back_while_a_load_is_in_flight_shows_the_current_workspace()
+    {
+        var first = CreateWorkspace(StoryJson);
+        var second = CreateWorkspace(StoryJson);
+        try
+        {
+            await SeedAsync(first, Idea("a", "Alpha", Day1));
+            await SeedAsync(second, Idea("b", "Bravo", Day1));
+
+            await Ui(first, async context =>
+            {
+                var vm = await Within(context.CreateIdeasAsync());
+                var holdSecond = context.Ideas.HoldNextLoad(second);
+
+                // A → B: B's ideas load is held in flight.
+                context.FolderPicker.Folder = second;
+                await Within(context.OpenWorkspaceInCurrentDispatchAsync());
+                await PumpUntilAsync(() => context.Ideas.IsHeld(second));
+
+                // B → A before B's load finishes.
+                context.FolderPicker.Folder = first;
+                await Within(context.OpenWorkspaceInCurrentDispatchAsync());
+                Avalonia.Threading.Dispatcher.UIThread.RunJobs();
+
+                holdSecond.SetResult();
+                await PumpUntilAsync(() => !context.Ideas.IsHeld(second));
+                await Within(CurrentLoad(vm));
+
+                Assert.Equal(["Alpha"], vm.Cards.Select(c => c.Title));
+                Assert.Equal(context.Workspace.WorkspaceRoot, LoadedRoot(vm));
+                Assert.Equal(Path.GetFullPath(first), Path.GetFullPath(LoadedRoot(vm)!));
+            });
+        }
+        finally
+        {
+            DeleteFolder(first);
+            DeleteFolder(second);
+        }
+    }
+
+    [Fact]
+    public async Task Edit_made_while_ideas_are_being_read_is_saved_not_dropped()
+    {
+        var root = CreateWorkspace(StoryJson);
+        try
+        {
+            await SeedAsync(root, Idea("a", "Draft", Day1));
+
+            await Ui(root, async context =>
+            {
+                var vm = await Within(context.CreateIdeasAsync());
+                vm.Selected = vm.Cards.Single();
+                context.Ideas.SaveCount = 0;
+
+                var hold = context.Ideas.HoldNextLoad(root);
+                var load = vm.LoadAsync();
+                await PumpUntilAsync(() => context.Ideas.IsHeld(root));
+
+                // The read already returned "Draft"; this edit must survive replacing the cards.
+                vm.Selected!.Title = "Edited mid-load";
+                hold.SetResult();
+                await Within(load);
+
+                Assert.Equal("Edited mid-load", vm.Cards.Single().Title);
+                Assert.Equal("Edited mid-load", vm.Selected?.Title);
+
+                // The reload loop normally writes the edit itself. If a change-triggered reload overlapped
+                // and took the held read, the edit is still pending on the live card and the debounce writes it.
+                context.Scheduler.AdvanceBy(TimeSpan.FromSeconds(1));
+                await Within(CurrentLoad(vm));
+                await Within(vm.FlushAsync());
+                Assert.Equal(1, context.Ideas.SaveCount);
+            });
+
+            Assert.Equal("Edited mid-load", Assert.Single(await LoadFromDiskAsync(root)).Title);
+        }
+        finally { DeleteFolder(root); }
+    }
+
     // ── Helpers ───────────────────────────────────────────────────────────────
 
-    /// <summary>Pumps the current UI dispatcher until <paramref name="predicate"/> holds (call on the UI thread).</summary>
-    private static async Task PumpUntilAsync(Func<bool> predicate)
+    private static readonly TimeSpan StepTimeout = TimeSpan.FromSeconds(10);
+
+    /// <summary>
+    /// Pumps the current UI dispatcher until <paramref name="predicate"/> holds (call on the UI thread);
+    /// fails after <see cref="StepTimeout"/> so a stuck wait ends the Dispatch job instead of stalling the session.
+    /// </summary>
+    private static async Task PumpUntilAsync(Func<bool> predicate,
+        [CallerArgumentExpression(nameof(predicate))] string? what = null)
     {
-        var deadline = DateTime.UtcNow + TimeSpan.FromSeconds(20);
-        while (DateTime.UtcNow < deadline && !predicate())
+        var deadline = DateTime.UtcNow + StepTimeout;
+        while (!predicate())
         {
+            if (DateTime.UtcNow >= deadline)
+                Assert.Fail($"Timed out waiting for {what}.");
             Avalonia.Threading.Dispatcher.UIThread.RunJobs();
             await Task.Delay(25);
         }
+    }
+
+    /// <summary>Awaits <paramref name="task"/>, failing fast after <see cref="StepTimeout"/> instead of hanging the UI session.</summary>
+    private static async Task Within(Task task, [CallerArgumentExpression(nameof(task))] string? what = null)
+    {
+        if (await Task.WhenAny(task, Task.Delay(StepTimeout)) != task)
+            Assert.Fail($"Timed out waiting for {what}.");
+        await task;
+    }
+
+    private static async Task<T> Within<T>(Task<T> task, [CallerArgumentExpression(nameof(task))] string? what = null)
+    {
+        await Within((Task)task, what);
+        return await task;
     }
 
     private static string CreateWorkspace(string projectJson)
@@ -507,8 +596,11 @@ public sealed class IdeasViewModelTests : IDisposable
         return root;
     }
 
+    /// <summary>Releases view models and file watchers first, so deleting the folder raises no watcher events.</summary>
     private static void DeleteFolder(string root)
     {
+        foreach (var context in LiveContexts) context.Dispose();
+        LiveContexts.Clear();
         try { if (Directory.Exists(root)) Directory.Delete(root, recursive: true); }
         catch { /* best effort */ }
     }
@@ -526,37 +618,27 @@ public sealed class IdeasViewModelTests : IDisposable
         return result.Value!;
     }
 
-    private static async Task<TestContext> OpenAsync(string root)
-    {
-        var context = new TestContext(root);
-        await context.OpenAsync();
-        await WaitUntilAsync(() => context.Workspace.Nodes.Count == 1,
-            () => $"Workspace did not load. Errors: {string.Join(" | ", context.Notifications.Errors)}");
-        return context;
-    }
-
-    private static Task Ui(Func<Task> action) =>
-        RunOnUiThreadWithPumpingAsync(async () => { await action(); return 0; });
+    /// <summary>
+    /// Opens <paramref name="root"/> and runs <paramref name="body"/> in one UI Dispatch. Each Dispatch gets a
+    /// fresh dispatcher, so opening, hydration and the test's own UI work must share a single job.
+    /// </summary>
+    private static Task Ui(string root, Func<TestContext, Task> body) =>
+        RunOnUiThreadWithPumpingAsync(async () =>
+        {
+            var context = new TestContext(root);
+            await Within(context.OpenWorkspaceInCurrentDispatchAsync());
+            await PumpUntilAsync(() => context.Workspace.Nodes.Count == 1);
+            await body(context);
+            return 0;
+        });
 
     private static Task<T> RunOnUiThreadWithPumpingAsync<T>(Func<Task<T>> action) =>
         ReactiveUiTestBootstrap.RunOnUiThreadAsync(action, TimeSpan.FromSeconds(40));
 
-    private static async Task WaitUntilAsync(Func<bool> predicate, Func<string> failureMessage)
-    {
-        var satisfied = await RunOnUiThreadWithPumpingAsync(async () =>
-        {
-            var deadline = DateTime.UtcNow + TimeSpan.FromSeconds(30);
-            while (DateTime.UtcNow < deadline && !predicate())
-            {
-                Avalonia.Threading.Dispatcher.UIThread.RunJobs();
-                await Task.Delay(25);
-            }
-            return predicate();
-        });
-
-        if (!satisfied)
-            Assert.Fail(failureMessage());
-    }
+    private static string? LoadedRoot(IdeasViewModel vm) =>
+        (string?)typeof(IdeasViewModel)
+            .GetField("_loadedRoot", BindingFlags.Instance | BindingFlags.NonPublic)!
+            .GetValue(vm);
 
     private static Task CurrentLoad(IdeasViewModel vm) =>
         (Task)typeof(IdeasViewModel)
@@ -625,13 +707,6 @@ public sealed class IdeasViewModelTests : IDisposable
             _manuscript.Dispose();
         }
 
-        public Task OpenAsync() =>
-            RunOnUiThreadWithPumpingAsync(async () =>
-            {
-                await OpenWorkspaceInCurrentDispatchAsync();
-                return 0;
-            });
-
         /// <summary>
         /// Opens <see cref="FolderPicker"/>'s folder and waits for hydration inside the current Dispatch:
         /// each Dispatch gets a fresh dispatcher, so the node rebuild it posts would be lost once the job returns.
@@ -640,9 +715,9 @@ public sealed class IdeasViewModelTests : IDisposable
         {
             var method = typeof(WorkspaceViewModel).GetMethod("OpenWorkspaceAsync", BindingFlags.Instance | BindingFlags.NonPublic)
                 ?? throw new InvalidOperationException("Unable to locate OpenWorkspaceAsync.");
-            await (Task)method.Invoke(Workspace, Array.Empty<object>())!;
+            await Within((Task)method.Invoke(Workspace, Array.Empty<object>())!);
             if (HydrationTask(Workspace) is { } hydration)
-                await hydration;
+                await Within(hydration);
         }
 
         /// <summary>Creates and loads an ideas view model; call on the UI thread.</summary>
@@ -650,7 +725,10 @@ public sealed class IdeasViewModelTests : IDisposable
         {
             var vm = new IdeasViewModel(Workspace, Ideas, _promoter, Notifications, Scheduler);
             _ideasViewModels.Add(vm);
-            await vm.LoadAsync();
+            await Within(vm.LoadAsync());
+            // Run the change handler the constructor posted, so no stray reload starts mid-test.
+            Avalonia.Threading.Dispatcher.UIThread.RunJobs();
+            await Within(CurrentLoad(vm));
             return vm;
         }
     }
@@ -660,7 +738,35 @@ public sealed class IdeasViewModelTests : IDisposable
         public int SaveCount { get; set; }
         public IReadOnlyList<StoryIdea>? LastSaved { get; private set; }
 
-        public Task<Result<IReadOnlyList<StoryIdea>>> LoadAsync(string workspaceRoot) => inner.LoadAsync(workspaceRoot);
+        private readonly Dictionary<string, TaskCompletionSource> _holds = new(StringComparer.Ordinal);
+        private readonly HashSet<string> _held = new(StringComparer.Ordinal);
+
+        /// <summary>The next load of <paramref name="root"/> reads the file, then waits until the returned source is set.</summary>
+        public TaskCompletionSource HoldNextLoad(string root)
+        {
+            var hold = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+            _holds[Key(root)] = hold;
+            return hold;
+        }
+
+        /// <summary>True while a load of <paramref name="root"/> is waiting on its hold.</summary>
+        public bool IsHeld(string root) => _held.Contains(Key(root));
+
+        public async Task<Result<IReadOnlyList<StoryIdea>>> LoadAsync(string workspaceRoot)
+        {
+            var result = await inner.LoadAsync(workspaceRoot);
+            var key = Key(workspaceRoot);
+            if (_holds.Remove(key, out var hold))
+            {
+                _held.Add(key);
+                await hold.Task;
+                _held.Remove(key);
+            }
+            return result;
+        }
+
+        private static string Key(string root) =>
+            Path.TrimEndingDirectorySeparator(Path.GetFullPath(root));
 
         public Task<Result<Unit>> SaveAsync(string workspaceRoot, IReadOnlyList<StoryIdea> ideas)
         {
