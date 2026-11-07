@@ -63,10 +63,18 @@ public sealed class StoryIdeaPromoter
     {
         if (profile.Kind != ProjectKind.Anthology)
             return Result<string>.Fail("Ideas can only be promoted to stories in an Anthology project.");
-        if (idea.State == IdeaState.Used)
-            return Result<string>.Fail($"Idea '{idea.Title}' has already been used.");
         if (!IsBareMarkdownName(fileName))
             return Result<string>.Fail($"'{fileName}' is not a valid story file name. Use a plain name ending in .md.");
+
+        var preload = await _ideas.LoadAsync(workspaceRoot).ConfigureAwait(false);
+        if (!preload.IsSuccess)
+            return Result<string>.Fail(preload.Error!);
+        var persisted = preload.Value!.FirstOrDefault(i => i.Id == idea.Id);
+        if (persisted is null)
+            return Result<string>.Fail($"Idea '{idea.Title}' was not found in the ideas file.");
+        if (persisted.State == IdeaState.Used)
+            return Result<string>.Fail($"Idea '{persisted.Title}' has already been used.");
+        idea = persisted;
 
         var entries = await _structure.ReadNormalizedEntriesAsync(bookTxtPath).ConfigureAwait(false);
         if (!entries.IsSuccess)
@@ -99,11 +107,7 @@ public sealed class StoryIdeaPromoter
             if (notes.Length > 0)
                 await _notes.SaveAsync(INotesService.DeriveNotesPath(workspaceRoot, fileName), notes).ConfigureAwait(false);
 
-            var loaded = await _ideas.LoadAsync(workspaceRoot).ConfigureAwait(false);
-            if (!loaded.IsSuccess)
-                return CreatedButFailed(fileName, loaded.Error!);
-
-            var updated = loaded.Value!
+            var updated = preload.Value!
                 .Select(i => i.Id == idea.Id ? i with { State = IdeaState.Used, StoryId = uuid } : i)
                 .ToList();
             var saved = await _ideas.SaveAsync(workspaceRoot, updated).ConfigureAwait(false);

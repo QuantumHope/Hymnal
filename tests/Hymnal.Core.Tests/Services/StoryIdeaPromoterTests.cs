@@ -19,6 +19,12 @@ public class StoryIdeaPromoterTests
             Task.FromResult(Result<Unit>.Fail("disk full"));
     }
 
+    private sealed class ThrowingNotesService : INotesService
+    {
+        public Task<string> LoadAsync(string absoluteNotesPath) => Task.FromResult("");
+        public Task SaveAsync(string absoluteNotesPath, string content) => throw new IOException("notes boom");
+    }
+
     private sealed class Env
     {
         public required string Root { get; init; }
@@ -31,9 +37,9 @@ public class StoryIdeaPromoterTests
         public TargetsService Targets => new(Store);
         public NotesService Notes => new(Store);
 
-        public StoryIdeaPromoter Promoter(IStoryIdeasService? ideas = null) =>
+        public StoryIdeaPromoter Promoter(IStoryIdeasService? ideas = null, INotesService? notes = null) =>
             new(new BookTxtStructureService(Store, new ExclusionManifestService(Store)),
-                Registry, Phases, Targets, Notes, ideas ?? Ideas);
+                Registry, Phases, Targets, notes ?? Notes, ideas ?? Ideas);
     }
 
     private static async Task WithEnvAsync(Func<Env, Task> body, bool subfolder = false)
@@ -222,5 +228,64 @@ public class StoryIdeaPromoterTests
         Assert.Contains("the-lighthouse.md", result.Error);
         Assert.Contains("disk full", result.Error);
         Assert.Equal(IdeaState.New, (await env.Ideas.LoadAsync(env.Root)).Value!.Single().State);
+        Assert.True(File.Exists(Path.Combine(env.ManuscriptDir, "the-lighthouse.md")));
+        Assert.Contains(await env.Registry.LoadAsync(env.Root), e => e.Value.CurrentPath == "the-lighthouse.md");
+    });
+
+    [Fact]
+    public Task Promote_throwing_step_after_creation_fails_naming_file() => WithEnvAsync(async env =>
+    {
+        await SeedAsync(env, Idea());
+        var result = await env.Promoter(notes: new ThrowingNotesService())
+            .PromoteAsync(env.Root, env.BookTxtPath, Idea(), "the-lighthouse.md", Anthology);
+
+        Assert.False(result.IsSuccess);
+        Assert.Contains("the-lighthouse.md", result.Error);
+        Assert.Contains("notes boom", result.Error);
+        Assert.Equal(IdeaState.New, (await env.Ideas.LoadAsync(env.Root)).Value!.Single().State);
+    });
+
+    [Fact]
+    public Task Promote_malformed_ideas_file_fails_and_writes_nothing() => WithEnvAsync(async env =>
+    {
+        var path = StoryIdeasService.IdeasFilePath(env.Root);
+        Directory.CreateDirectory(Path.GetDirectoryName(path)!);
+        File.WriteAllText(path, "{ not json");
+        var bookBefore = File.ReadAllText(env.BookTxtPath);
+
+        var result = await env.Promoter().PromoteAsync(env.Root, env.BookTxtPath, Idea(), "the-lighthouse.md", Anthology);
+
+        Assert.False(result.IsSuccess);
+        Assert.Equal(bookBefore, File.ReadAllText(env.BookTxtPath));
+        Assert.False(File.Exists(Path.Combine(env.ManuscriptDir, "the-lighthouse.md")));
+        Assert.Equal("{ not json", File.ReadAllText(path));
+    });
+
+    [Fact]
+    public Task Promote_idea_missing_from_file_fails_and_writes_nothing() => WithEnvAsync(async env =>
+    {
+        await SeedAsync(env, Idea(id: "other"));
+        var bookBefore = File.ReadAllText(env.BookTxtPath);
+
+        var result = await env.Promoter().PromoteAsync(env.Root, env.BookTxtPath, Idea(), "the-lighthouse.md", Anthology);
+
+        Assert.False(result.IsSuccess);
+        Assert.Equal(bookBefore, File.ReadAllText(env.BookTxtPath));
+        Assert.False(File.Exists(Path.Combine(env.ManuscriptDir, "the-lighthouse.md")));
+        Assert.Empty(await env.Registry.LoadAsync(env.Root));
+    });
+
+    [Fact]
+    public Task Promote_persisted_used_idea_fails_despite_stale_new_copy() => WithEnvAsync(async env =>
+    {
+        await SeedAsync(env, Idea(state: IdeaState.Used));
+        var bookBefore = File.ReadAllText(env.BookTxtPath);
+
+        var result = await env.Promoter().PromoteAsync(env.Root, env.BookTxtPath, Idea(), "the-lighthouse.md", Anthology);
+
+        Assert.False(result.IsSuccess);
+        Assert.Equal(bookBefore, File.ReadAllText(env.BookTxtPath));
+        Assert.False(File.Exists(Path.Combine(env.ManuscriptDir, "the-lighthouse.md")));
+        Assert.Empty(await env.Registry.LoadAsync(env.Root));
     });
 }
