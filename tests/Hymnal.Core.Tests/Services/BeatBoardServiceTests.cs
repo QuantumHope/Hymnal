@@ -1,0 +1,143 @@
+using Hymnal.Core.Infrastructure;
+using Hymnal.Core.Models;
+using Hymnal.Core.Services;
+
+namespace Hymnal.Core.Tests.Services;
+
+public class BeatBoardServiceTests
+{
+    private static async Task WithTempDirAsync(Func<string, BeatBoardService, Task> body)
+    {
+        var dir = Path.Combine(Path.GetTempPath(), "hymnal-beats-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(dir);
+        try
+        {
+            await body(dir, new BeatBoardService(new MetadataStore()));
+        }
+        finally
+        {
+            Directory.Delete(dir, true);
+        }
+    }
+
+    private static void WriteRaw(string dir, string key, string content)
+    {
+        var path = BeatBoardService.BoardFilePath(dir, key);
+        Directory.CreateDirectory(Path.GetDirectoryName(path)!);
+        File.WriteAllText(path, content);
+    }
+
+    [Fact]
+    public Task Load_missing_returns_empty() => WithTempDirAsync(async (dir, svc) =>
+    {
+        var result = await svc.LoadAsync(dir, BeatBoardService.ShortStoryBoardKey);
+        Assert.True(result.IsSuccess);
+        Assert.Empty(result.Value!);
+    });
+
+    [Fact]
+    public Task Save_then_load_round_trips_order_and_fields() => WithTempDirAsync(async (dir, svc) =>
+    {
+        var a = new Beat("b-1", "Hook", "Open strong.", "scenes/one.md");
+        var b = new Beat("b-2", "Climax", "", null);
+        var c = new Beat("b-3", "Resolution", "Wrap up.", null);
+
+        Assert.True((await svc.SaveAsync(dir, "story", [b, a, c])).IsSuccess);
+        var loaded = await svc.LoadAsync(dir, "story");
+
+        Assert.True(loaded.IsSuccess);
+        Assert.Equal([b, a, c], loaded.Value!);
+    });
+
+    [Fact]
+    public Task Saved_json_shape() => WithTempDirAsync(async (dir, svc) =>
+    {
+        await svc.SaveAsync(dir, "story", [new Beat("b-1", "Hook", "n", "scenes/one.md")]);
+
+        var json = File.ReadAllText(Path.Combine(dir, ".hymnal-data", "beats", "story.json"));
+        Assert.Contains("\"schemaVersion\": 1", json);
+        Assert.Contains("\"beats\"", json);
+        Assert.Contains("\"scenePath\": \"scenes/one.md\"", json);
+        Assert.Contains("\"id\": \"b-1\"", json);
+    });
+
+    [Fact]
+    public Task Load_malformed_fails_and_leaves_file() => WithTempDirAsync(async (dir, svc) =>
+    {
+        WriteRaw(dir, "story", "{ not json");
+
+        var result = await svc.LoadAsync(dir, "story");
+
+        Assert.False(result.IsSuccess);
+        Assert.Equal("{ not json", File.ReadAllText(BeatBoardService.BoardFilePath(dir, "story")));
+    });
+
+    [Fact]
+    public Task Load_unsupported_schema_fails() => WithTempDirAsync(async (dir, svc) =>
+    {
+        WriteRaw(dir, "story", """{ "schemaVersion": 99, "beats": [] }""");
+
+        var result = await svc.LoadAsync(dir, "story");
+
+        Assert.False(result.IsSuccess);
+        Assert.Contains("schemaVersion", result.Error);
+    });
+
+    [Theory]
+    [InlineData("""{ "schemaVersion": 1, "beats": [ null ] }""")]
+    [InlineData("""{ "schemaVersion": 1, "beats": [ { "title": "T" } ] }""")]
+    [InlineData("""{ "schemaVersion": 1, "beats": [ { "id": "  ", "title": "T" } ] }""")]
+    [InlineData("""{ "schemaVersion": 1, "beats": [ { "id": "x" } ] }""")]
+    public Task Load_null_entry_or_missing_id_or_title_fails(string json) => WithTempDirAsync(async (dir, svc) =>
+    {
+        WriteRaw(dir, "story", json);
+
+        var result = await svc.LoadAsync(dir, "story");
+
+        Assert.False(result.IsSuccess);
+        Assert.Equal(json, File.ReadAllText(BeatBoardService.BoardFilePath(dir, "story")));
+    });
+
+    [Fact]
+    public Task Missing_note_becomes_empty() => WithTempDirAsync(async (dir, svc) =>
+    {
+        WriteRaw(dir, "story", """{ "schemaVersion": 1, "beats": [ { "id": "x", "title": "T" } ] }""");
+
+        var result = await svc.LoadAsync(dir, "story");
+
+        Assert.True(result.IsSuccess);
+        Assert.Equal("", result.Value![0].Note);
+        Assert.Null(result.Value[0].ScenePath);
+    });
+
+    [Fact]
+    public Task Boards_are_independent_per_key() => WithTempDirAsync(async (dir, svc) =>
+    {
+        var uuid = Guid.NewGuid().ToString();
+        await svc.SaveAsync(dir, "story", [new Beat("1", "Story beat", "", null)]);
+        await svc.SaveAsync(dir, uuid, [new Beat("2", "Anthology beat", "", null)]);
+
+        var story = await svc.LoadAsync(dir, "story");
+        var other = await svc.LoadAsync(dir, uuid);
+
+        Assert.Equal("Story beat", Assert.Single(story.Value!).Title);
+        Assert.Equal("Anthology beat", Assert.Single(other.Value!).Title);
+    });
+
+    [Theory]
+    [InlineData("../x")]
+    [InlineData("a/b")]
+    [InlineData("a\\b")]
+    [InlineData("..")]
+    [InlineData("")]
+    [InlineData("   ")]
+    [InlineData("a\0b")]
+    public Task Key_with_path_characters_is_rejected(string key) => WithTempDirAsync(async (dir, svc) =>
+    {
+        Assert.False((await svc.LoadAsync(dir, key)).IsSuccess);
+        Assert.False((await svc.SaveAsync(dir, key, [new Beat("1", "T", "", null)])).IsSuccess);
+
+        Assert.False(Directory.Exists(Path.Combine(dir, ".hymnal-data")));
+        Assert.Empty(Directory.GetFileSystemEntries(dir));
+    });
+}
