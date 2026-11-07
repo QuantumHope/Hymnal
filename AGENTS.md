@@ -67,7 +67,7 @@ dotnet run --project src/Hymnal/Hymnal.csproj
 dotnet test Hymnal.slnx
 ```
 
-Baseline: 649 tests. That count is the **sum of per-filter runs** (see Tests below; it matches `dotnet test Hymnal.slnx --list-tests`), not one full run — a single full `dotnet test Hymnal.slnx` run hangs. Per-filter runs: 648 pass; `GanttView_RowMoveShortcutHelper_DelegatesForEditableChapterRowsAndIgnoresPartRows` always hangs.
+Baseline: 664 tests (`dotnet test Hymnal.slnx --list-tests`). Measured 2026-11-07 on Linux with one run of `dotnet test Hymnal.slnx --filter "FullyQualifiedName!~GanttView_RowMoveShortcutHelper" --blame-hang-timeout 90s`: 663 pass, 0 fail, in about 10 s. The excluded test, `GanttView_RowMoveShortcutHelper_DelegatesForEditableChapterRowsAndIgnoresPartRows`, always hangs, so an unfiltered run aborts there (about 490 tests pass before the abort).
 
 ## Key Patterns
 
@@ -94,17 +94,13 @@ Baseline: 649 tests. That count is the **sum of per-filter runs** (see Tests bel
 - `FolderPickerService` requires a `Func<TopLevel?>` accessor — see `App.axaml.cs` for the factory registration pattern
 
 ### Tests
-- **Hangs (pre-existing):** a single full run does not finish. Two causes:
-  - `GanttViewSmokeTests.GanttView_RowMoveShortcutHelper_DelegatesForEditableChapterRowsAndIgnoresPartRows` hangs every time, even run alone (it blocks the UI thread on an async move command).
-  - `WorkspaceSidebarReorderTests` hangs now and then (usually `ReorderChapterCommand_ReordersIncludedPartAsWholeBlockWhenDroppedOnPartDivider`; sometimes another test in that class when it shares a run with the rest of `Hymnal.ViewModels`).
+- **Dispose watcher owners.** Tests must dispose `ManuscriptService`, `EditorViewModel` and `GitPanelViewModel`, before deleting their temp folders. Each one owns a `FileSystemWatcher`, and on Linux every live watcher holds an inotify instance. The per-user limit (`fs.inotify.max_user_instances`, often 128) is shared with the IDE and every other process. Leaked watchers made a full run fail with "The configured user limit (128) on the number of inotify instances has been reached", and those failures then stalled the headless session.
+  - Track them with `OwnedDisposables` (`tests/Hymnal.Core.Tests/Infrastructure/`). Dispose the tracker first, then delete folders. Inside `try { … } finally { Delete… }`, declare contexts with `using var`, so they are disposed before the `finally` runs.
+  - `WatcherLeakGuardTests` (Linux only) checks that each owner releases its inotify descriptor on dispose.
+- **Hangs (pre-existing):**
+  - `GanttViewSmokeTests.GanttView_RowMoveShortcutHelper_DelegatesForEditableChapterRowsAndIgnoresPartRows` hangs every time, even run alone (it blocks the UI thread on an async move command). Exclude it with `--filter "FullyQualifiedName!~GanttView_RowMoveShortcutHelper"`.
+  - About one filtered run in ten still stalls the shared headless session. This is not inotify-related. Tests start failing with "UI-thread operation did not complete within 40s" (seen in `TargetPresetAndStatsTests`, ending with `StructuralConsistencyUatTests.CrossSurfaceReplay_PersistsOneUuidBackedStructureAfterFreshReload` not completing). Re-run when that happens. If a stall repeats, run one namespace per command, e.g. `--filter "FullyQualifiedName~Hymnal.ViewModels"`.
   - Once a UI-thread job hangs, every later headless test in the run stalls behind it. `--blame-hang-timeout` reports the culprit in `TestResults/*/Sequence_*.xml` (look for `Completed="False"`).
-- **Workaround: run one filter per command**, e.g. `timeout 400 dotnet test Hymnal.slnx --no-build --filter "<filter>" --blame-hang-timeout 60s`. These filters add up to the baseline:
-  - `FullyQualifiedName~Hymnal.Core.Tests.Common|FullyQualifiedName~Hymnal.Core.Tests.Infrastructure|FullyQualifiedName~Hymnal.Core.Tests.Models|FullyQualifiedName~Hymnal.Core.Tests.Performance|FullyQualifiedName~Hymnal.Core.Tests.Services`
-  - `FullyQualifiedName~Hymnal.Core.Tests.ViewModels`
-  - `FullyQualifiedName~Hymnal.Core.Tests.Views&FullyQualifiedName!~GanttView_RowMoveShortcutHelper`
-  - `FullyQualifiedName~Hymnal.Views`
-  - `FullyQualifiedName~Hymnal.ViewModels&FullyQualifiedName!~Hymnal.ViewModels.Workspace`
-  - `FullyQualifiedName~Hymnal.ViewModels.Workspace` (re-run it if a Reorder test hangs)
 - **Headless isolation:** `ReactiveUiTestBootstrap` uses the default (PerTest) isolation. Outside a `Dispatch`, `Application.Current` is null, and production code checks for that to run dispatcher work inline. PerAssembly keeps one Application alive, which deadlocks the tests that run off the UI thread, so don't switch to it. Each `Dispatch` gets a fresh dispatcher. So await any background UI work (such as `WorkspaceViewModel` hydration) inside the same `Dispatch` that started it. Bound async UI work with `RunOnUiThreadAsync(action, timeout)`.
 - Test fixtures (sample manuscripts) live in `tests/Hymnal.Core.Tests/Fixtures/SampleManuscripts/` — load via `AppContext.BaseDirectory`
 - Prefer hand-rolled fakes (e.g., `FakeNotificationService`) over NSubstitute for simple interfaces; use NSubstitute for complex interfaces with many members
