@@ -24,6 +24,9 @@ public sealed class BeatTemplateOptionViewModel : ViewModelBase
     public bool HasParameter => Template.Parameter != null;
     public IReadOnlyList<string> ParameterOptions => Template.Parameter?.Options ?? [];
 
+    /// <summary>False for a template without beats (Blank): appending it would add nothing.</summary>
+    public bool CanAppend => Template.Beats.Count > 0;
+
     private string? _selectedParameter;
     /// <summary>The chosen parameter value; a picker writing null back (its items swapped) is ignored.</summary>
     public string? SelectedParameter

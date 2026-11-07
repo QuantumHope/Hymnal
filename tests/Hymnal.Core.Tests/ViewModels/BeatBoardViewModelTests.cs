@@ -72,7 +72,7 @@ public sealed class BeatBoardViewModelTests
             {
                 var vm = await Within(context.OpenBoardAsync(BoardA));
                 var prompts = new List<string>();
-                vm.ConfirmAsync = message => { prompts.Add(message); return Task.FromResult(false); };
+                vm.ConfirmAsync = request => { prompts.Add(request.Message); return Task.FromResult(false); };
 
                 await Within(vm.ApplyTemplateCommand.Execute(new ApplyTemplateRequest("threeAct", TemplateApplyMode.Replace, null)).ToTask());
 
@@ -126,7 +126,7 @@ public sealed class BeatBoardViewModelTests
                 var vm = await Within(context.OpenBoardAsync(BoardA));
                 var prompts = new List<string>();
 
-                vm.ConfirmAsync = message => { prompts.Add(message); return Task.FromResult(false); };
+                vm.ConfirmAsync = request => { prompts.Add(request.Message); return Task.FromResult(false); };
                 await Within(vm.ApplyTemplateCommand.Execute(request).ToTask());
                 Assert.Single(prompts);
                 Assert.Equal(["Mine", "Also mine"], vm.Beats.Select(b => b.Title));
@@ -156,7 +156,7 @@ public sealed class BeatBoardViewModelTests
             {
                 var vm = await Within(context.OpenBoardAsync(BoardA));
                 var prompts = new List<string>();
-                vm.ConfirmAsync = message => { prompts.Add(message); return Task.FromResult(false); };
+                vm.ConfirmAsync = request => { prompts.Add(request.Message); return Task.FromResult(false); };
 
                 await Within(vm.ApplyTemplateCommand.Execute(new ApplyTemplateRequest("kishotenketsu", TemplateApplyMode.Append, null)).ToTask());
 
@@ -347,7 +347,7 @@ public sealed class BeatBoardViewModelTests
                 var vm = await Within(context.OpenBoardAsync(BoardA));
                 vm.Selected = vm.Beats[0];
 
-                vm.ConfirmAsync = message => { prompts.Add(message); return Task.FromResult(false); };
+                vm.ConfirmAsync = request => { prompts.Add(request.Message); return Task.FromResult(false); };
                 await Within(vm.DeleteSelectedCommand.Execute().ToTask());
                 Assert.Equal(2, vm.Beats.Count);
                 Assert.Equal(0, context.Boards.SaveCount);
@@ -672,7 +672,7 @@ public sealed class BeatBoardViewModelTests
             {
                 var vm = await Within(context.OpenBoardAsync(BoardA));
                 var prompts = new List<string>();
-                vm.ConfirmAsync = message => { prompts.Add(message); return Task.FromResult(true); };
+                vm.ConfirmAsync = request => { prompts.Add(request.Message); return Task.FromResult(true); };
 
                 await Within(vm.DeleteBeatCommand.Execute(vm.Beats[1]).ToTask());
 
@@ -681,6 +681,153 @@ public sealed class BeatBoardViewModelTests
             });
 
             Assert.Equal(["Keep"], (await LoadFromDiskAsync(root, BoardA)).Select(b => b.Title));
+        }
+        finally { DeleteFolder(root); }
+    }
+
+    [Fact]
+    public async Task Delete_confirm_pending_across_a_board_switch_changes_neither_board()
+    {
+        var root = CreateWorkspace();
+        try
+        {
+            await SeedAsync(root, BoardA, B("a", "Keep me"));
+            await SeedAsync(root, BoardB, B("b", "Board B beat"));
+            var bytesA = await File.ReadAllBytesAsync(BeatBoardService.BoardFilePath(root, BoardA));
+            var bytesB = await File.ReadAllBytesAsync(BeatBoardService.BoardFilePath(root, BoardB));
+
+            await Ui(root, async context =>
+            {
+                var vm = await Within(context.OpenBoardAsync(BoardA));
+                var answer = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+                ConfirmRequest? asked = null;
+                vm.ConfirmAsync = request => { asked = request; return answer.Task; };
+                vm.Selected = vm.Beats[0];
+
+                var delete = vm.DeleteSelectedCommand.Execute().ToTask();
+                await PumpUntilAsync(() => asked != null);
+                Assert.Equal("Delete Beat", asked!.Title);
+                Assert.Equal("Delete", asked.ConfirmText);
+
+                await Within(vm.OpenBoardAsync(BoardB, "Story B", Scope));
+                answer.SetResult(true);
+                await Within(delete);
+
+                Assert.Equal(["Board B beat"], vm.Beats.Select(b => b.Title));
+                Assert.Equal(0, context.Boards.SaveCount);
+            });
+
+            Assert.Equal(bytesA, await File.ReadAllBytesAsync(BeatBoardService.BoardFilePath(root, BoardA)));
+            Assert.Equal(bytesB, await File.ReadAllBytesAsync(BeatBoardService.BoardFilePath(root, BoardB)));
+        }
+        finally { DeleteFolder(root); }
+    }
+
+    [Fact]
+    public async Task Failed_save_on_a_closed_board_does_not_fail_the_next_flush()
+    {
+        var root = CreateWorkspace();
+        try
+        {
+            await Ui(root, async context =>
+            {
+                var vm = await Within(context.OpenBoardAsync(BoardA));
+                context.Boards.FailSaves = true;
+                await Within(vm.AddBeatCommand.Execute().ToTask());
+                Assert.False(await Within(vm.FlushAsync()));
+
+                context.Boards.FailSaves = false;
+                await Within(vm.OpenBoardAsync(BoardB, "Story B", Scope));
+                Assert.True(await Within(vm.FlushAsync()));
+
+                context.Boards.FailSaves = true;
+                await Within(vm.AddBeatCommand.Execute().ToTask());
+                Assert.False(await Within(vm.FlushAsync()));
+                context.Boards.FailSaves = false;
+                await Within(vm.CloseBoardAsync());
+                Assert.True(await Within(vm.FlushAsync()));
+            });
+        }
+        finally { DeleteFolder(root); }
+    }
+
+    [Fact]
+    public async Task Blank_template_cannot_be_appended_and_appending_it_changes_nothing()
+    {
+        var root = CreateWorkspace();
+        try
+        {
+            await Ui(root, async context =>
+            {
+                var vm = await Within(context.OpenBoardAsync(BoardA));
+                var blank = vm.TemplateOptions.Single(o => o.Key == "blank");
+                Assert.False(blank.CanAppend);
+                Assert.All(vm.TemplateOptions.Where(o => o.Key != "blank"), o => Assert.True(o.CanAppend));
+
+                await Within(vm.ApplyTemplateCommand.Execute(blank.AppendRequest).ToTask());
+
+                Assert.True(vm.IsEmpty);
+                Assert.Equal(0, context.Boards.SaveCount);
+            });
+
+            Assert.False(File.Exists(BeatBoardService.BoardFilePath(root, BoardA)));
+        }
+        finally { DeleteFolder(root); }
+    }
+
+    [Fact]
+    public async Task Board_file_without_scene_ids_still_links_by_path()
+    {
+        var root = CreateWorkspace();
+        try
+        {
+            var path = BeatBoardService.BoardFilePath(root, BoardA);
+            Directory.CreateDirectory(Path.GetDirectoryName(path)!);
+            await File.WriteAllTextAsync(path,
+                $$"""{ "schemaVersion": 1, "beats": [ { "id": "a", "title": "Climb", "note": "", "scenePath": "{{SceneOne}}" } ] }""");
+            var before = await File.ReadAllBytesAsync(path);
+
+            await Ui(root, async context =>
+            {
+                var vm = await Within(context.OpenBoardAsync(BoardA));
+                var card = Assert.Single(vm.Beats);
+
+                Assert.False(card.IsSceneMissing);
+                Assert.Equal("Scene One", card.SceneTitle);
+                Assert.Equal(SceneOne, card.ScenePath);
+                Assert.Same(vm.SceneOptions[0], card.SelectedScene);
+                context.Scheduler.AdvanceBy(TimeSpan.FromSeconds(1));
+                Assert.True(await Within(vm.FlushAsync()));
+                Assert.Equal(0, context.Boards.SaveCount);
+            });
+
+            Assert.Equal(before, await File.ReadAllBytesAsync(path));
+        }
+        finally { DeleteFolder(root); }
+    }
+
+    [Fact]
+    public async Task Update_scope_keeps_cards_and_selection()
+    {
+        var root = CreateWorkspace();
+        try
+        {
+            await SeedAsync(root, BoardA, B("a", "One"), B("b", "Two"));
+
+            await Ui(root, async context =>
+            {
+                var vm = await Within(context.OpenBoardAsync(BoardA));
+                var cards = vm.Beats.ToList();
+                vm.Selected = cards[1];
+
+                vm.UpdateScope("Renamed Story", [SceneTwo, SceneOne]);
+
+                Assert.Equal("Renamed Story", vm.BoardTitle);
+                Assert.Equal([SceneTwo, SceneOne], vm.SceneOptions.Select(o => o.RelativePath));
+                Assert.Equal(cards, vm.Beats);
+                Assert.Same(cards[1], vm.Selected);
+                Assert.Equal(0, context.Boards.SaveCount);
+            });
         }
         finally { DeleteFolder(root); }
     }
@@ -863,10 +1010,15 @@ public sealed class BeatBoardViewModelTests
             return result;
         }
 
+        /// <summary>While true, saves fail without writing.</summary>
+        public bool FailSaves { get; set; }
+
         public Task<Result<Unit>> SaveAsync(string workspaceRoot, string boardKey, IReadOnlyList<Beat> beats)
         {
             SavedKeys.Add(boardKey);
             LastSaved = beats;
+            if (FailSaves)
+                return Task.FromResult(Result<Unit>.Fail("The disk is full."));
             return inner.SaveAsync(workspaceRoot, boardKey, beats);
         }
 

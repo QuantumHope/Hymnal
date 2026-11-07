@@ -20,6 +20,9 @@ namespace Hymnal.ViewModels;
 /// <summary>A scene a beat on the open board may be linked to.</summary>
 public sealed record SceneOption(string RelativePath, string Title);
 
+/// <summary>A confirmation the board asks of the author: dialog title, message and confirm button text.</summary>
+public sealed record ConfirmRequest(string Title, string Message, string ConfirmText);
+
 /// <summary>Applies template <paramref name="Key"/>; <paramref name="Parameter"/> is the template's parameter value (MICE thread).</summary>
 public sealed record ApplyTemplateRequest(string Key, TemplateApplyMode Mode, string? Parameter);
 
@@ -55,6 +58,7 @@ public sealed class BeatBoardViewModel : ViewModelBase, IDisposable
     private BoardTarget? _target;
     private IReadOnlyList<string> _sceneScope = [];
     private bool _savePending;
+    /// <summary>True when the open board's last save failed; a failure on a board since closed doesn't count.</summary>
     private bool _lastSaveFailed;
     private Task _saveChain = Task.CompletedTask;
     private int _generation;
@@ -178,7 +182,7 @@ public sealed class BeatBoardViewModel : ViewModelBase, IDisposable
     }
 
     /// <summary>Asks the author to confirm a deletion or replacement; defaults to "no".</summary>
-    public Func<string, Task<bool>> ConfirmAsync { get; set; } = _ => Task.FromResult(false);
+    public Func<ConfirmRequest, Task<bool>> ConfirmAsync { get; set; } = _ => Task.FromResult(false);
 
     public ReactiveCommand<Unit, Unit> AddBeatCommand { get; }
     public ReactiveCommand<Unit, Unit> DeleteSelectedCommand { get; }
@@ -200,6 +204,19 @@ public sealed class BeatBoardViewModel : ViewModelBase, IDisposable
         var open = OpenCoreAsync(++_generation, boardKey, title ?? "", sceneScope.ToList());
         _currentSwitch = open;
         return open;
+    }
+
+    /// <summary>
+    /// Updates the open board's title and the scenes its beats may link to (the story was renamed or its
+    /// scenes reordered) without reopening it, so cards, selection and pending edits stay.
+    /// </summary>
+    public void UpdateScope(string title, IReadOnlyList<string> sceneScope)
+    {
+        if (_disposed || BoardKey == null)
+            return;
+        BoardTitle = title ?? "";
+        _sceneScope = sceneScope.ToList();
+        RefreshScenes();
     }
 
     /// <summary>Writes pending edits, then closes the board.</summary>
@@ -315,6 +332,7 @@ public sealed class BeatBoardViewModel : ViewModelBase, IDisposable
     {
         _target = null;
         _boardRoot = null;
+        _lastSaveFailed = false;
         _sceneScope = [];
         Selected = null;
         foreach (var card in _beats)
@@ -350,7 +368,7 @@ public sealed class BeatBoardViewModel : ViewModelBase, IDisposable
             return;
 
         var name = string.IsNullOrWhiteSpace(card.Title) ? "this beat" : $"\"{card.Title}\"";
-        if (!await ConfirmAsync($"Delete {name}? This can't be undone."))
+        if (!await ConfirmAsync(new ConfirmRequest("Delete Beat", $"Delete {name}? This can't be undone.", "Delete")))
             return;
         // Another board opened (or this one closed) while asking.
         if (_disposed || !ReferenceEquals(target, _target) || !_beats.Contains(card))
@@ -412,11 +430,16 @@ public sealed class BeatBoardViewModel : ViewModelBase, IDisposable
         if (request.Mode == TemplateApplyMode.Replace && _beats.Count > 0)
         {
             var count = _beats.Count == 1 ? "the 1 beat" : $"all {_beats.Count} beats";
-            if (!await ConfirmAsync($"Replace {count} on this board with {template.Name}? This can't be undone."))
+            if (!await ConfirmAsync(new ConfirmRequest("Replace Beats",
+                    $"Replace {count} on this board with {template.Name}? This can't be undone.", "Replace")))
                 return;
             if (_disposed || !ReferenceEquals(target, _target))
                 return;
         }
+
+        // Appending a template without beats (Blank) changes nothing.
+        if (request.Mode == TemplateApplyMode.Append && templateBeats.Count == 0)
+            return;
 
         var updated = BeatBoardOperations.ApplyTemplate(Snapshot(), templateBeats, request.Mode);
         SetCards(updated);
@@ -443,11 +466,14 @@ public sealed class BeatBoardViewModel : ViewModelBase, IDisposable
             relativePath = inScope;
         }
 
-        if (string.Equals(card.ScenePath, relativePath, StringComparison.Ordinal))
+        var scene = relativePath == null ? null : FindScene(null, relativePath);
+        var sceneId = scene?.Uuid;
+        if (string.Equals(card.ScenePath, relativePath, StringComparison.Ordinal)
+            && string.Equals(card.SceneId, sceneId, StringComparison.Ordinal))
             return;
 
-        card.SetScenePath(relativePath);
-        card.AttachScene(FindScene(relativePath));
+        card.SetScene(relativePath, sceneId);
+        card.AttachScene(scene);
         await SaveNowAsync();
     }
 
@@ -478,15 +504,21 @@ public sealed class BeatBoardViewModel : ViewModelBase, IDisposable
         try
         {
             var result = await _service.SaveAsync(target.Root, target.Key, snapshot);
-            _lastSaveFailed = !result.IsSuccess;
+            RecordSave(target, result.IsSuccess);
             if (!result.IsSuccess)
                 _notifications.ShowError(result.Error!);
         }
         catch (Exception ex)
         {
-            _lastSaveFailed = true;
+            RecordSave(target, succeeded: false);
             _notifications.ShowError($"Failed to save beats: {ex.Message}");
         }
+    }
+
+    private void RecordSave(BoardTarget target, bool succeeded)
+    {
+        if (ReferenceEquals(target, _target))
+            _lastSaveFailed = !succeeded;
     }
 
     private void OnCardEdited()
@@ -504,8 +536,9 @@ public sealed class BeatBoardViewModel : ViewModelBase, IDisposable
     private BeatCardViewModel CreateCard(Beat beat)
     {
         var card = new BeatCardViewModel(beat);
-        _cardSubscriptions[card] = card.Edited.Subscribe(_ => OnCardEdited());
-        card.AttachScene(FindScene(beat.ScenePath));
+        _cardSubscriptions[card] = card.Edited.Merge(card.SceneMoved).Subscribe(_ => OnCardEdited());
+        if (AttachCard(card))
+            OnCardEdited();
         card.SetSceneChoices(SceneChoices(), path => LinkFromPicker(card, path));
         return card;
     }
@@ -531,24 +564,53 @@ public sealed class BeatBoardViewModel : ViewModelBase, IDisposable
             DisposeCard(removed);
     }
 
-    private ChapterViewModel? FindScene(string? relativePath) =>
-        relativePath == null
+    /// <summary>The chapter a link points at: by registry id first (it survives renames), then by path.</summary>
+    private ChapterViewModel? FindScene(string? sceneId, string? relativePath)
+    {
+        if (sceneId != null
+            && _workspace.Nodes.FirstOrDefault(n => n.Uuid == sceneId && n.Node.Kind == NodeKind.Chapter && !n.Node.IsExcluded)
+                is { } byId)
+            return byId;
+        return relativePath == null
             ? null
             : _workspace.Nodes.FirstOrDefault(n => BeatCardViewModel.IsSameScene(n.Node, relativePath));
+    }
+
+    /// <summary>
+    /// Attaches <paramref name="card"/> to its scene. Returns true when the scene, found by id, was renamed
+    /// and the card now holds its new path, which needs saving.
+    /// </summary>
+    private bool AttachCard(BeatCardViewModel card)
+    {
+        var scene = FindScene(card.SceneId, card.ScenePath);
+        var moved = false;
+        if (scene != null)
+        {
+            if (card.SceneId == scene.Uuid)
+                moved = card.FollowScene(scene);
+            else
+                card.RememberSceneId(scene.Uuid);
+        }
+        card.AttachScene(scene);
+        return moved;
+    }
 
     /// <summary>Re-attaches every card to its scene and refreshes the scene options, after the book changed.</summary>
     private void RefreshScenes()
     {
         if (_disposed)
             return;
+        var moved = false;
         foreach (var card in _beats)
-            card.AttachScene(FindScene(card.ScenePath));
+            moved |= AttachCard(card);
         SceneOptions = _sceneScope
-            .Select(path => new SceneOption(path, FindScene(path)?.Node.Title ?? path))
+            .Select(path => new SceneOption(path, FindScene(null, path)?.Node.Title ?? path))
             .ToList();
         var choices = SceneChoices();
         foreach (var card in _beats)
             card.SetSceneChoices(choices, path => LinkFromPicker(card, path));
+        if (moved)
+            OnCardEdited();
     }
 
     private IReadOnlyList<SceneOption> SceneChoices() => [NoScene, .. SceneOptions];

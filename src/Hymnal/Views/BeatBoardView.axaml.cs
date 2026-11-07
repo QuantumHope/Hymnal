@@ -28,14 +28,9 @@ public partial class BeatBoardView : UserControl
             if (DataContext is not BeatBoardViewModel vm)
                 return;
 
-            vm.ConfirmAsync = message =>
-            {
-                if (TopLevel.GetTopLevel(this) is not Window owner)
-                    return Task.FromResult(false);
-                var deleting = message.StartsWith("Delete", StringComparison.Ordinal);
-                return ConfirmDialog.ShowAsync(owner,
-                    deleting ? "Delete Beat" : "Replace Beats", message, deleting ? "Delete" : "Replace");
-            };
+            vm.ConfirmAsync = request => TopLevel.GetTopLevel(this) is Window owner
+                ? ConfirmDialog.ShowAsync(owner, request.Title, request.Message, request.ConfirmText)
+                : Task.FromResult(false);
         };
     }
 

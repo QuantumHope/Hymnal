@@ -118,6 +118,7 @@
                                                         Classes="beat-action"
                                                         VerticalAlignment="Center"
                                                         Content="Append"
+                                                        IsEnabled="{Binding CanAppend}"
                                                         ToolTip.Tip="Add this template's beats after the current ones"
                                                         Command="{Binding $parent[ItemsControl].DataContext.ApplyTemplateCommand}"
                                                         CommandParameter="{Binding AppendRequest}"
@@ -201,6 +202,7 @@
                                     </StackPanel>
                                     <Button Classes="beat-action"
                                             Content="Use template"
+                                            IsEnabled="{Binding CanAppend}"
                                             Command="{Binding $parent[ItemsControl].DataContext.ApplyTemplateCommand}"
                                             CommandParameter="{Binding AppendRequest}" />
                                 </StackPanel>

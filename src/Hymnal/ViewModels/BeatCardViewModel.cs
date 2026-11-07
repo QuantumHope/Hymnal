@@ -17,6 +17,7 @@ namespace Hymnal.ViewModels;
 public sealed class BeatCardViewModel : ViewModelBase, IDisposable
 {
     private readonly Subject<Unit> _edited = new();
+    private readonly Subject<Unit> _sceneMoved = new();
     private IDisposable? _sceneSubscription;
 
     public BeatCardViewModel(Beat beat)
@@ -25,10 +26,17 @@ public sealed class BeatCardViewModel : ViewModelBase, IDisposable
         _title = beat.Title;
         _note = beat.Note;
         _scenePath = beat.ScenePath;
+        SceneId = beat.SceneId;
     }
 
     /// <summary>Fires after any user edit to <see cref="Title"/> or <see cref="Note"/>.</summary>
     public IObservable<Unit> Edited => _edited.AsObservable();
+
+    /// <summary>Fires when the linked scene (found by <see cref="SceneId"/>) moved, so <see cref="ScenePath"/> changed.</summary>
+    public IObservable<Unit> SceneMoved => _sceneMoved.AsObservable();
+
+    /// <summary>Registry UUID of the linked scene; null when unlinked or not known (older board files).</summary>
+    public string? SceneId { get; private set; }
 
     public string Id { get; }
 
@@ -131,10 +139,29 @@ public sealed class BeatCardViewModel : ViewModelBase, IDisposable
         private set => this.RaiseAndSetIfChanged(ref _isSceneMissing, value);
     }
 
-    public Beat ToBeat() => new(Id, Title, Note, ScenePath);
+    public Beat ToBeat() => new(Id, Title, Note, ScenePath, SceneId);
 
     /// <summary>Changes the link; the owner then attaches the matching scene and saves.</summary>
-    internal void SetScenePath(string? relativePath) => ScenePath = relativePath;
+    internal void SetScene(string? relativePath, string? sceneId)
+    {
+        ScenePath = relativePath;
+        SceneId = relativePath == null ? null : sceneId;
+    }
+
+    /// <summary>Records the id of the scene found at <see cref="ScenePath"/> when the board file had none.</summary>
+    internal void RememberSceneId(string sceneId) => SceneId ??= sceneId;
+
+    /// <summary>
+    /// Points the link at <paramref name="scene"/>, found by <see cref="SceneId"/>. Returns true when
+    /// <see cref="ScenePath"/> changed (the scene was renamed), which needs saving.
+    /// </summary>
+    internal bool FollowScene(ChapterViewModel scene)
+    {
+        if (string.Equals(ScenePath, scene.Node.RelativePath, StringComparison.Ordinal))
+            return false;
+        ScenePath = scene.Node.RelativePath;
+        return true;
+    }
 
     /// <summary>
     /// Shows <paramref name="scene"/> (the chapter at <see cref="ScenePath"/>, or null when it isn't in the
@@ -145,7 +172,7 @@ public sealed class BeatCardViewModel : ViewModelBase, IDisposable
         _sceneSubscription?.Dispose();
         _sceneSubscription = null;
 
-        if (ScenePath is not { } path)
+        if (ScenePath is null)
         {
             ShowScene(null, null, null, missing: false);
             return;
@@ -153,7 +180,7 @@ public sealed class BeatCardViewModel : ViewModelBase, IDisposable
 
         if (scene == null)
         {
-            ShowScene(path, null, null, missing: true);
+            ShowScene(ScenePath, null, null, missing: true);
             return;
         }
 
@@ -162,11 +189,19 @@ public sealed class BeatCardViewModel : ViewModelBase, IDisposable
                 (node, known, count, label) => (node, known, count, label))
             .Subscribe(s =>
             {
-                // The chapter can be renamed or excluded in place; the link then no longer resolves.
-                if (!IsSameScene(s.node, path))
-                    ShowScene(path, null, null, missing: true);
-                else
-                    ShowScene(s.node.Title, s.known ? s.count : null, s.label, missing: false);
+                // The chapter can be renamed or excluded in place. A link by id follows a rename;
+                // otherwise the link no longer resolves.
+                if (SceneId != null && scene.Uuid == SceneId && !s.node.IsExcluded)
+                {
+                    if (FollowScene(scene))
+                        _sceneMoved.OnNext(Unit.Default);
+                }
+                else if (ScenePath is not { } path || !IsSameScene(s.node, path))
+                {
+                    ShowScene(ScenePath, null, null, missing: true);
+                    return;
+                }
+                ShowScene(s.node.Title, s.known ? s.count : null, s.label, missing: false);
             });
     }
 
@@ -198,5 +233,7 @@ public sealed class BeatCardViewModel : ViewModelBase, IDisposable
         Disposables.Dispose();
         _edited.OnCompleted();
         _edited.Dispose();
+        _sceneMoved.OnCompleted();
+        _sceneMoved.Dispose();
     }
 }
