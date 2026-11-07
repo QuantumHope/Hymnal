@@ -1,0 +1,68 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        x:Class="Hymnal.Views.QuickIdeaDialog"
+        Title="New Idea"
+        Width="460" Height="300"
+        CanResize="False"
+        ShowInTaskbar="False"
+        WindowStartupLocation="CenterOwner"
+        Background="#120932"
+        FontFamily="{DynamicResource InterFont}">
+
+    <Border BorderBrush="#2D1B5E"
+            BorderThickness="1"
+            Padding="16">
+        <StackPanel Spacing="12">
+            <StackPanel Spacing="4">
+                <TextBlock Text="TITLE"
+                           FontSize="10"
+                           FontWeight="SemiBold"
+                           LetterSpacing="1.5"
+                           Foreground="{DynamicResource OnSurfaceDimBrush}" />
+                <TextBox x:Name="TitleInput"
+                         FontSize="12"
+                         Padding="8,6"
+                         Background="{DynamicResource SurfaceBaseBrush}"
+                         Foreground="{DynamicResource OnSurfaceBrush}"
+                         BorderBrush="{DynamicResource BorderSubtleBrush}"
+                         BorderThickness="1" />
+            </StackPanel>
+
+            <StackPanel Spacing="4">
+                <TextBlock Text="PREMISE (optional)"
+                           FontSize="10"
+                           FontWeight="SemiBold"
+                           LetterSpacing="1.5"
+                           Foreground="{DynamicResource OnSurfaceDimBrush}" />
+                <TextBox x:Name="PremiseInput"
+                         Height="80"
+                         FontSize="12"
+                         Padding="8,6"
+                         AcceptsReturn="True"
+                         TextWrapping="Wrap"
+                         Background="{DynamicResource SurfaceBaseBrush}"
+                         Foreground="{DynamicResource OnSurfaceBrush}"
+                         BorderBrush="{DynamicResource BorderSubtleBrush}"
+                         BorderThickness="1" />
+            </StackPanel>
+
+            <StackPanel Orientation="Horizontal"
+                        HorizontalAlignment="Right"
+                        Spacing="8">
+                <Button x:Name="CreateButton"
+                        Content="Create"
+                        IsDefault="True"
+                        Padding="12,6"
+                        Background="{DynamicResource SynthwavePurpleBrush}"
+                        Foreground="{DynamicResource OnSurfaceBrush}"
+                        BorderThickness="0"
+                        Click="CreateButton_Click" />
+                <Button Content="Cancel"
+                        IsCancel="True"
+                        Padding="12,6"
+                        Click="CancelButton_Click" />
+            </StackPanel>
+        </StackPanel>
+    </Border>
+
+</Window>

@@ -66,6 +66,10 @@ public partial class App : Application
         services.AddSingleton<IBookTxtStructureService, BookTxtStructureService>();
         services.AddSingleton<IOrphanFileDiscoveryService, OrphanFileDiscoveryService>();
 
+        // Story ideas (story/anthology projects)
+        services.AddSingleton<IStoryIdeasService, StoryIdeasService>();
+        services.AddSingleton<StoryIdeaPromoter>();
+
         // M004/S02 services — supplemental docs sidebar tree
         services.AddSingleton<ISupplementalDocsService, SupplementalDocsService>();
 
@@ -204,6 +208,13 @@ public partial class App : Application
                 sp.GetRequiredService<WordCountHistoryService>(),
                 sp.GetRequiredService<TargetsService>()));
 
+        services.AddSingleton<IdeasViewModel>(sp =>
+            new IdeasViewModel(
+                sp.GetRequiredService<WorkspaceViewModel>(),
+                sp.GetRequiredService<IStoryIdeasService>(),
+                sp.GetRequiredService<StoryIdeaPromoter>(),
+                sp.GetRequiredService<INotificationService>()));
+
         // M006 — AI chat ViewModels (must be registered after Editor/Workspace VMs)
         services.AddSingleton<ConversationListViewModel>(sp =>
             new ConversationListViewModel(
@@ -247,7 +258,8 @@ public partial class App : Application
                 sp.GetRequiredService<NotificationService>(),
                 sp.GetRequiredService<IAppSettingsStore>(),
                 sp.GetRequiredService<AiChatViewModel>(),
-                () => sp.GetRequiredService<SettingsViewModel>()));
+                () => sp.GetRequiredService<SettingsViewModel>(),
+                sp.GetRequiredService<IdeasViewModel>()));
 
         _serviceProvider = services.BuildServiceProvider();
         Services = _serviceProvider;

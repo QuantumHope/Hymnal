@@ -29,6 +29,8 @@ public partial class MainWindow : Window
     {
         InitializeComponent();
 
+        Closing += OnClosingFlushPendingEdits;
+
         Closed += (_, _) =>
         {
             _layoutDisposables.Dispose();
@@ -56,6 +58,8 @@ public partial class MainWindow : Window
                 SetupRightPaneRowHeights(vm);
                 SetupLayoutPersistence(vm);
 
+                vm.ShowQuickIdeaDialogAsync = () => QuickIdeaDialog.ShowAsync(this);
+
                 // About dialog — needs Window reference so it's wired here, not in the VM.
                 _layoutDisposables.Add(
                     vm.ShowAboutCommand.Subscribe(_ =>
@@ -65,6 +69,30 @@ public partial class MainWindow : Window
                     }));
             }
         };
+    }
+
+    /// <summary>
+    /// Holds the close until debounced edits (story ideas) are written, then closes again.
+    /// </summary>
+    private async void OnClosingFlushPendingEdits(object? sender, WindowClosingEventArgs e)
+    {
+        if (DataContext is not MainWindowViewModel vm)
+            return;
+
+        var flush = vm.FlushPendingEditsAsync();
+        if (flush.IsCompleted)
+            return;
+
+        e.Cancel = true;
+        try
+        {
+            await flush;
+        }
+        finally
+        {
+            // Save failures are reported by the view model; closing goes ahead either way.
+            Close();
+        }
     }
 
     public static async Task ExecuteGitSyncActionAsync(GitPanelViewModel gitPanelViewModel, string? commitMessage)
@@ -108,7 +136,7 @@ public partial class MainWindow : Window
 
         void ApplyColumnWidths(ShellMode mode, bool anyLeftOpen, bool anyRightOpen, WriteLayoutSettings layout)
         {
-            if (mode is ShellMode.Manage or ShellMode.Plan or ShellMode.Research)
+            if (mode is ShellMode.Manage or ShellMode.Plan or ShellMode.Research or ShellMode.Ideas)
             {
                 grid.ColumnDefinitions[0].Width = new GridLength(0);
                 grid.ColumnDefinitions[1].Width = new GridLength(0);

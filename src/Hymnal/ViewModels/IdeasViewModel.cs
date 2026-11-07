@@ -39,6 +39,7 @@ public sealed class IdeasViewModel : ViewModelBase, IDisposable
     private readonly Dictionary<IdeaCardViewModel, IDisposable> _cardSubscriptions = new();
     private readonly ObservableCollectionExtended<IdeaCardViewModel> _cards = new();
     private readonly Subject<Unit> _saveRequests = new();
+    private readonly Subject<Unit> _loadedRootChanged = new();
 
     /// <summary>Workspace root the current ideas were loaded from; null when nothing is loaded.</summary>
     private string? _loadedRoot;
@@ -69,12 +70,36 @@ public sealed class IdeasViewModel : ViewModelBase, IDisposable
                 : card.WhenAnyValue(c => c.State).Select(s => (IdeaState?)s))
             .Switch();
 
+        // Edits from elsewhere (or a reload) reach the pickers too.
+        Disposables.Add(
+            this.WhenAnyValue(x => x.Selected)
+                .Select(card => card == null
+                    ? Observable.Return(Unit.Default)
+                    : card.WhenAnyValue(c => c.State, c => c.TargetPreset).Select(_ => Unit.Default))
+                .Switch()
+                .Subscribe(_ =>
+                {
+                    this.RaisePropertyChanged(nameof(SelectedState));
+                    this.RaisePropertyChanged(nameof(SelectedTarget));
+                }));
+
+        // While another workspace's ideas are still shown (its load is in flight), nothing is promoted.
+        var showsOpenWorkspace = Observable.Merge(workspace.WorkspaceChanged.Select(_ => Unit.Default), _loadedRootChanged)
+            .StartWith(Unit.Default)
+            .Select(_ => ShowsOpenWorkspace);
+
         _canPromote = Observable.CombineLatest(
-                profile, selectedState, this.WhenAnyValue(x => x.IsReadOnly),
-                (p, state, readOnly) => p.Kind == ProjectKind.Anthology && state is { } s && s != IdeaState.Used && !readOnly)
+                profile, selectedState, this.WhenAnyValue(x => x.IsReadOnly), showsOpenWorkspace,
+                (p, state, readOnly, current) =>
+                    p.Kind == ProjectKind.Anthology && state is { } s && s != IdeaState.Used && !readOnly && current)
             .DistinctUntilChanged()
             .ToProperty(this, x => x.CanPromote);
         Disposables.Add(_canPromote);
+
+        _showsPromote = profile
+            .Select(p => p.Kind == ProjectKind.Anthology)
+            .ToProperty(this, x => x.ShowsPromote);
+        Disposables.Add(_showsPromote);
 
         var canCreate = Observable.CombineLatest(
             profile, this.WhenAnyValue(x => x.IsReadOnly),
@@ -88,6 +113,7 @@ public sealed class IdeasViewModel : ViewModelBase, IDisposable
         DeleteSelectedCommand = ReactiveCommand.CreateFromTask(DeleteSelectedAsync, canDelete);
         PromoteSelectedCommand = ReactiveCommand.CreateFromTask(
             PromoteSelectedAsync, this.WhenAnyValue(x => x.CanPromote));
+        ClearTagFilterCommand = ReactiveCommand.Create(() => { TagFilter = null; });
 
         foreach (var command in new IHandleObservableErrors[] { NewIdeaCommand, DeleteSelectedCommand, PromoteSelectedCommand })
             Disposables.Add(command.ThrownExceptions.Subscribe(ex => _notifications.ShowError(ex.Message)));
@@ -147,7 +173,75 @@ public sealed class IdeasViewModel : ViewModelBase, IDisposable
     public IdeaCardViewModel? Selected
     {
         get => _selected;
-        set => this.RaiseAndSetIfChanged(ref _selected, value);
+        set
+        {
+            if (ReferenceEquals(_selected, value))
+                return;
+            UpdateEditorPickers(() => this.RaiseAndSetIfChanged(ref _selected, value));
+        }
+    }
+
+    // ── Editor pickers ────────────────────────────────────────────────────────
+    // The state picker's options differ per card (a used idea also lists Used). While a picker's
+    // options are being swapped it can push a value meant for neither card, so picker writes are
+    // ignored until the swap is done, and the real value is pushed back afterwards.
+
+    private bool _updatingEditorPickers;
+
+    /// <summary>The "no target" entry of <see cref="TargetOptions"/>.</summary>
+    public static TargetPreset NoTarget { get; } = new("", "None", null, null);
+
+    private IReadOnlyList<TargetPreset> _targetOptions = [NoTarget];
+    /// <summary>Choices for the editor's target picker: <see cref="NoTarget"/>, then the profile's presets.</summary>
+    public IReadOnlyList<TargetPreset> TargetOptions
+    {
+        get => _targetOptions;
+        private set => this.RaiseAndSetIfChanged(ref _targetOptions, value);
+    }
+
+    /// <summary>State picker value for <see cref="Selected"/>; options come from the card's <see cref="IdeaCardViewModel.StateOptions"/>.</summary>
+    public IdeaState? SelectedState
+    {
+        get => Selected?.State;
+        set
+        {
+            if (_updatingEditorPickers || value is not { } state || Selected is not { } card)
+                return;
+            UpdateEditorPickers(() => card.State = state);
+        }
+    }
+
+    /// <summary>
+    /// Target picker value for <see cref="Selected"/>: <see cref="NoTarget"/> when none is set or the key
+    /// isn't one of this profile's presets.
+    /// </summary>
+    public TargetPreset? SelectedTarget
+    {
+        get => Selected is not { } card
+            ? null
+            : TargetOptions.FirstOrDefault(p => p.Key == (card.TargetPreset ?? "")) ?? NoTarget;
+        set
+        {
+            if (_updatingEditorPickers || value is null || Selected is not { } card)
+                return;
+            UpdateEditorPickers(() => card.TargetPreset = value.Key);
+        }
+    }
+
+    private void UpdateEditorPickers(Action change)
+    {
+        var outer = _updatingEditorPickers;
+        _updatingEditorPickers = true;
+        try
+        {
+            change();
+            this.RaisePropertyChanged(nameof(SelectedState));
+            this.RaisePropertyChanged(nameof(SelectedTarget));
+        }
+        finally
+        {
+            _updatingEditorPickers = outer;
+        }
     }
 
     private bool _isReadOnly;
@@ -160,6 +254,10 @@ public sealed class IdeasViewModel : ViewModelBase, IDisposable
 
     private readonly ObservableAsPropertyHelper<bool> _canPromote;
     public bool CanPromote => _canPromote.Value;
+
+    private readonly ObservableAsPropertyHelper<bool> _showsPromote;
+    /// <summary>True for anthologies, where an idea can become a new story; short stories have one story.</summary>
+    public bool ShowsPromote => _showsPromote.Value;
 
     /// <summary>States the editor offers. <see cref="IdeaState.Used"/> is set only by promoting.</summary>
     public IReadOnlyList<IdeaState> States => IdeaCardViewModel.SelectableStates;
@@ -176,6 +274,7 @@ public sealed class IdeasViewModel : ViewModelBase, IDisposable
     public ReactiveCommand<(string Title, string Premise), Unit> NewIdeaCommand { get; }
     public ReactiveCommand<Unit, Unit> DeleteSelectedCommand { get; }
     public ReactiveCommand<Unit, Unit> PromoteSelectedCommand { get; }
+    public ReactiveCommand<Unit, Unit> ClearTagFilterCommand { get; }
 
     // ── Loading ───────────────────────────────────────────────────────────────
 
@@ -268,6 +367,9 @@ public sealed class IdeasViewModel : ViewModelBase, IDisposable
         }
     }
 
+    /// <summary>True when the loaded ideas belong to the workspace that is open now.</summary>
+    private bool ShowsOpenWorkspace => _loadedRoot != null && _loadedRoot == _workspace.WorkspaceRoot;
+
     private void ReplaceIdeas(
         string? root, ProjectKind? kind, IReadOnlyList<StoryIdea> ideas, IReadOnlyList<TargetPreset> presets)
     {
@@ -278,7 +380,10 @@ public sealed class IdeasViewModel : ViewModelBase, IDisposable
         // to the outgoing cards can be lost.
         _loadedRoot = root;
         _loadedKind = kind;
+        _loadedRootChanged.OnNext(Unit.Default);
         Selected = null;
+        if (!TargetOptions.Skip(1).SequenceEqual(presets))
+            TargetOptions = [NoTarget, .. presets];
         if (!sameRoot)
             TagFilter = null;
         foreach (var card in _allCards)
@@ -297,6 +402,9 @@ public sealed class IdeasViewModel : ViewModelBase, IDisposable
 
     public async Task NewIdeaAsync(string title, string premise)
     {
+        // Quick capture can arrive while the open workspace's ideas are still loading; add the
+        // idea to that workspace's list, not the one being replaced.
+        await _currentLoad;
         if (IsReadOnly || _loadedRoot == null)
             return;
 
@@ -342,21 +450,22 @@ public sealed class IdeasViewModel : ViewModelBase, IDisposable
     public async Task PromoteSelectedAsync()
     {
         var card = Selected;
-        if (card == null || !CanPromote)
+        if (card == null || !CanPromote || !ShowsOpenWorkspace)
             return;
+        var root = _loadedRoot!;
 
         // The promoter re-reads the idea from disk, so pending edits must land first.
         await FlushAsync();
 
         var fileName = await AskFileNameAsync(StoryIdeaPromoter.SuggestFileName(card.Title));
-        if (string.IsNullOrWhiteSpace(fileName))
+        if (string.IsNullOrWhiteSpace(fileName) || root != _loadedRoot || !ShowsOpenWorkspace)
             return;
 
         try
         {
             using var suppressFileWatcher = _workspace.SuppressFileWatcher();
             var result = await _promoter.PromoteAsync(
-                _workspace.WorkspaceRoot, _workspace.BookTxtPath, card.ToIdea(), fileName.Trim(), _workspace.Profile);
+                root, _workspace.BookTxtPath, card.ToIdea(), fileName.Trim(), _workspace.Profile);
 
             if (result.IsSuccess)
             {
@@ -474,5 +583,7 @@ public sealed class IdeasViewModel : ViewModelBase, IDisposable
         _allCards.Clear();
         _saveRequests.OnCompleted();
         _saveRequests.Dispose();
+        _loadedRootChanged.OnCompleted();
+        _loadedRootChanged.Dispose();
     }
 }

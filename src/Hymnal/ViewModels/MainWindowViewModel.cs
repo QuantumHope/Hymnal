@@ -35,6 +35,9 @@ public class MainWindowViewModel : ViewModelBase
     public GitPanelViewModel GitPanelViewModel { get; }
     public AiChatViewModel AiChatViewModel { get; }
 
+    /// <summary>Story ideas for the Ideas mode; null when the app runs without it.</summary>
+    public IdeasViewModel? IdeasViewModel { get; }
+
     // ── Settings overlay ──────────────────────────────────────────────────────
 
     private bool _isSettingsOpen;
@@ -116,6 +119,7 @@ public class MainWindowViewModel : ViewModelBase
             this.RaisePropertyChanged(nameof(IsGanttVisible));
             this.RaisePropertyChanged(nameof(IsCorkboardVisible));
             this.RaisePropertyChanged(nameof(IsResearchVisible));
+            this.RaisePropertyChanged(nameof(IsIdeasVisible));
             this.RaisePropertyChanged(nameof(SecondaryCentreContent));
         }
     }
@@ -124,6 +128,7 @@ public class MainWindowViewModel : ViewModelBase
     public object? SecondaryCentreContent => ActiveMode switch
     {
         ShellMode.Research => ResearchViewModel,
+        ShellMode.Ideas => IdeasViewModel,
         ShellMode.Plan => CorkboardViewModel,
         ShellMode.Manage => GanttViewModel,
         _ => null
@@ -141,7 +146,22 @@ public class MainWindowViewModel : ViewModelBase
     /// <summary>True when the research surface is the active centre-panel view.</summary>
     public bool IsResearchVisible => ActiveMode == ShellMode.Research;
 
+    /// <summary>True when the story ideas surface is the active centre-panel view.</summary>
+    public bool IsIdeasVisible => ActiveMode == ShellMode.Ideas;
+
+    private readonly ObservableAsPropertyHelper<bool> _isIdeasModeAvailable;
+    /// <summary>True when a story or anthology workspace is open, so the Ideas mode can be shown.</summary>
+    public bool IsIdeasModeAvailable => _isIdeasModeAvailable.Value;
+
+    /// <summary>
+    /// Asks for a quick-capture idea's title and premise; null cancels. Set by the view.
+    /// </summary>
+    public Func<Task<(string Title, string Premise)?>> ShowQuickIdeaDialogAsync { get; set; } =
+        () => Task.FromResult<(string Title, string Premise)?>(null);
+
     public ReactiveCommand<Unit, Unit> SelectResearchCommand { get; }
+    public ReactiveCommand<Unit, Unit> SelectIdeasCommand { get; }
+    public ReactiveCommand<Unit, Unit> QuickCaptureIdeaCommand { get; }
     public ReactiveCommand<Unit, Unit> SelectPlanCommand { get; }
     public ReactiveCommand<Unit, Unit> SelectWriteCommand { get; }
     public ReactiveCommand<Unit, Unit> SelectManageCommand { get; }
@@ -226,7 +246,7 @@ public class MainWindowViewModel : ViewModelBase
         ReactiveCommand.Create(() =>
         {
             if (Application.Current?.ApplicationLifetime is IClassicDesktopStyleApplicationLifetime desktop)
-                desktop.Shutdown();
+                desktop.TryShutdown(); // lets the main window finish pending saves before closing
         });
 
     // ── About ─────────────────────────────────────────────────────────────────
@@ -248,7 +268,8 @@ public class MainWindowViewModel : ViewModelBase
         NotificationService notificationService,
         IAppSettingsStore settingsStore,
         AiChatViewModel aiChatViewModel,
-        Func<SettingsViewModel> settingsVmFactory)
+        Func<SettingsViewModel> settingsVmFactory,
+        IdeasViewModel? ideasViewModel = null)
     {
         _settingsStore = settingsStore;
         _workspaceVm = workspaceViewModel;
@@ -267,6 +288,7 @@ public class MainWindowViewModel : ViewModelBase
         SupplementalDocsViewModel = supplementalDocsViewModel;
         GitPanelViewModel = gitPanelViewModel;
         AiChatViewModel = aiChatViewModel;
+        IdeasViewModel = ideasViewModel;
         _settingsVmFactory = settingsVmFactory;
 
         CorkboardViewModel.SetViewActive(false);
@@ -322,6 +344,36 @@ public class MainWindowViewModel : ViewModelBase
         SelectResearchCommand = ReactiveCommand.CreateFromTask(EnterResearchModeAsync);
         Disposables.Add(SelectResearchCommand.ThrownExceptions.Subscribe(ex =>
             notificationService.ShowError($"Failed to enter research mode: {ex.Message}")));
+        var ideasAvailable = ideasViewModel == null
+            ? Observable.Return(false)
+            : Observable.CombineLatest(
+                    workspaceViewModel.WhenAnyValue(x => x.Profile),
+                    workspaceViewModel.WhenAnyValue(x => x.HasWorkspace),
+                    (profile, hasWorkspace) => profile.ShowsIdeas && hasWorkspace)
+                .DistinctUntilChanged();
+        _isIdeasModeAvailable = ideasAvailable.ToProperty(this, x => x.IsIdeasModeAvailable);
+        Disposables.Add(_isIdeasModeAvailable);
+
+        // Leaving story/anthology (or closing the workspace) while in Ideas returns to Write.
+        Disposables.Add(
+            this.WhenAnyValue(x => x.IsIdeasModeAvailable)
+                .Where(available => !available && ActiveMode == ShellMode.Ideas)
+                .Subscribe(_ => ActiveMode = ShellMode.Write));
+
+        SelectIdeasCommand = ReactiveCommand.Create(
+            () => { ActiveMode = ShellMode.Ideas; },
+            this.WhenAnyValue(x => x.IsIdeasModeAvailable));
+
+        var canQuickCapture = ideasViewModel == null
+            ? Observable.Return(false)
+            : Observable.CombineLatest(
+                this.WhenAnyValue(x => x.IsIdeasModeAvailable),
+                ideasViewModel.WhenAnyValue(x => x.IsReadOnly),
+                (available, readOnly) => available && !readOnly);
+        QuickCaptureIdeaCommand = ReactiveCommand.CreateFromTask(QuickCaptureIdeaAsync, canQuickCapture);
+        Disposables.Add(QuickCaptureIdeaCommand.ThrownExceptions.Subscribe(ex =>
+            notificationService.ShowError($"Failed to capture idea: {ex.Message}")));
+
         SelectPlanCommand = ReactiveCommand.Create(() => { ActiveMode = ShellMode.Plan; });
         SelectWriteCommand = ReactiveCommand.Create(() => { ActiveMode = ShellMode.Write; });
         SelectManageCommand = ReactiveCommand.Create(() => { ActiveMode = ShellMode.Manage; });
@@ -519,6 +571,23 @@ public class MainWindowViewModel : ViewModelBase
 
         ActiveMode = ShellMode.Research;
     }
+
+    private async Task QuickCaptureIdeaAsync()
+    {
+        if (IdeasViewModel == null)
+            return;
+
+        var request = await ShowQuickIdeaDialogAsync();
+        if (request is not { } idea)
+            return;
+
+        await IdeasViewModel.NewIdeaAsync(idea.Title, idea.Premise);
+    }
+
+    /// <summary>
+    /// Writes edits still waiting on a debounced save (story ideas), e.g. before the window closes.
+    /// </summary>
+    public Task FlushPendingEditsAsync() => IdeasViewModel?.FlushAsync() ?? Task.CompletedTask;
 
     // ── Write layout persistence ──────────────────────────────────────────────
 

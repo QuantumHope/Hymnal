@@ -92,6 +92,7 @@
         <KeyBinding Gesture="F3" Command="{Binding ChapterInfoViewModel.ToggleCommand}" />
         <KeyBinding Gesture="F4" Command="{Binding NotesViewModel.ToggleCommand}" />
         <KeyBinding Gesture="F5" Command="{Binding ToggleGanttCommand}" />
+        <KeyBinding Gesture="Ctrl+Shift+I" Command="{Binding QuickCaptureIdeaCommand}" />
     </Window.KeyBindings>
 
     <Grid RowDefinitions="48,Auto,*,Auto">
@@ -145,7 +146,7 @@
                     </MenuItem>
                 </Menu>
 
-                <!-- Centre: mode tabs — RESEARCH / PLAN / WRITE / MANAGE / EDIT -->
+                <!-- Centre: mode tabs — RESEARCH / IDEAS (story/anthology) / PLAN / WRITE / MANAGE / EDIT -->
                 <StackPanel Grid.Column="1"
                             Orientation="Horizontal"
                             HorizontalAlignment="Center"
@@ -156,6 +157,12 @@
                                   Command="{Binding SelectResearchCommand}"
                                   IsChecked="{Binding ActiveMode, Mode=OneWay, Converter={StaticResource ShellModeEqualsConverter}, ConverterParameter=Research}"
                                   ToolTip.Tip="Research docs and AI chat" />
+                    <ToggleButton Classes="nav-mode"
+                                  Content="IDEAS"
+                                  Command="{Binding SelectIdeasCommand}"
+                                  IsVisible="{Binding IsIdeasModeAvailable}"
+                                  IsChecked="{Binding ActiveMode, Mode=OneWay, Converter={StaticResource ShellModeEqualsConverter}, ConverterParameter=Ideas}"
+                                  ToolTip.Tip="Story ideas (Ctrl+Shift+I to capture one)" />
                     <ToggleButton Classes="nav-mode"
                                   Content="PLAN"
                                   Command="{Binding SelectPlanCommand}"
@@ -651,7 +658,7 @@
 
             </Grid>
 
-            <!-- Research / Plan / Manage — lazy-loaded via ViewLocator, full width -->
+            <!-- Research / Ideas / Plan / Manage — lazy-loaded via ViewLocator, full width -->
             <ContentControl IsVisible="{Binding !IsEditorVisible}"
                             Content="{Binding SecondaryCentreContent}" />
 

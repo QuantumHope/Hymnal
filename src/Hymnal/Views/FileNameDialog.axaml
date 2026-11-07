@@ -1,0 +1,54 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        x:Class="Hymnal.Views.FileNameDialog"
+        Title="File Name"
+        Width="460" Height="200"
+        CanResize="False"
+        ShowInTaskbar="False"
+        WindowStartupLocation="CenterOwner"
+        Background="#120932"
+        FontFamily="{DynamicResource InterFont}">
+
+    <Border BorderBrush="#2D1B5E"
+            BorderThickness="1"
+            Padding="16">
+        <StackPanel Spacing="12">
+            <TextBlock x:Name="PromptText"
+                       Foreground="{DynamicResource OnSurfaceBrush}"
+                       TextWrapping="Wrap" />
+
+            <StackPanel Spacing="4">
+                <TextBlock Text="FILE NAME"
+                           FontSize="10"
+                           FontWeight="SemiBold"
+                           LetterSpacing="1.5"
+                           Foreground="{DynamicResource OnSurfaceDimBrush}" />
+                <TextBox x:Name="FileNameInput"
+                         FontSize="12"
+                         Padding="8,6"
+                         Background="{DynamicResource SurfaceBaseBrush}"
+                         Foreground="{DynamicResource OnSurfaceBrush}"
+                         BorderBrush="{DynamicResource BorderSubtleBrush}"
+                         BorderThickness="1" />
+            </StackPanel>
+
+            <StackPanel Orientation="Horizontal"
+                        HorizontalAlignment="Right"
+                        Spacing="8">
+                <Button x:Name="OkButton"
+                        Content="Create"
+                        IsDefault="True"
+                        Padding="12,6"
+                        Background="{DynamicResource SynthwavePurpleBrush}"
+                        Foreground="{DynamicResource OnSurfaceBrush}"
+                        BorderThickness="0"
+                        Click="OkButton_Click" />
+                <Button Content="Cancel"
+                        IsCancel="True"
+                        Padding="12,6"
+                        Click="CancelButton_Click" />
+            </StackPanel>
+        </StackPanel>
+    </Border>
+
+</Window>

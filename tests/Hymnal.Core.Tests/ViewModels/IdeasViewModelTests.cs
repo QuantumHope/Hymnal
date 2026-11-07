@@ -327,6 +327,51 @@ public sealed class IdeasViewModelTests : IDisposable
     }
 
     [Fact]
+    public async Task CanPromote_false_while_ideas_belong_to_another_workspace()
+    {
+        var first = CreateWorkspace(AnthologyJson);
+        var second = CreateWorkspace(AnthologyJson);
+        try
+        {
+            await SeedAsync(first, Idea("a", "The Lighthouse", Day1));
+            await SeedAsync(second, Idea("b", "Bravo", Day1));
+
+            await Ui(first, async context =>
+            {
+                var vm = await Within(context.CreateIdeasAsync());
+                vm.Selected = vm.Cards.Single();
+                Assert.True(vm.CanPromote);
+                var asked = false;
+                vm.AskFileNameAsync = suggestion => { asked = true; return Task.FromResult<string?>(suggestion); };
+
+                // Open the second workspace while its ideas are still being read: the first
+                // workspace's cards are still shown and must not be promoted into the second.
+                var hold = context.Ideas.HoldNextLoad(second);
+                context.FolderPicker.Folder = second;
+                await Within(context.OpenWorkspaceInCurrentDispatchAsync());
+                await PumpUntilAsync(() => context.Ideas.IsHeld(second));
+
+                Assert.Equal("The Lighthouse", vm.Selected?.Title);
+                Assert.False(vm.CanPromote);
+                await Within(vm.PromoteSelectedAsync());
+                Assert.False(asked);
+
+                hold.SetResult();
+                await PumpUntilAsync(() => !context.Ideas.IsHeld(second));
+                await Within(CurrentLoad(vm));
+            });
+
+            Assert.False(File.Exists(Path.Combine(second, "the-lighthouse.md")));
+            Assert.Equal(IdeaState.New, Assert.Single(await LoadFromDiskAsync(first)).State);
+        }
+        finally
+        {
+            DeleteFolder(first);
+            DeleteFolder(second);
+        }
+    }
+
+    [Fact]
     public async Task Promote_failure_shows_error()
     {
         var root = CreateWorkspace(AnthologyJson);

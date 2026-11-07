@@ -1,0 +1,245 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:Hymnal.ViewModels"
+             xmlns:models="using:Hymnal.Core.Models"
+             x:Class="Hymnal.Views.IdeasView"
+             x:DataType="vm:IdeasViewModel"
+             Background="#0B0820">
+
+    <UserControl.Styles>
+        <Style Selector="ListBox#IdeaCards ListBoxItem">
+            <Setter Property="Padding" Value="0" />
+            <Setter Property="Margin" Value="0,0,12,12" />
+            <Setter Property="Background" Value="Transparent" />
+        </Style>
+        <Style Selector="ListBox#IdeaCards ListBoxItem:selected /template/ ContentPresenter#PART_ContentPresenter">
+            <Setter Property="Background" Value="Transparent" />
+        </Style>
+        <Style Selector="ListBox#IdeaCards ListBoxItem:pointerover /template/ ContentPresenter#PART_ContentPresenter">
+            <Setter Property="Background" Value="Transparent" />
+        </Style>
+        <Style Selector="ListBox#IdeaCards ListBoxItem Border.idea-card">
+            <Setter Property="BorderBrush" Value="{DynamicResource BorderSubtleBrush}" />
+        </Style>
+        <Style Selector="ListBox#IdeaCards ListBoxItem:selected Border.idea-card">
+            <Setter Property="BorderBrush" Value="{DynamicResource SynthwavePurpleBrush}" />
+        </Style>
+        <Style Selector="TextBlock.field-label">
+            <Setter Property="FontSize" Value="10" />
+            <Setter Property="FontWeight" Value="SemiBold" />
+            <Setter Property="LetterSpacing" Value="1.5" />
+            <Setter Property="Foreground" Value="{DynamicResource OnSurfaceDimBrush}" />
+        </Style>
+    </UserControl.Styles>
+
+    <Grid ColumnDefinitions="*,320">
+
+        <!-- Card grid with filter bar -->
+        <Grid Grid.Column="0" RowDefinitions="Auto,Auto,*">
+            <Border Grid.Row="0"
+                    Padding="16,10"
+                    BorderBrush="{DynamicResource BorderSubtleBrush}"
+                    BorderThickness="0,0,0,1">
+                <DockPanel LastChildFill="False">
+                    <TextBlock DockPanel.Dock="Left"
+                               Text="IDEAS"
+                               VerticalAlignment="Center"
+                               FontSize="10"
+                               FontWeight="SemiBold"
+                               LetterSpacing="1.5"
+                               Foreground="{DynamicResource OnSurfaceDimBrush}" />
+                    <Button x:Name="NewIdeaButton"
+                            DockPanel.Dock="Left"
+                            Margin="16,0,0,0"
+                            Content="+ New idea"
+                            Padding="12,4"
+                            Background="{DynamicResource SynthwavePurpleBrush}"
+                            Foreground="{DynamicResource OnSurfaceBrush}"
+                            BorderThickness="0"
+                            IsEnabled="{Binding !IsReadOnly}"
+                            ToolTip.Tip="New idea (Ctrl+Shift+I)"
+                            Click="NewIdeaButton_Click" />
+                    <CheckBox x:Name="ShowUsedAndShelvedToggle"
+                              DockPanel.Dock="Right"
+                              Margin="12,0,0,0"
+                              Content="Show used &amp; shelved"
+                              Foreground="{DynamicResource OnSurfaceBrush}"
+                              IsChecked="{Binding ShowUsedAndShelved, Mode=TwoWay}" />
+                    <Button DockPanel.Dock="Right"
+                            Margin="4,0,0,0"
+                            Padding="8,4"
+                            Content="✕"
+                            ToolTip.Tip="Show all tags"
+                            IsVisible="{Binding TagFilter, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"
+                            Command="{Binding ClearTagFilterCommand}" />
+                    <ComboBox x:Name="TagFilterPicker"
+                              DockPanel.Dock="Right"
+                              MinWidth="140"
+                              PlaceholderText="All tags"
+                              ItemsSource="{Binding AllTags}"
+                              SelectedItem="{Binding TagFilter, Mode=TwoWay}" />
+                </DockPanel>
+            </Border>
+
+            <Border Grid.Row="1"
+                    IsVisible="{Binding IsReadOnly}"
+                    Padding="16,8"
+                    Background="{DynamicResource SurfaceHighBrush}">
+                <TextBlock Text="{x:Static vm:IdeasViewModel.ReadOnlyNotice}"
+                           Foreground="{DynamicResource OrangeBrush}"
+                           TextWrapping="Wrap" />
+            </Border>
+
+            <Panel Grid.Row="2">
+                <TextBlock x:Name="EmptyIdeasState"
+                           Text="No ideas yet. Capture one with + New idea or Ctrl+Shift+I."
+                           IsVisible="{Binding !Cards.Count}"
+                           HorizontalAlignment="Center"
+                           VerticalAlignment="Center"
+                           Foreground="{DynamicResource OnSurfaceMutedBrush}" />
+                <ListBox x:Name="IdeaCards"
+                         Background="Transparent"
+                         Padding="16"
+                         ItemsSource="{Binding Cards}"
+                         SelectedItem="{Binding Selected, Mode=TwoWay}"
+                         ScrollViewer.HorizontalScrollBarVisibility="Disabled">
+                    <ListBox.ItemsPanel>
+                        <ItemsPanelTemplate>
+                            <WrapPanel Orientation="Horizontal" />
+                        </ItemsPanelTemplate>
+                    </ListBox.ItemsPanel>
+                    <ListBox.ItemTemplate>
+                        <DataTemplate x:DataType="vm:IdeaCardViewModel">
+                            <Border Classes="idea-card"
+                                    Width="240"
+                                    MinHeight="140"
+                                    Padding="12"
+                                    CornerRadius="6"
+                                    BorderThickness="1"
+                                    Background="{DynamicResource SurfaceElevatedBrush}">
+                                <StackPanel Spacing="6">
+                                    <TextBlock Text="{Binding Title}"
+                                               FontWeight="SemiBold"
+                                               TextTrimming="CharacterEllipsis"
+                                               Foreground="{DynamicResource OnSurfaceBrush}" />
+                                    <TextBlock Text="{Binding Premise}"
+                                               TextWrapping="Wrap"
+                                               MaxLines="3"
+                                               TextTrimming="CharacterEllipsis"
+                                               FontSize="12"
+                                               Foreground="{DynamicResource OnSurfaceMutedBrush}" />
+                                    <ItemsControl ItemsSource="{Binding Tags}">
+                                        <ItemsControl.ItemsPanel>
+                                            <ItemsPanelTemplate>
+                                                <WrapPanel Orientation="Horizontal" />
+                                            </ItemsPanelTemplate>
+                                        </ItemsControl.ItemsPanel>
+                                        <ItemsControl.ItemTemplate>
+                                            <DataTemplate x:DataType="x:String">
+                                                <Border Margin="0,0,4,4"
+                                                        Padding="6,1"
+                                                        CornerRadius="8"
+                                                        Background="{DynamicResource SurfaceHighBrush}">
+                                                    <TextBlock Text="{Binding}"
+                                                               FontSize="10"
+                                                               Foreground="{DynamicResource OnSurfaceBrush}" />
+                                                </Border>
+                                            </DataTemplate>
+                                        </ItemsControl.ItemTemplate>
+                                    </ItemsControl>
+                                    <DockPanel LastChildFill="False">
+                                        <TextBlock DockPanel.Dock="Left"
+                                                   Text="{Binding TargetLabel}"
+                                                   FontSize="10"
+                                                   Foreground="{DynamicResource SynthwavePurpleBrush}" />
+                                        <TextBlock DockPanel.Dock="Right"
+                                                   Text="{Binding State}"
+                                                   FontSize="10"
+                                                   Foreground="{DynamicResource OnSurfaceDimBrush}" />
+                                    </DockPanel>
+                                </StackPanel>
+                            </Border>
+                        </DataTemplate>
+                    </ListBox.ItemTemplate>
+                </ListBox>
+            </Panel>
+        </Grid>
+
+        <!-- Side editor for the selected idea -->
+        <Border Grid.Column="1"
+                Background="{DynamicResource SurfaceElevatedBrush}"
+                BorderBrush="{DynamicResource BorderSubtleBrush}"
+                BorderThickness="1,0,0,0">
+            <Panel>
+                <TextBlock Text="Select an idea to edit it."
+                           IsVisible="{Binding Selected, Converter={x:Static ObjectConverters.IsNull}}"
+                           HorizontalAlignment="Center"
+                           VerticalAlignment="Center"
+                           Foreground="{DynamicResource OnSurfaceMutedBrush}" />
+                <ScrollViewer x:Name="IdeaEditor"
+                              IsVisible="{Binding Selected, Converter={x:Static ObjectConverters.IsNotNull}}">
+                    <StackPanel Margin="16" Spacing="12" IsEnabled="{Binding !IsReadOnly}">
+                        <StackPanel Spacing="4">
+                            <TextBlock Classes="field-label" Text="TITLE" />
+                            <TextBox x:Name="IdeaTitleInput" Text="{Binding Selected.Title, Mode=TwoWay}" />
+                        </StackPanel>
+                        <StackPanel Spacing="4">
+                            <TextBlock Classes="field-label" Text="PREMISE" />
+                            <TextBox Text="{Binding Selected.Premise, Mode=TwoWay}"
+                                     AcceptsReturn="True"
+                                     TextWrapping="Wrap"
+                                     MinHeight="60" />
+                        </StackPanel>
+                        <StackPanel Spacing="4">
+                            <TextBlock Classes="field-label" Text="NOTES" />
+                            <TextBox Text="{Binding Selected.Notes, Mode=TwoWay}"
+                                     AcceptsReturn="True"
+                                     TextWrapping="Wrap"
+                                     MinHeight="120" />
+                        </StackPanel>
+                        <StackPanel Spacing="4">
+                            <TextBlock Classes="field-label" Text="TAGS (comma-separated)" />
+                            <TextBox Text="{Binding Selected.TagsText, Mode=TwoWay}" />
+                        </StackPanel>
+                        <StackPanel Spacing="4">
+                            <TextBlock Classes="field-label" Text="TARGET" />
+                            <ComboBox x:Name="IdeaTargetPicker"
+                                      HorizontalAlignment="Stretch"
+                                      ItemsSource="{Binding TargetOptions}"
+                                      SelectedItem="{Binding SelectedTarget, Mode=TwoWay}">
+                                <ComboBox.ItemTemplate>
+                                    <DataTemplate x:DataType="models:TargetPreset">
+                                        <TextBlock Text="{Binding Label}" />
+                                    </DataTemplate>
+                                </ComboBox.ItemTemplate>
+                            </ComboBox>
+                        </StackPanel>
+                        <StackPanel Spacing="4">
+                            <TextBlock Classes="field-label" Text="STATE" />
+                            <!-- Each card's own options (a used idea also lists Used); SelectedState ignores
+                                 stale writes while the options swap between cards. -->
+                            <ComboBox x:Name="IdeaStatePicker"
+                                      HorizontalAlignment="Stretch"
+                                      ItemsSource="{Binding Selected.StateOptions}"
+                                      SelectedItem="{Binding SelectedState, Mode=TwoWay}" />
+                        </StackPanel>
+                        <StackPanel Orientation="Horizontal" Spacing="8" Margin="0,8,0,0">
+                            <Button x:Name="PromoteButton"
+                                    Content="Promote to story"
+                                    Padding="12,6"
+                                    Background="{DynamicResource SynthwavePurpleBrush}"
+                                    Foreground="{DynamicResource OnSurfaceBrush}"
+                                    BorderThickness="0"
+                                    IsVisible="{Binding ShowsPromote}"
+                                    Command="{Binding PromoteSelectedCommand}" />
+                            <Button x:Name="DeleteIdeaButton"
+                                    Content="Delete"
+                                    Padding="12,6"
+                                    Command="{Binding DeleteSelectedCommand}" />
+                        </StackPanel>
+                    </StackPanel>
+                </ScrollViewer>
+            </Panel>
+        </Border>
+    </Grid>
+</UserControl>
