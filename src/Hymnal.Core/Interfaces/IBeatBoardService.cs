@@ -7,4 +7,14 @@ public interface IBeatBoardService
 {
     Task<Result<IReadOnlyList<Beat>>> LoadAsync(string workspaceRoot, string boardKey);
     Task<Result<Unit>> SaveAsync(string workspaceRoot, string boardKey, IReadOnlyList<Beat> beats);
+
+    /// <summary>True when <paramref name="boardKey"/> is valid and its board file exists.</summary>
+    bool BoardExists(string workspaceRoot, string boardKey);
+
+    /// <summary>
+    /// Moves board <paramref name="fromKey"/> to <paramref name="toKey"/>: writes the destination
+    /// atomically, then deletes the source. Fails, changing nothing, when the source is missing or the
+    /// destination already exists.
+    /// </summary>
+    Task<Result<Unit>> MoveBoardAsync(string workspaceRoot, string fromKey, string toKey);
 }

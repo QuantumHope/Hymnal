@@ -869,6 +869,11 @@ public sealed class BeatBoardViewModelTests
             LastSaved = beats;
             return inner.SaveAsync(workspaceRoot, boardKey, beats);
         }
+
+        public bool BoardExists(string workspaceRoot, string boardKey) => inner.BoardExists(workspaceRoot, boardKey);
+
+        public Task<Result<Unit>> MoveBoardAsync(string workspaceRoot, string fromKey, string toKey) =>
+            inner.MoveBoardAsync(workspaceRoot, fromKey, toKey);
     }
 
     private sealed class NeverInitPrompt : IProjectInitPrompt

@@ -110,6 +110,66 @@ public class BeatBoardServiceTests
         Assert.True(result.IsSuccess);
         Assert.Equal("", result.Value![0].Note);
         Assert.Null(result.Value[0].ScenePath);
+        Assert.Null(result.Value[0].SceneId);
+    });
+
+    [Fact]
+    public Task Scene_id_round_trips_as_sceneId() => WithTempDirAsync(async (dir, svc) =>
+    {
+        var uuid = Guid.NewGuid().ToString();
+        var beat = new Beat("b-1", "Hook", "", "scenes/one.md", uuid);
+
+        Assert.True((await svc.SaveAsync(dir, "story", [beat])).IsSuccess);
+
+        Assert.Contains($"\"sceneId\": \"{uuid}\"", File.ReadAllText(BeatBoardService.BoardFilePath(dir, "story")));
+        Assert.Equal(beat, Assert.Single((await svc.LoadAsync(dir, "story")).Value!));
+    });
+
+    [Fact]
+    public Task Move_board_writes_destination_and_deletes_source() => WithTempDirAsync(async (dir, svc) =>
+    {
+        var uuid = Guid.NewGuid().ToString();
+        var beat = new Beat("b-1", "Hook", "Open strong.", "one.md");
+        await svc.SaveAsync(dir, "story", [beat]);
+        var bytes = File.ReadAllBytes(BeatBoardService.BoardFilePath(dir, "story"));
+
+        var result = await svc.MoveBoardAsync(dir, "story", uuid);
+
+        Assert.True(result.IsSuccess, result.Error);
+        Assert.False(svc.BoardExists(dir, "story"));
+        Assert.True(svc.BoardExists(dir, uuid));
+        Assert.Equal(bytes, File.ReadAllBytes(BeatBoardService.BoardFilePath(dir, uuid)));
+        Assert.Equal(beat, Assert.Single((await svc.LoadAsync(dir, uuid)).Value!));
+    });
+
+    [Fact]
+    public Task Move_board_onto_existing_destination_fails_and_changes_nothing() => WithTempDirAsync(async (dir, svc) =>
+    {
+        var uuid = Guid.NewGuid().ToString();
+        await svc.SaveAsync(dir, "story", [new Beat("1", "Source", "", null)]);
+        await svc.SaveAsync(dir, uuid, [new Beat("2", "Destination", "", null)]);
+        var source = File.ReadAllBytes(BeatBoardService.BoardFilePath(dir, "story"));
+        var destination = File.ReadAllBytes(BeatBoardService.BoardFilePath(dir, uuid));
+
+        var result = await svc.MoveBoardAsync(dir, "story", uuid);
+
+        Assert.False(result.IsSuccess);
+        Assert.Equal(source, File.ReadAllBytes(BeatBoardService.BoardFilePath(dir, "story")));
+        Assert.Equal(destination, File.ReadAllBytes(BeatBoardService.BoardFilePath(dir, uuid)));
+    });
+
+    [Fact]
+    public Task Move_board_with_missing_source_fails() => WithTempDirAsync(async (dir, svc) =>
+    {
+        var uuid = Guid.NewGuid().ToString();
+
+        var result = await svc.MoveBoardAsync(dir, "story", uuid);
+
+        Assert.False(result.IsSuccess);
+        Assert.False(svc.BoardExists(dir, uuid));
+        Assert.False((await svc.MoveBoardAsync(dir, "story", "story")).IsSuccess);
+        Assert.False((await svc.MoveBoardAsync(dir, "../x", uuid)).IsSuccess);
+        Assert.False(svc.BoardExists(dir, "../x"));
     });
 
     [Fact]
