@@ -228,7 +228,9 @@ public partial class App : Application
                 sp.GetRequiredService<IProviderProfileService>(),
                 sp.GetRequiredService<ICredentialStore>(),
                 sp.GetRequiredService<IAiChatService>(),
-                sp.GetRequiredService<INotificationService>()));
+                sp.GetRequiredService<INotificationService>(),
+                sp.GetRequiredService<WorkspaceViewModel>(),
+                sp.GetRequiredService<ProjectSettingsService>()));
 
         services.AddTransient<MainWindowViewModel>(sp =>
             new MainWindowViewModel(

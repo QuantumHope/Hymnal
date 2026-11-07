@@ -2,9 +2,27 @@
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:vm="using:Hymnal.ViewModels"
              xmlns:aivm="using:Hymnal.ViewModels.Ai"
+             xmlns:conv="using:Hymnal.Views.Converters"
              x:Class="Hymnal.Views.SettingsView"
              x:DataType="vm:SettingsViewModel"
              Background="{DynamicResource SurfaceBaseBrush}">
+
+    <UserControl.Styles>
+        <Style Selector="Button.typeCard">
+            <Setter Property="Background" Value="{DynamicResource SurfaceBaseBrush}" />
+            <Setter Property="BorderBrush" Value="{DynamicResource BorderSubtleBrush}" />
+            <Setter Property="BorderThickness" Value="2" />
+            <Setter Property="Padding" Value="14" />
+            <Setter Property="Margin" Value="0,0,12,0" />
+            <Setter Property="Width" Value="230" />
+            <Setter Property="VerticalAlignment" Value="Stretch" />
+            <Setter Property="VerticalContentAlignment" Value="Top" />
+            <Setter Property="HorizontalContentAlignment" Value="Left" />
+        </Style>
+        <Style Selector="Button.typeCard.selected">
+            <Setter Property="BorderBrush" Value="{DynamicResource SynthwavePurpleBrush}" />
+        </Style>
+    </UserControl.Styles>
 
     <Grid ColumnDefinitions="160,*" Margin="0">
 
@@ -15,6 +33,12 @@
                 BorderThickness="0,0,1,0"
                 Padding="0,16">
             <StackPanel Spacing="2" Margin="8,0">
+                <TextBlock Text="Project"
+                           IsVisible="{Binding HasWorkspace}"
+                           FontSize="12"
+                           FontWeight="SemiBold"
+                           Foreground="{DynamicResource SynthwavePurpleBrush}"
+                           Padding="8,6" />
                 <TextBlock Text="AI Providers"
                            FontSize="12"
                            FontWeight="SemiBold"
@@ -27,7 +51,59 @@
 
         <!-- Content area -->
         <ScrollViewer Grid.Column="1" VerticalScrollBarVisibility="Auto" Padding="24,20">
-            <StackPanel Spacing="16" MaxWidth="600">
+            <StackPanel Spacing="16" MaxWidth="760">
+
+                <!-- Project section -->
+                <StackPanel Spacing="12" IsVisible="{Binding HasWorkspace}">
+                    <TextBlock Text="Project"
+                               FontSize="18"
+                               FontWeight="SemiBold"
+                               Foreground="{DynamicResource OnSurfaceBrush}" />
+                    <ScrollViewer HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Disabled">
+                        <ItemsControl ItemsSource="{Binding ProjectCards}">
+                            <ItemsControl.ItemsPanel>
+                                <ItemsPanelTemplate>
+                                    <StackPanel Orientation="Horizontal" />
+                                </ItemsPanelTemplate>
+                            </ItemsControl.ItemsPanel>
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate x:DataType="vm:ProjectTypeCardViewModel">
+                                    <Button Classes="typeCard"
+                                            Classes.selected="{Binding IsSelected}"
+                                            Command="{Binding $parent[UserControl].((vm:SettingsViewModel)DataContext).SelectProjectKindCommand}"
+                                            CommandParameter="{Binding}">
+                                        <StackPanel Spacing="8">
+                                            <PathIcon Width="40" Height="40" HorizontalAlignment="Left"
+                                                      Foreground="{DynamicResource SynthwavePurpleBrush}"
+                                                      Data="{Binding Info.IconKey, Converter={x:Static conv:IconKeyToGeometryConverter.Instance}}" />
+                                            <TextBlock Text="{Binding Info.Title}" FontSize="18" FontWeight="SemiBold"
+                                                       Foreground="{DynamicResource OnSurfaceBrush}" />
+                                            <TextBlock Text="{Binding Info.Description}"
+                                                       Foreground="{DynamicResource OnSurfaceDimBrush}"
+                                                       TextWrapping="Wrap" />
+                                            <TextBlock Text="{Binding Info.Impact}" FontSize="12"
+                                                       Foreground="{DynamicResource OnSurfaceBrush}"
+                                                       TextWrapping="Wrap" />
+                                        </StackPanel>
+                                    </Button>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+                    </ScrollViewer>
+                    <TextBlock Text="{Binding ProjectChangeSummary}"
+                               IsVisible="{Binding ProjectChangeSummary, Converter={x:Static ObjectConverters.IsNotNull}}"
+                               FontSize="12"
+                               TextWrapping="Wrap"
+                               Foreground="{DynamicResource OnSurfaceMutedBrush}" />
+                    <Button Content="Apply"
+                            Command="{Binding ApplyProjectKindCommand}"
+                            HorizontalAlignment="Left"
+                            Padding="12,6"
+                            FontSize="12"
+                            Background="{DynamicResource SynthwavePurpleBrush}"
+                            Foreground="White"
+                            CornerRadius="5" />
+                </StackPanel>
 
                 <!-- Section header -->
                 <Grid ColumnDefinitions="*,Auto">

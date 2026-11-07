@@ -64,10 +64,10 @@ dotnet run --project src/Hymnal/Hymnal.csproj
 
 ```bash
 # Must use solution file — bare 'dotnet test' fails with multiple projects
-dotnet test Hymnal.sln
+dotnet test Hymnal.slnx
 ```
 
-Baseline: 31 tests, 0 failures.
+Baseline: 567 tests, 0 failures.
 
 ## Key Patterns
 
@@ -85,6 +85,7 @@ Baseline: 31 tests, 0 failures.
 
 ### Data Model
 - `ManuscriptModel` holds chapters in a `SourceCache<ChapterNode, string>` (DynamicData) keyed by `RelativePath` — bind via `.Connect().AsObservableList()` or `.Bind()` to an `ObservableCollection`
+- **Project kinds** — `.hymnal-data/project.json` (`{schemaVersion, kind: novel|story|anthology, storage: sidecar|embedded}`) is read/written by `ProjectSettingsService` (missing file = Novel/Sidecar). `ProjectProfile.For(settings)` turns it into the profile (statuses, Gantt phases, labels, target presets, feature flags). `WorkspaceViewModel.Profile` exposes the open workspace's profile; `ReloadProjectAsync()` re-reads it and rebuilds the chapter list. Story/anthology statuses relabel a subset of `ChapterStatus` (Planned/Drafting/Editing/Done shown as Idea/Drafting/Revising/Done) — stored values are never rewritten. Switch kind from Settings → Project.
 - `ChapterNode` is an immutable `record` — `Key == RelativePath` (both are forward-slash normalized); `NodeKind.Part` nodes are non-selectable in the sidebar
 
 ### DI Registration
@@ -92,6 +93,7 @@ Baseline: 31 tests, 0 failures.
 - `FolderPickerService` requires a `Func<TopLevel?>` accessor — see `App.axaml.cs` for the factory registration pattern
 
 ### Tests
+- The combined run has a known intermittent hang in the headless ViewModel tests (pre-existing; the test host can stall after tests pass, or UI-thread tests time out when many classes share a run). Run per namespace/class instead: `timeout 400 dotnet test Hymnal.slnx --no-build --filter "FullyQualifiedName~Hymnal.Core.Tests.Services" --blame-hang-timeout 60s`
 - Test fixtures (sample manuscripts) live in `tests/Hymnal.Core.Tests/Fixtures/SampleManuscripts/` — load via `AppContext.BaseDirectory`
 - Prefer hand-rolled fakes (e.g., `FakeNotificationService`) over NSubstitute for simple interfaces; use NSubstitute for complex interfaces with many members
 - Infra tests that touch the file system use temp directories and clean up in `try/finally`
