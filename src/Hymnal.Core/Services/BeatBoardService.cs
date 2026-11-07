@@ -104,7 +104,7 @@ public sealed partial class BeatBoardService(IMetadataStore store) : IBeatBoardS
     public static bool IsValidBoardKey(string? boardKey) =>
         boardKey is not null && BoardKeyPattern().IsMatch(boardKey);
 
-    [GeneratedRegex("^[A-Za-z0-9_-]+$")]
+    [GeneratedRegex(@"^[A-Za-z0-9_-]+\z")]
     private static partial Regex BoardKeyPattern();
 
     private sealed class BoardFile

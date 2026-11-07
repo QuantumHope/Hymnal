@@ -136,6 +136,7 @@ public class BeatBoardServiceTests
     [InlineData("a\0b")]
     [InlineData("a:b")]
     [InlineData("a*")]
+    [InlineData("story\n")]
     [InlineData("abc ")]
     [InlineData("abc.")]
     [InlineData("caf\u00e9")]
