@@ -8,6 +8,7 @@ using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Input;
 using Avalonia.Interactivity;
+using Avalonia.VisualTree;
 using Hymnal.ViewModels;
 
 namespace Hymnal.Views;
@@ -132,6 +133,12 @@ public partial class CorkboardView : UserControl
         if (!point.Properties.IsLeftButtonPressed)
             return;
 
+        // A press on one of the card's own buttons (Beats, Open) is a click, not a drag.
+        if (e.Source is Visual source
+            && source.FindAncestorOfType<Button>(includeSelf: true) is { } pressed
+            && !ReferenceEquals(pressed, control))
+            return;
+
         if (!CanDragFromCorkboard(card))
             return;
 
@@ -254,6 +261,17 @@ public partial class CorkboardView : UserControl
 
         e.Handled = true;
         await ExecuteCommandAsync(vm.OpenCardCommand.Execute(card));
+    }
+
+    private async void PartHeader_DoubleTapped(object? sender, TappedEventArgs e)
+    {
+        if (sender is not Control { DataContext: PartDividerItemViewModel part }
+            || DataContext is not CorkboardViewModel vm
+            || !vm.IsAnthology)
+            return;
+
+        e.Handled = true;
+        await ExecuteCommandAsync(vm.OpenCardCommand.Execute(part));
     }
 
     private void Card_DragOver(object? sender, DragEventArgs e)

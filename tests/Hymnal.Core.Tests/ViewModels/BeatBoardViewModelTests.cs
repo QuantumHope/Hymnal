@@ -567,6 +567,124 @@ public sealed class BeatBoardViewModelTests
         finally { DeleteFolder(root); }
     }
 
+    [Fact]
+    public async Task Card_scene_picker_links_and_unlinks_through_the_board()
+    {
+        var root = CreateWorkspace();
+        try
+        {
+            await SeedAsync(root, BoardA, B("a", "Hook"));
+
+            await Ui(root, async context =>
+            {
+                var vm = await Within(context.OpenBoardAsync(BoardA));
+                var card = Assert.Single(vm.Beats);
+
+                Assert.Equal(
+                    [BeatBoardViewModel.NoScene, new SceneOption(SceneOne, "Scene One"), new SceneOption(SceneTwo, "Scene Two")],
+                    card.SceneChoices);
+                Assert.Equal(BeatBoardViewModel.NoScene, card.SelectedScene);
+
+                card.SelectedScene = card.SceneChoices[1];
+                await PumpUntilAsync(() => card.ScenePath == SceneOne);
+                Assert.Equal(card.SceneChoices[1], card.SelectedScene);
+                Assert.True(await Within(vm.FlushAsync()));
+                Assert.Equal(SceneOne, Assert.Single(await LoadFromDiskAsync(root, BoardA)).ScenePath);
+
+                // A picker that loses its items writes null back; that never unlinks.
+                card.SelectedScene = null;
+                Assert.Equal(SceneOne, card.ScenePath);
+
+                card.SelectedScene = BeatBoardViewModel.NoScene;
+                await PumpUntilAsync(() => card.ScenePath == null);
+                Assert.True(await Within(vm.FlushAsync()));
+                Assert.Null(Assert.Single(await LoadFromDiskAsync(root, BoardA)).ScenePath);
+            });
+        }
+        finally { DeleteFolder(root); }
+    }
+
+    [Fact]
+    public async Task Missing_scene_has_no_picker_selection_and_can_be_unlinked()
+    {
+        var root = CreateWorkspace();
+        try
+        {
+            await SeedAsync(root, BoardA, B("a", "Hook", scene: "gone.md"));
+
+            await Ui(root, async context =>
+            {
+                var vm = await Within(context.OpenBoardAsync(BoardA));
+                var card = Assert.Single(vm.Beats);
+
+                Assert.True(card.IsSceneMissing);
+                Assert.Null(card.SelectedScene);
+
+                card.SelectedScene = BeatBoardViewModel.NoScene;
+                await PumpUntilAsync(() => card.ScenePath == null);
+                Assert.False(card.IsSceneMissing);
+            });
+        }
+        finally { DeleteFolder(root); }
+    }
+
+    [Fact]
+    public async Task Template_options_build_apply_requests()
+    {
+        var root = CreateWorkspace();
+        try
+        {
+            await Ui(root, async context =>
+            {
+                var vm = await Within(context.OpenBoardAsync(BoardA));
+
+                Assert.Equal(vm.Templates.Select(t => t.Key), vm.TemplateOptions.Select(o => o.Key));
+
+                var threeAct = vm.TemplateOptions.Single(o => o.Key == "threeAct");
+                Assert.False(threeAct.HasParameter);
+                Assert.Equal(new ApplyTemplateRequest("threeAct", TemplateApplyMode.Replace, null), threeAct.ReplaceRequest);
+
+                var mice = vm.TemplateOptions.Single(o => o.Key == "mice");
+                Assert.True(mice.HasParameter);
+                Assert.Equal(["Milieu", "Inquiry", "Character", "Event"], mice.ParameterOptions);
+                Assert.Equal("Milieu", mice.SelectedParameter);
+
+                mice.SelectedParameter = "Event";
+                mice.SelectedParameter = null; // a picker writing null back is ignored
+                Assert.Equal(new ApplyTemplateRequest("mice", TemplateApplyMode.Append, "Event"), mice.AppendRequest);
+
+                await Within(vm.ApplyTemplateCommand.Execute(mice.AppendRequest).ToTask());
+                Assert.Equal(["Open: Event", "Close: Event"], vm.Beats.Select(b => b.Title));
+            });
+        }
+        finally { DeleteFolder(root); }
+    }
+
+    [Fact]
+    public async Task Delete_beat_command_deletes_that_card_after_confirm()
+    {
+        var root = CreateWorkspace();
+        try
+        {
+            await SeedAsync(root, BoardA, B("a", "Keep"), B("b", "Drop"));
+
+            await Ui(root, async context =>
+            {
+                var vm = await Within(context.OpenBoardAsync(BoardA));
+                var prompts = new List<string>();
+                vm.ConfirmAsync = message => { prompts.Add(message); return Task.FromResult(true); };
+
+                await Within(vm.DeleteBeatCommand.Execute(vm.Beats[1]).ToTask());
+
+                Assert.Single(prompts);
+                Assert.Equal(["Keep"], vm.Beats.Select(b => b.Title));
+            });
+
+            Assert.Equal(["Keep"], (await LoadFromDiskAsync(root, BoardA)).Select(b => b.Title));
+        }
+        finally { DeleteFolder(root); }
+    }
+
     // ── Helpers ───────────────────────────────────────────────────────────────
 
     private static readonly TimeSpan StepTimeout = TimeSpan.FromSeconds(10);

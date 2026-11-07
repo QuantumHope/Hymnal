@@ -117,6 +117,15 @@
         <Style Selector="Panel.cork-card-host.card-size-list-host">
             <Setter Property="HorizontalAlignment" Value="Stretch" />
         </Style>
+        <Style Selector="Button.cork-card-action">
+            <Setter Property="Padding" Value="8,2" />
+            <Setter Property="FontSize" Value="11" />
+            <Setter Property="Background" Value="Transparent" />
+            <Setter Property="BorderBrush" Value="#2D1B5E" />
+            <Setter Property="BorderThickness" Value="1" />
+            <Setter Property="CornerRadius" Value="6" />
+            <Setter Property="Foreground" Value="#9D4EDD" />
+        </Style>
         <Style Selector="Button.cork-card:pointerover">
             <Setter Property="Background" Value="{DynamicResource SurfaceHighBrush}" />
             <Setter Property="BorderBrush" Value="{DynamicResource SynthwavePurpleBrush}" />
@@ -351,10 +360,11 @@
                     Width="{Binding Bounds.Width, ElementName=Root}"
                     Focusable="False"
                     Loaded="PartHeader_Loaded"
+                    DoubleTapped="PartHeader_DoubleTapped"
                     Command="{Binding DataContext.TogglePartExpandedCommand, ElementName=Root}"
                     CommandParameter="{Binding}"
                     ToolTip.Tip="Click to show or hide chapters in this part">
-                <Grid ColumnDefinitions="Auto,*,Auto"
+                <Grid ColumnDefinitions="Auto,*,Auto,Auto"
                       ColumnSpacing="12">
                     <Border Grid.Column="0"
                             Classes="cork-part-chevron-badge">
@@ -376,6 +386,14 @@
                                    VerticalAlignment="Center" />
                     </StackPanel>
                     <Button Grid.Column="2"
+                            Classes="cork-card-action"
+                            Content="Beats"
+                            VerticalAlignment="Center"
+                            ToolTip.Tip="Open this story's beat board"
+                            IsVisible="{Binding DataContext.IsAnthology, ElementName=Root}"
+                            Command="{Binding DataContext.ShowBeatsCommand, ElementName=Root}"
+                            CommandParameter="{Binding}" />
+                    <Button Grid.Column="3"
                             Content="+"
                             Padding="10,4"
                             MinWidth="32"
@@ -480,7 +498,11 @@
                 <Button.ContextMenu>
                     <ContextMenu>
                         <MenuItem Header="Open"
-                                  Command="{Binding DataContext.OpenCardCommand, ElementName=Root}"
+                                  Command="{Binding DataContext.OpenInEditorCommand, ElementName=Root}"
+                                  CommandParameter="{Binding}" />
+                        <MenuItem Header="Beats"
+                                  IsVisible="{Binding DataContext.IsAnthology, ElementName=Root}"
+                                  Command="{Binding DataContext.ShowBeatsCommand, ElementName=Root}"
                                   CommandParameter="{Binding}" />
                         <MenuItem Header="Mark complete"
                                   Command="{Binding Card.Chapter.CompletePhaseCommand}"
@@ -508,7 +530,7 @@
                             IsVisible="{Binding Card.IsMissing}" />
 
                     <Grid Classes="cork-card-body"
-                          RowDefinitions="Auto,Auto,Auto,Auto,Auto,Auto,Auto,Auto"
+                          RowDefinitions="Auto,Auto,Auto,Auto,Auto,Auto,Auto,Auto,Auto"
                           RowSpacing="8"
                           IsVisible="{Binding DataContext.CardDisplaySize, ElementName=Root, Converter={StaticResource CardDisplaySizeNotEqualsConverter}, ConverterParameter=List}">
                     <TextBlock Grid.Row="0"
@@ -667,6 +689,22 @@
                                FontSize="10"
                                Foreground="{DynamicResource OrangeBrush}"
                                IsVisible="{Binding Card.IsMissing}" />
+
+                    <StackPanel Grid.Row="8"
+                                Orientation="Horizontal"
+                                Spacing="6"
+                                IsVisible="{Binding DataContext.IsAnthology, ElementName=Root}">
+                        <Button Classes="cork-card-action"
+                                Content="Beats"
+                                ToolTip.Tip="Open this story's beat board"
+                                Command="{Binding DataContext.ShowBeatsCommand, ElementName=Root}"
+                                CommandParameter="{Binding}" />
+                        <Button Classes="cork-card-action"
+                                Content="Open"
+                                ToolTip.Tip="Open in the editor"
+                                Command="{Binding DataContext.OpenInEditorCommand, ElementName=Root}"
+                                CommandParameter="{Binding}" />
+                    </StackPanel>
                     </Grid>
 
                     <Grid Classes="cork-card-list-body"

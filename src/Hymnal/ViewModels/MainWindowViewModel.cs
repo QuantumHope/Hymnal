@@ -38,6 +38,9 @@ public class MainWindowViewModel : ViewModelBase
     /// <summary>Story ideas for the Ideas mode; null when the app runs without it.</summary>
     public IdeasViewModel? IdeasViewModel { get; }
 
+    /// <summary>Plan mode for story and anthology projects (beat boards); null when the app runs without it.</summary>
+    public PlanHostViewModel? PlanHostViewModel { get; }
+
     // ── Settings overlay ──────────────────────────────────────────────────────
 
     private bool _isSettingsOpen;
@@ -124,12 +127,16 @@ public class MainWindowViewModel : ViewModelBase
         }
     }
 
+    /// <summary>Plan mode content: the beat-board host for story and anthology projects, else the Corkboard.</summary>
+    private object PlanContent =>
+        PlanHostViewModel != null && WorkspaceViewModel.Profile.UsesBeatBoard ? PlanHostViewModel : CorkboardViewModel;
+
     /// <summary>View-model for the active non-Write centre panel (lazy-loaded via ViewLocator).</summary>
     public object? SecondaryCentreContent => ActiveMode switch
     {
         ShellMode.Research => ResearchViewModel,
         ShellMode.Ideas => IdeasViewModel,
-        ShellMode.Plan => CorkboardViewModel,
+        ShellMode.Plan => PlanContent,
         ShellMode.Manage => GanttViewModel,
         _ => null
     };
@@ -269,7 +276,8 @@ public class MainWindowViewModel : ViewModelBase
         IAppSettingsStore settingsStore,
         AiChatViewModel aiChatViewModel,
         Func<SettingsViewModel> settingsVmFactory,
-        IdeasViewModel? ideasViewModel = null)
+        IdeasViewModel? ideasViewModel = null,
+        PlanHostViewModel? planHostViewModel = null)
     {
         _settingsStore = settingsStore;
         _workspaceVm = workspaceViewModel;
@@ -289,6 +297,7 @@ public class MainWindowViewModel : ViewModelBase
         GitPanelViewModel = gitPanelViewModel;
         AiChatViewModel = aiChatViewModel;
         IdeasViewModel = ideasViewModel;
+        PlanHostViewModel = planHostViewModel;
         _settingsVmFactory = settingsVmFactory;
 
         CorkboardViewModel.SetViewActive(false);
@@ -471,6 +480,14 @@ public class MainWindowViewModel : ViewModelBase
                     ActiveMode = ShellMode.Write;
                 }));
 
+        // Plan mode swaps between the Corkboard and the beat-board host as the project kind changes.
+        if (planHostViewModel != null)
+            Disposables.Add(
+                workspaceViewModel.WhenAnyValue(x => x.Profile)
+                    .Skip(1)
+                    .Where(_ => ActiveMode == ShellMode.Plan)
+                    .Subscribe(_ => this.RaisePropertyChanged(nameof(SecondaryCentreContent))));
+
         // Promoting an idea brings the author to the new story.
         if (ideasViewModel != null)
             Disposables.Add(
@@ -591,18 +608,19 @@ public class MainWindowViewModel : ViewModelBase
     }
 
     /// <summary>
-    /// Writes edits still waiting on a debounced save (story ideas) before the window closes, after any
-    /// in-flight promote finishes, waiting at most <paramref name="timeout"/> in all. False when they could not be saved in time, so the view can
-    /// ask whether to close anyway. Completes synchronously when nothing is pending.
+    /// Writes edits still waiting on a debounced save (story ideas, after any in-flight promote finishes,
+    /// and beats) before the window closes, waiting at most <paramref name="timeout"/> in all. False when
+    /// they could not be saved in time, so the view can ask whether to close anyway. Completes
+    /// synchronously when nothing is pending.
     /// </summary>
     public async Task<bool> FlushPendingEditsBeforeCloseAsync(TimeSpan timeout)
     {
-        if (IdeasViewModel == null)
+        if (IdeasViewModel == null && PlanHostViewModel == null)
             return true;
 
         try
         {
-            var flush = FlushAfterPromoteAsync(IdeasViewModel);
+            var flush = FlushAllAsync();
             if (!flush.IsCompleted)
             {
                 using var cancelDelay = new System.Threading.CancellationTokenSource();
@@ -617,6 +635,14 @@ public class MainWindowViewModel : ViewModelBase
         {
             return false;
         }
+    }
+
+    private async Task<bool> FlushAllAsync()
+    {
+        var ideas = IdeasViewModel == null ? Task.FromResult(true) : FlushAfterPromoteAsync(IdeasViewModel);
+        var beats = PlanHostViewModel == null ? Task.FromResult(true) : PlanHostViewModel.FlushAsync();
+        var results = await Task.WhenAll(ideas, beats);
+        return results[0] && results[1];
     }
 
     /// <summary>Waits for an in-flight promote (it saves ideas itself), then writes pending idea edits.</summary>

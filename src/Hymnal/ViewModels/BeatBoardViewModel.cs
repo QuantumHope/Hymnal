@@ -33,6 +33,9 @@ public sealed class BeatBoardViewModel : ViewModelBase, IDisposable
 {
     public const string NewBeatTitle = "New beat";
 
+    /// <summary>The scene picker's "not linked" option.</summary>
+    public static readonly SceneOption NoScene = new("", "None");
+
     private static readonly TimeSpan SaveDelay = TimeSpan.FromMilliseconds(500);
 
     /// <summary>Where a board's saves go: the workspace and key it was loaded from.</summary>
@@ -79,18 +82,23 @@ public sealed class BeatBoardViewModel : ViewModelBase, IDisposable
             .ToProperty(this, x => x.CanEdit);
         Disposables.Add(_canEdit);
 
+        _showsTemplatePicker = this.WhenAnyValue(x => x.CanEdit, x => x.IsEmpty, (edit, empty) => edit && empty)
+            .ToProperty(this, x => x.ShowsTemplatePicker);
+        Disposables.Add(_showsTemplatePicker);
+
         var canEdit = this.WhenAnyValue(x => x.CanEdit);
         var canDelete = this.WhenAnyValue(x => x.CanEdit, x => x.Selected, (edit, selected) => edit && selected != null);
 
         AddBeatCommand = ReactiveCommand.CreateFromTask(AddBeatAsync, canEdit);
         DeleteSelectedCommand = ReactiveCommand.CreateFromTask(DeleteSelectedAsync, canDelete);
+        DeleteBeatCommand = ReactiveCommand.CreateFromTask<BeatCardViewModel>(DeleteBeatAsync, canEdit);
         MoveBeatCommand = ReactiveCommand.CreateFromTask<(int From, int To)>(m => MoveBeatAsync(m.From, m.To), canEdit);
         ApplyTemplateCommand = ReactiveCommand.CreateFromTask<ApplyTemplateRequest>(ApplyTemplateAsync, canEdit);
         LinkSceneCommand = ReactiveCommand.CreateFromTask<(string BeatId, string? RelativePath)>(
             l => LinkSceneAsync(l.BeatId, l.RelativePath), canEdit);
 
         foreach (var command in new IHandleObservableErrors[]
-                     { AddBeatCommand, DeleteSelectedCommand, MoveBeatCommand, ApplyTemplateCommand, LinkSceneCommand })
+                     { AddBeatCommand, DeleteSelectedCommand, DeleteBeatCommand, MoveBeatCommand, ApplyTemplateCommand, LinkSceneCommand })
             Disposables.Add(command.ThrownExceptions.Subscribe(ex => _notifications.ShowError(ex.Message)));
 
         Disposables.Add(
@@ -144,6 +152,10 @@ public sealed class BeatBoardViewModel : ViewModelBase, IDisposable
     /// <summary>True when a board is open and writable.</summary>
     public bool CanEdit => _canEdit.Value;
 
+    private readonly ObservableAsPropertyHelper<bool> _showsTemplatePicker;
+    /// <summary>True when a writable board has no beats, so the template picker is shown inline.</summary>
+    public bool ShowsTemplatePicker => _showsTemplatePicker.Value;
+
     private BeatCardViewModel? _selected;
     public BeatCardViewModel? Selected
     {
@@ -152,6 +164,10 @@ public sealed class BeatBoardViewModel : ViewModelBase, IDisposable
     }
 
     public IReadOnlyList<BeatTemplate> Templates => BeatTemplateLoader.All;
+
+    /// <summary>The template picker's entries, one per <see cref="Templates"/> item, in order.</summary>
+    public IReadOnlyList<BeatTemplateOptionViewModel> TemplateOptions { get; } =
+        BeatTemplateLoader.All.Select(t => new BeatTemplateOptionViewModel(t)).ToList();
 
     private IReadOnlyList<SceneOption> _sceneOptions = [];
     /// <summary>Scenes a beat on this board may be linked to, in scope order.</summary>
@@ -166,6 +182,8 @@ public sealed class BeatBoardViewModel : ViewModelBase, IDisposable
 
     public ReactiveCommand<Unit, Unit> AddBeatCommand { get; }
     public ReactiveCommand<Unit, Unit> DeleteSelectedCommand { get; }
+    /// <summary>Selects a beat, then deletes it as <see cref="DeleteSelectedCommand"/> does.</summary>
+    public ReactiveCommand<BeatCardViewModel, Unit> DeleteBeatCommand { get; }
     public ReactiveCommand<(int From, int To), Unit> MoveBeatCommand { get; }
     public ReactiveCommand<ApplyTemplateRequest, Unit> ApplyTemplateCommand { get; }
     /// <summary>Links a beat to a scene in scope; a null path unlinks it.</summary>
@@ -345,6 +363,14 @@ public sealed class BeatBoardViewModel : ViewModelBase, IDisposable
         await SaveNowAsync();
     }
 
+    public Task DeleteBeatAsync(BeatCardViewModel card)
+    {
+        if (_target == null || !_beats.Contains(card))
+            return Task.CompletedTask;
+        Selected = card;
+        return DeleteSelectedAsync();
+    }
+
     /// <summary>Moves the beat at <paramref name="from"/> to <paramref name="to"/> (clamped), as <see cref="BeatBoardOperations.Move"/> does.</summary>
     public async Task MoveBeatAsync(int from, int to)
     {
@@ -480,6 +506,7 @@ public sealed class BeatBoardViewModel : ViewModelBase, IDisposable
         var card = new BeatCardViewModel(beat);
         _cardSubscriptions[card] = card.Edited.Subscribe(_ => OnCardEdited());
         card.AttachScene(FindScene(beat.ScenePath));
+        card.SetSceneChoices(SceneChoices(), path => LinkFromPicker(card, path));
         return card;
     }
 
@@ -519,7 +546,15 @@ public sealed class BeatBoardViewModel : ViewModelBase, IDisposable
         SceneOptions = _sceneScope
             .Select(path => new SceneOption(path, FindScene(path)?.Node.Title ?? path))
             .ToList();
+        var choices = SceneChoices();
+        foreach (var card in _beats)
+            card.SetSceneChoices(choices, path => LinkFromPicker(card, path));
     }
+
+    private IReadOnlyList<SceneOption> SceneChoices() => [NoScene, .. SceneOptions];
+
+    private void LinkFromPicker(BeatCardViewModel card, string? relativePath) =>
+        LinkSceneCommand.Execute((card.Id, relativePath)).Subscribe(_ => { }, _ => { /* reported via ThrownExceptions */ });
 
     private static IObservable<Unit> CollectionChanges(INotifyCollectionChanged collection) =>
         Observable.FromEventPattern<NotifyCollectionChangedEventHandler, NotifyCollectionChangedEventArgs>(

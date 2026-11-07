@@ -65,6 +65,7 @@ public sealed class CorkboardViewModel : ViewModelBase, IDisposable
     private IReadOnlyList<OrphanFileInfo> _orphanFiles = Array.Empty<OrphanFileInfo>();
     private int _rebuildGeneration;
     private readonly Subject<ChapterViewModel> _openChapterRequested = new();
+    private readonly Subject<ChapterViewModel> _beatsRequested = new();
     private readonly ObservableCollectionExtended<CorkboardItemViewModel> _items = new();
     private readonly Dictionary<string, bool> _partExpandedState = new(StringComparer.OrdinalIgnoreCase);
     private bool _isViewActive = true;
@@ -77,6 +78,12 @@ public sealed class CorkboardViewModel : ViewModelBase, IDisposable
     public bool HasItems => _items.Count > 0;
 
     public IObservable<ChapterViewModel> OpenChapterRequested => _openChapterRequested.AsObservable();
+
+    /// <summary>
+    /// Anthology only: the author asked for a story's beat board. Carries the story's node — a
+    /// single-file story's chapter, or the Part of a story told in several scenes.
+    /// </summary>
+    public IObservable<ChapterViewModel> BeatsRequested => _beatsRequested.AsObservable();
 
     private CardViewModel? _selectedCard;
     public CardViewModel? SelectedCard
@@ -101,7 +108,15 @@ public sealed class CorkboardViewModel : ViewModelBase, IDisposable
 
     public ReactiveCommand<CorkboardItemViewModel?, System.Reactive.Unit> SelectCardCommand { get; }
     public ReactiveCommand<System.Reactive.Unit, System.Reactive.Unit> OpenSelectedCardCommand { get; }
+    /// <summary>
+    /// Double-click: opens the card in the editor, except in an anthology, where a story card or a
+    /// Part divider opens that story's beats instead (scene cards inside a Part still open the editor).
+    /// </summary>
     public ReactiveCommand<CorkboardItemViewModel?, System.Reactive.Unit> OpenCardCommand { get; }
+    /// <summary>Opens a chapter card in the editor, whatever the project kind.</summary>
+    public ReactiveCommand<CorkboardItemViewModel?, System.Reactive.Unit> OpenInEditorCommand { get; }
+    /// <summary>Anthology only: opens the beats of the story a card or Part divider belongs to.</summary>
+    public ReactiveCommand<CorkboardItemViewModel?, System.Reactive.Unit> ShowBeatsCommand { get; }
     public ReactiveCommand<ReorderCardRequest, System.Reactive.Unit> ReorderCardCommand { get; }
     public ReactiveCommand<CorkboardDropRequest, System.Reactive.Unit> DropCardCommand { get; }
     public ReactiveCommand<RenameCardRequest, System.Reactive.Unit> RenameCardCommand { get; }
@@ -169,14 +184,21 @@ public sealed class CorkboardViewModel : ViewModelBase, IDisposable
         Disposables.Add(
             _workspace.WhenAnyValue(x => x.Profile)
                 .Skip(1)
-                .Subscribe(_ => this.RaisePropertyChanged(nameof(Profile))));
+                .Subscribe(_ =>
+                {
+                    this.RaisePropertyChanged(nameof(Profile));
+                    this.RaisePropertyChanged(nameof(IsAnthology));
+                }));
 
         Disposables.Add(_openChapterRequested);
+        Disposables.Add(_beatsRequested);
 
         SelectCardCommand = ReactiveCommand.CreateFromTask<CorkboardItemViewModel?>(SelectCardAsync);
         OpenSelectedCardCommand = ReactiveCommand.CreateFromTask(OpenSelectedCardAsync,
             this.WhenAnyValue(x => x.SelectedCard).Select(card => card != null));
         OpenCardCommand = ReactiveCommand.CreateFromTask<CorkboardItemViewModel?>(OpenCardAsync);
+        OpenInEditorCommand = ReactiveCommand.CreateFromTask<CorkboardItemViewModel?>(OpenInEditorAsync);
+        ShowBeatsCommand = ReactiveCommand.CreateFromTask<CorkboardItemViewModel?>(ShowBeatsAsync);
         ReorderCardCommand = ReactiveCommand.CreateFromTask<ReorderCardRequest>(ReorderCardAsync);
         DropCardCommand = ReactiveCommand.CreateFromTask<CorkboardDropRequest>(DropCardAsync);
         RenameCardCommand = ReactiveCommand.CreateFromTask<RenameCardRequest>(RenameCardAsync);
@@ -191,6 +213,8 @@ public sealed class CorkboardViewModel : ViewModelBase, IDisposable
         Disposables.Add(SelectCardCommand.ThrownExceptions.Subscribe(ReportUnexpectedError));
         Disposables.Add(OpenSelectedCardCommand.ThrownExceptions.Subscribe(ReportUnexpectedError));
         Disposables.Add(OpenCardCommand.ThrownExceptions.Subscribe(ReportUnexpectedError));
+        Disposables.Add(OpenInEditorCommand.ThrownExceptions.Subscribe(ReportUnexpectedError));
+        Disposables.Add(ShowBeatsCommand.ThrownExceptions.Subscribe(ReportUnexpectedError));
         Disposables.Add(ReorderCardCommand.ThrownExceptions.Subscribe(ReportUnexpectedError));
         Disposables.Add(DropCardCommand.ThrownExceptions.Subscribe(ReportUnexpectedError));
         Disposables.Add(RenameCardCommand.ThrownExceptions.Subscribe(ReportUnexpectedError));
@@ -232,6 +256,9 @@ public sealed class CorkboardViewModel : ViewModelBase, IDisposable
 
     /// <summary>Profile of the open workspace; supplies UI nouns for board menus.</summary>
     public ProjectProfile Profile => _workspace.Profile;
+
+    /// <summary>True in an anthology, where cards offer Beats and Open actions.</summary>
+    public bool IsAnthology => _workspace.Profile.Kind == ProjectKind.Anthology;
 
     public Task<string?> PickManuscriptFileAsync() => _workspace.PickManuscriptFileAsync();
 
@@ -533,6 +560,18 @@ public sealed class CorkboardViewModel : ViewModelBase, IDisposable
 
     private Task OpenCardAsync(CorkboardItemViewModel? item)
     {
+        var opensBeats = IsAnthology && item switch
+        {
+            PartDividerItemViewModel => true,
+            ChapterCardItemViewModel card => string.IsNullOrEmpty(card.OwningPartPath),
+            _ => false
+        };
+
+        return opensBeats ? ShowBeatsAsync(item) : OpenInEditorAsync(item);
+    }
+
+    private Task OpenInEditorAsync(CorkboardItemViewModel? item)
+    {
         if (item is not ChapterCardItemViewModel cardItem)
             return Task.CompletedTask;
 
@@ -540,6 +579,30 @@ public sealed class CorkboardViewModel : ViewModelBase, IDisposable
         _openChapterRequested.OnNext(cardItem.Card.Chapter);
         return Task.CompletedTask;
     }
+
+    private Task ShowBeatsAsync(CorkboardItemViewModel? item)
+    {
+        if (!IsAnthology)
+            return Task.CompletedTask;
+
+        if (item is ChapterCardItemViewModel cardItem)
+            SetSelectedCard(cardItem.Card);
+
+        if (FindStory(item) is { } story)
+            _beatsRequested.OnNext(story);
+        return Task.CompletedTask;
+    }
+
+    /// <summary>The story an item belongs to: a Part divider's Part, a scene's Part, or a top-level card itself.</summary>
+    private ChapterViewModel? FindStory(CorkboardItemViewModel? item) => item switch
+    {
+        PartDividerItemViewModel part => part.Part,
+        ChapterCardItemViewModel card when string.IsNullOrEmpty(card.OwningPartPath) => card.Card.Chapter,
+        ChapterCardItemViewModel card => _workspace.Nodes.FirstOrDefault(node =>
+            node.Node.Kind == NodeKind.Part &&
+            string.Equals(node.Node.RelativePath, card.OwningPartPath, StringComparison.OrdinalIgnoreCase)),
+        _ => null
+    };
 
     private async Task ReorderCardAsync(ReorderCardRequest request)
     {

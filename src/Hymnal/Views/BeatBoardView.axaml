@@ -1,0 +1,292 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:Hymnal.ViewModels"
+             x:Class="Hymnal.Views.BeatBoardView"
+             x:Name="Root"
+             x:DataType="vm:BeatBoardViewModel"
+             x:CompileBindings="False"
+             Background="#0B0820">
+
+    <UserControl.Styles>
+        <Style Selector="ListBox#BeatList ListBoxItem">
+            <Setter Property="Padding" Value="0" />
+            <Setter Property="Margin" Value="0,0,0,10" />
+            <Setter Property="Background" Value="Transparent" />
+        </Style>
+        <Style Selector="ListBox#BeatList ListBoxItem:selected /template/ ContentPresenter#PART_ContentPresenter">
+            <Setter Property="Background" Value="Transparent" />
+        </Style>
+        <Style Selector="ListBox#BeatList ListBoxItem:pointerover /template/ ContentPresenter#PART_ContentPresenter">
+            <Setter Property="Background" Value="Transparent" />
+        </Style>
+        <Style Selector="Border.beat-card">
+            <Setter Property="Background" Value="{DynamicResource SurfaceElevatedBrush}" />
+            <Setter Property="BorderBrush" Value="{DynamicResource BorderSubtleBrush}" />
+            <Setter Property="BorderThickness" Value="1" />
+            <Setter Property="CornerRadius" Value="12" />
+            <Setter Property="Padding" Value="12,10" />
+            <Setter Property="MaxWidth" Value="760" />
+            <Setter Property="HorizontalAlignment" Value="Left" />
+        </Style>
+        <Style Selector="ListBox#BeatList ListBoxItem:selected Border.beat-card">
+            <Setter Property="BorderBrush" Value="{DynamicResource SynthwavePurpleBrush}" />
+        </Style>
+        <Style Selector="Border.beat-card.drop-target">
+            <Setter Property="BorderBrush" Value="{DynamicResource SynthwavePurpleBrush}" />
+            <Setter Property="BorderThickness" Value="1,3,1,1" />
+        </Style>
+        <Style Selector="Border.template-card">
+            <Setter Property="Background" Value="{DynamicResource SurfaceElevatedBrush}" />
+            <Setter Property="BorderBrush" Value="{DynamicResource BorderSubtleBrush}" />
+            <Setter Property="BorderThickness" Value="1" />
+            <Setter Property="CornerRadius" Value="12" />
+            <Setter Property="Padding" Value="14,12" />
+            <Setter Property="Width" Value="260" />
+            <Setter Property="Margin" Value="0,0,12,12" />
+        </Style>
+        <Style Selector="TextBlock.field-label">
+            <Setter Property="FontSize" Value="10" />
+            <Setter Property="FontWeight" Value="SemiBold" />
+            <Setter Property="LetterSpacing" Value="1.5" />
+            <Setter Property="Foreground" Value="{DynamicResource OnSurfaceDimBrush}" />
+        </Style>
+        <Style Selector="Button.beat-action">
+            <Setter Property="Padding" Value="12,4" />
+            <Setter Property="Background" Value="Transparent" />
+            <Setter Property="BorderBrush" Value="#2D1B5E" />
+            <Setter Property="BorderThickness" Value="1" />
+            <Setter Property="CornerRadius" Value="6" />
+            <Setter Property="Foreground" Value="#9D4EDD" />
+        </Style>
+    </UserControl.Styles>
+
+    <Grid RowDefinitions="Auto,Auto,*">
+
+        <!-- Header: board title and board-wide actions -->
+        <Border Grid.Row="0"
+                Padding="16,10"
+                BorderBrush="{DynamicResource BorderSubtleBrush}"
+                BorderThickness="0,0,0,1">
+            <DockPanel LastChildFill="False">
+                <TextBlock DockPanel.Dock="Left"
+                           Text="BEATS"
+                           VerticalAlignment="Center"
+                           FontSize="10"
+                           FontWeight="SemiBold"
+                           LetterSpacing="1.5"
+                           Foreground="{DynamicResource OnSurfaceDimBrush}" />
+                <TextBlock DockPanel.Dock="Left"
+                           Margin="12,0,0,0"
+                           Text="{Binding BoardTitle}"
+                           VerticalAlignment="Center"
+                           FontSize="14"
+                           FontWeight="SemiBold"
+                           Foreground="{DynamicResource OnSurfaceBrush}" />
+                <Button x:Name="ApplyTemplateButton"
+                        DockPanel.Dock="Right"
+                        Classes="beat-action"
+                        Margin="8,0,0,0"
+                        IsEnabled="{Binding CanEdit}"
+                        IsVisible="{Binding !IsEmpty}">
+                    <TextBlock Text="Apply template…" />
+                    <Button.Flyout>
+                        <Flyout Placement="BottomEdgeAlignedRight">
+                            <ScrollViewer MaxHeight="480">
+                                <ItemsControl ItemsSource="{Binding TemplateOptions}">
+                                    <ItemsControl.ItemTemplate>
+                                        <DataTemplate DataType="vm:BeatTemplateOptionViewModel">
+                                            <Grid ColumnDefinitions="*,Auto,Auto,Auto"
+                                                  ColumnSpacing="8"
+                                                  Margin="0,0,0,8"
+                                                  MinWidth="420">
+                                                <StackPanel Grid.Column="0" Spacing="2">
+                                                    <TextBlock Text="{Binding Name}"
+                                                               FontWeight="SemiBold"
+                                                               Foreground="{DynamicResource OnSurfaceBrush}" />
+                                                    <TextBlock Text="{Binding Description}"
+                                                               FontSize="11"
+                                                               TextWrapping="Wrap"
+                                                               MaxWidth="260"
+                                                               Foreground="{DynamicResource OnSurfaceMutedBrush}" />
+                                                </StackPanel>
+                                                <ComboBox Grid.Column="1"
+                                                          VerticalAlignment="Center"
+                                                          IsVisible="{Binding HasParameter}"
+                                                          ItemsSource="{Binding ParameterOptions}"
+                                                          SelectedItem="{Binding SelectedParameter, Mode=TwoWay}" />
+                                                <Button Grid.Column="2"
+                                                        Classes="beat-action"
+                                                        VerticalAlignment="Center"
+                                                        Content="Append"
+                                                        ToolTip.Tip="Add this template's beats after the current ones"
+                                                        Command="{Binding $parent[ItemsControl].DataContext.ApplyTemplateCommand}"
+                                                        CommandParameter="{Binding AppendRequest}"
+                                                        Click="ApplyTemplateMenu_Click" />
+                                                <Button Grid.Column="3"
+                                                        Classes="beat-action"
+                                                        VerticalAlignment="Center"
+                                                        Content="Replace"
+                                                        ToolTip.Tip="Replace every beat on this board (asks first)"
+                                                        Command="{Binding $parent[ItemsControl].DataContext.ApplyTemplateCommand}"
+                                                        CommandParameter="{Binding ReplaceRequest}"
+                                                        Click="ApplyTemplateMenu_Click" />
+                                            </Grid>
+                                        </DataTemplate>
+                                    </ItemsControl.ItemTemplate>
+                                </ItemsControl>
+                            </ScrollViewer>
+                        </Flyout>
+                    </Button.Flyout>
+                </Button>
+                <Button DockPanel.Dock="Right"
+                        Content="+ Add beat"
+                        Padding="12,4"
+                        Background="{DynamicResource SynthwavePurpleBrush}"
+                        Foreground="{DynamicResource OnSurfaceBrush}"
+                        BorderThickness="0"
+                        ToolTip.Tip="Add a beat after the selected one"
+                        Command="{Binding AddBeatCommand}" />
+            </DockPanel>
+        </Border>
+
+        <Border x:Name="ReadOnlyBanner"
+                Grid.Row="1"
+                Padding="16,8"
+                Background="#2A1A0A"
+                IsVisible="{Binding IsReadOnly}">
+            <TextBlock Text="This beat board's file couldn't be read, so the board is read-only. Fix or remove the file, then reopen the project to edit it."
+                       TextWrapping="Wrap"
+                       FontSize="12"
+                       Foreground="{DynamicResource OrangeBrush}" />
+        </Border>
+
+        <!-- Empty board: pick a template to start from -->
+        <ScrollViewer x:Name="TemplatePickerPanel"
+                      Grid.Row="2"
+                      Padding="16"
+                      IsVisible="{Binding ShowsTemplatePicker}">
+            <StackPanel Spacing="12">
+                <TextBlock Text="Start this board from a template"
+                           FontSize="15"
+                           FontWeight="SemiBold"
+                           Foreground="{DynamicResource OnSurfaceBrush}" />
+                <ItemsControl x:Name="TemplatePicker"
+                              ItemsSource="{Binding TemplateOptions}">
+                    <ItemsControl.ItemsPanel>
+                        <ItemsPanelTemplate>
+                            <WrapPanel Orientation="Horizontal" />
+                        </ItemsPanelTemplate>
+                    </ItemsControl.ItemsPanel>
+                    <ItemsControl.ItemTemplate>
+                        <DataTemplate DataType="vm:BeatTemplateOptionViewModel">
+                            <Border Classes="template-card">
+                                <StackPanel Spacing="8">
+                                    <TextBlock Text="{Binding Name}"
+                                               FontSize="14"
+                                               FontWeight="SemiBold"
+                                               Foreground="{DynamicResource OnSurfaceBrush}" />
+                                    <TextBlock Text="{Binding Description}"
+                                               FontSize="12"
+                                               TextWrapping="Wrap"
+                                               Foreground="{DynamicResource OnSurfaceMutedBrush}" />
+                                    <StackPanel Orientation="Horizontal"
+                                                Spacing="8"
+                                                IsVisible="{Binding HasParameter}">
+                                        <TextBlock Text="Thread"
+                                                   VerticalAlignment="Center"
+                                                   FontSize="12"
+                                                   Foreground="{DynamicResource OnSurfaceMutedBrush}" />
+                                        <ComboBox ItemsSource="{Binding ParameterOptions}"
+                                                  SelectedItem="{Binding SelectedParameter, Mode=TwoWay}" />
+                                    </StackPanel>
+                                    <Button Classes="beat-action"
+                                            Content="Use template"
+                                            Command="{Binding $parent[ItemsControl].DataContext.ApplyTemplateCommand}"
+                                            CommandParameter="{Binding AppendRequest}" />
+                                </StackPanel>
+                            </Border>
+                        </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                </ItemsControl>
+            </StackPanel>
+        </ScrollViewer>
+
+        <!-- Ordered beat cards -->
+        <ListBox x:Name="BeatList"
+                 Grid.Row="2"
+                 Padding="16"
+                 Background="Transparent"
+                 IsVisible="{Binding !IsEmpty}"
+                 ItemsSource="{Binding Beats}"
+                 SelectedItem="{Binding Selected, Mode=TwoWay}">
+            <ListBox.ItemTemplate>
+                <DataTemplate DataType="vm:BeatCardViewModel">
+                    <Border Classes="beat-card"
+                            Loaded="BeatCard_Loaded">
+                        <Grid ColumnDefinitions="Auto,*,Auto"
+                              ColumnSpacing="10">
+                            <TextBlock Grid.Column="0"
+                                       Classes="beat-drag-handle"
+                                       Text="⠿"
+                                       FontSize="16"
+                                       Cursor="SizeAll"
+                                       VerticalAlignment="Top"
+                                       Margin="0,4,0,0"
+                                       ToolTip.Tip="Drag to reorder"
+                                       Foreground="{DynamicResource OnSurfaceMutedBrush}" />
+                            <StackPanel Grid.Column="1" Spacing="6">
+                                <TextBox Text="{Binding Title, Mode=TwoWay}"
+                                         PlaceholderText="Beat title"
+                                         IsReadOnly="{Binding !DataContext.CanEdit, ElementName=Root}"
+                                         FontSize="14"
+                                         FontWeight="SemiBold" />
+                                <TextBox Text="{Binding Note, Mode=TwoWay}"
+                                         PlaceholderText="What happens in this beat?"
+                                         IsReadOnly="{Binding !DataContext.CanEdit, ElementName=Root}"
+                                         AcceptsReturn="True"
+                                         TextWrapping="Wrap"
+                                         MinHeight="48" />
+                                <StackPanel Orientation="Horizontal" Spacing="8">
+                                    <TextBlock Classes="field-label"
+                                               Text="SCENE"
+                                               VerticalAlignment="Center" />
+                                    <ComboBox MinWidth="200"
+                                              IsEnabled="{Binding DataContext.CanEdit, ElementName=Root}"
+                                              PlaceholderText="Missing scene"
+                                              ItemsSource="{Binding SceneChoices}"
+                                              SelectedItem="{Binding SelectedScene, Mode=TwoWay}">
+                                        <ComboBox.ItemTemplate>
+                                            <DataTemplate DataType="vm:SceneOption">
+                                                <TextBlock Text="{Binding Title}" />
+                                            </DataTemplate>
+                                        </ComboBox.ItemTemplate>
+                                    </ComboBox>
+                                    <TextBlock VerticalAlignment="Center"
+                                               FontSize="11"
+                                               Foreground="{DynamicResource OnSurfaceMutedBrush}"
+                                               Text="{Binding SceneStatusLabel}" />
+                                    <TextBlock VerticalAlignment="Center"
+                                               FontSize="11"
+                                               Foreground="{DynamicResource OnSurfaceMutedBrush}"
+                                               Text="{Binding SceneWordCount, StringFormat='{}{0:N0} words'}" />
+                                </StackPanel>
+                                <TextBlock IsVisible="{Binding IsSceneMissing}"
+                                           FontSize="11"
+                                           TextWrapping="Wrap"
+                                           Foreground="{DynamicResource OrangeBrush}"
+                                           Text="{Binding SceneTitle, StringFormat='Linked scene {0} is no longer in the book. Choose None to unlink it.'}" />
+                            </StackPanel>
+                            <Button Grid.Column="2"
+                                    Classes="beat-action"
+                                    VerticalAlignment="Top"
+                                    Content="Delete"
+                                    ToolTip.Tip="Delete this beat (asks first)"
+                                    Command="{Binding DataContext.DeleteBeatCommand, ElementName=Root}"
+                                    CommandParameter="{Binding}" />
+                        </Grid>
+                    </Border>
+                </DataTemplate>
+            </ListBox.ItemTemplate>
+        </ListBox>
+    </Grid>
+</UserControl>

@@ -70,6 +70,9 @@ public partial class App : Application
         services.AddSingleton<IStoryIdeasService, StoryIdeasService>();
         services.AddSingleton<StoryIdeaPromoter>();
 
+        // Beat boards (story/anthology plan mode)
+        services.AddSingleton<IBeatBoardService, BeatBoardService>();
+
         // M004/S02 services — supplemental docs sidebar tree
         services.AddSingleton<ISupplementalDocsService, SupplementalDocsService>();
 
@@ -215,6 +218,19 @@ public partial class App : Application
                 sp.GetRequiredService<StoryIdeaPromoter>(),
                 sp.GetRequiredService<INotificationService>()));
 
+        services.AddSingleton<BeatBoardViewModel>(sp =>
+            new BeatBoardViewModel(
+                sp.GetRequiredService<WorkspaceViewModel>(),
+                sp.GetRequiredService<IBeatBoardService>(),
+                sp.GetRequiredService<INotificationService>()));
+
+        services.AddSingleton<PlanHostViewModel>(sp =>
+            new PlanHostViewModel(
+                sp.GetRequiredService<WorkspaceViewModel>(),
+                sp.GetRequiredService<CorkboardViewModel>(),
+                sp.GetRequiredService<BeatBoardViewModel>(),
+                sp.GetRequiredService<INotificationService>()));
+
         // M006 — AI chat ViewModels (must be registered after Editor/Workspace VMs)
         services.AddSingleton<ConversationListViewModel>(sp =>
             new ConversationListViewModel(
@@ -259,7 +275,8 @@ public partial class App : Application
                 sp.GetRequiredService<IAppSettingsStore>(),
                 sp.GetRequiredService<AiChatViewModel>(),
                 () => sp.GetRequiredService<SettingsViewModel>(),
-                sp.GetRequiredService<IdeasViewModel>()));
+                sp.GetRequiredService<IdeasViewModel>(),
+                sp.GetRequiredService<PlanHostViewModel>()));
 
         _serviceProvider = services.BuildServiceProvider();
         Services = _serviceProvider;

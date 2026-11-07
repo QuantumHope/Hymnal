@@ -1,0 +1,52 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:Hymnal.ViewModels"
+             x:Class="Hymnal.Views.PlanHostView"
+             x:DataType="vm:PlanHostViewModel"
+             Background="#0B0820">
+
+    <Grid RowDefinitions="Auto,*,Auto">
+
+        <!-- Anthology: breadcrumb back to the collection while a story's board is shown -->
+        <Border x:Name="Breadcrumb"
+                Grid.Row="0"
+                Padding="12,6"
+                BorderBrush="{DynamicResource BorderSubtleBrush}"
+                BorderThickness="0,0,0,1"
+                IsVisible="{Binding ShowBreadcrumb}">
+            <StackPanel Orientation="Horizontal" Spacing="8">
+                <Button Padding="8,2"
+                        Background="Transparent"
+                        BorderThickness="0"
+                        Foreground="#9D4EDD"
+                        ToolTip.Tip="Back to the collection"
+                        Command="{Binding BackToCollectionCommand}">
+                    <TextBlock Text="{Binding BreadcrumbParent, StringFormat='← {0}'}" />
+                </Button>
+                <TextBlock Text="›"
+                           VerticalAlignment="Center"
+                           Foreground="{DynamicResource OnSurfaceMutedBrush}" />
+                <TextBlock Text="{Binding BeatBoard.BoardTitle}"
+                           VerticalAlignment="Center"
+                           FontWeight="SemiBold"
+                           Foreground="{DynamicResource OnSurfaceBrush}" />
+            </StackPanel>
+        </Border>
+
+        <ContentControl x:Name="PlanContent"
+                        Grid.Row="1"
+                        Content="{Binding Content}" />
+
+        <!-- Short Story with several scene files: the file Corkboard, for reordering scenes -->
+        <Expander x:Name="FilesStrip"
+                  Grid.Row="2"
+                  Header="Files"
+                  HorizontalAlignment="Stretch"
+                  IsVisible="{Binding ShowFilesStrip}"
+                  IsExpanded="{Binding IsFilesStripExpanded, Mode=TwoWay}">
+            <ContentControl x:Name="FilesContent"
+                            Height="280"
+                            Content="{Binding Corkboard}" />
+        </Expander>
+    </Grid>
+</UserControl>

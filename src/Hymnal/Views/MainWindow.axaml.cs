@@ -91,7 +91,7 @@ public partial class MainWindow : Window
 
         e.Cancel = true;
         if (!await flush
-            && !await ConfirmDialog.ShowAsync(this, "Unsaved Ideas", "Idea edits couldn't be saved. Close anyway?", "Close"))
+            && !await ConfirmDialog.ShowAsync(this, "Unsaved Edits", "Idea or beat edits couldn't be saved. Close anyway?", "Close"))
             return;
 
         _closeAllowed = true;

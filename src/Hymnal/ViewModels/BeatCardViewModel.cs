@@ -1,4 +1,6 @@
 using System;
+using System.Collections.Generic;
+using System.Linq;
 using System.Reactive;
 using System.Reactive.Linq;
 using System.Reactive.Subjects;
@@ -49,7 +51,52 @@ public sealed class BeatCardViewModel : ViewModelBase, IDisposable
     public string? ScenePath
     {
         get => _scenePath;
-        private set => this.RaiseAndSetIfChanged(ref _scenePath, value);
+        private set
+        {
+            if (string.Equals(_scenePath, value, StringComparison.Ordinal))
+                return;
+            _scenePath = value;
+            this.RaisePropertyChanged();
+            this.RaisePropertyChanged(nameof(SelectedScene));
+        }
+    }
+
+    private IReadOnlyList<SceneOption> _sceneChoices = [];
+    private Action<string?>? _linkScene;
+
+    /// <summary>Scene picker items: <see cref="BeatBoardViewModel.NoScene"/>, then the board's scenes.</summary>
+    public IReadOnlyList<SceneOption> SceneChoices => _sceneChoices;
+
+    /// <summary>
+    /// Scene picker value: <see cref="BeatBoardViewModel.NoScene"/> when unlinked, the linked scene's
+    /// option, or null when the linked scene is missing. Choosing an option asks the board to link it;
+    /// null (a picker whose items were swapped writes it back) is ignored.
+    /// </summary>
+    public SceneOption? SelectedScene
+    {
+        get => ScenePath == null
+            ? BeatBoardViewModel.NoScene
+            : _sceneChoices.FirstOrDefault(o => o != BeatBoardViewModel.NoScene
+                && string.Equals(o.RelativePath, ScenePath, StringComparison.OrdinalIgnoreCase));
+        set
+        {
+            if (value == null || _linkScene == null)
+                return;
+            var path = value == BeatBoardViewModel.NoScene ? null : value.RelativePath;
+            if (!string.Equals(path, ScenePath, StringComparison.Ordinal))
+                _linkScene(path);
+            // A refused link leaves the picker showing the current scene.
+            this.RaisePropertyChanged();
+        }
+    }
+
+    /// <summary>Sets the picker items and how a picked scene is linked (by the owning board).</summary>
+    internal void SetSceneChoices(IReadOnlyList<SceneOption> choices, Action<string?> linkScene)
+    {
+        _linkScene = linkScene;
+        _sceneChoices = choices;
+        this.RaisePropertyChanged(nameof(SceneChoices));
+        this.RaisePropertyChanged(nameof(SelectedScene));
     }
 
     private string? _sceneTitle;
