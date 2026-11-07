@@ -1,5 +1,6 @@
 using System.Reflection;
 using Hymnal.Core.Interfaces;
+using Hymnal.Core.Models;
 using Hymnal.Core.Models.Ai;
 
 namespace Hymnal.Core.Services.Ai;
@@ -12,6 +13,8 @@ public sealed class RolePromptProvider : IRolePromptProvider
     private static readonly Assembly _asm = typeof(RolePromptProvider).Assembly;
     private readonly string _commonPreamble;
     private readonly Dictionary<AiRole, string> _roleBodies;
+    private readonly string _shortStoryAddendum;
+    private readonly string _anthologyAddendum;
 
     // spec §3.2 — view-to-role mappings
     private static readonly IReadOnlyDictionary<string, IReadOnlyList<AiRole>> _viewRoleMap =
@@ -35,6 +38,8 @@ public sealed class RolePromptProvider : IRolePromptProvider
     public RolePromptProvider()
     {
         _commonPreamble = LoadResource("common");
+        _shortStoryAddendum = LoadResource("short-story").Trim();
+        _anthologyAddendum = LoadResource("anthology").Trim();
         _roleBodies = new Dictionary<AiRole, string>
         {
             [AiRole.WritingCoach]        = LoadResource("writing-coach"),
@@ -49,6 +54,17 @@ public sealed class RolePromptProvider : IRolePromptProvider
     {
         var body = _roleBodies.TryGetValue(role, out var b) ? b : string.Empty;
         return _commonPreamble.TrimEnd() + "\n\n" + body.TrimEnd();
+    }
+
+    public string GetSystemPrompt(AiRole role, ProjectKind kind)
+    {
+        var basePrompt = GetSystemPrompt(role);
+        return kind switch
+        {
+            ProjectKind.Story => basePrompt + "\n\n" + _shortStoryAddendum,
+            ProjectKind.Anthology => basePrompt + "\n\n" + _anthologyAddendum,
+            _ => basePrompt,
+        };
     }
 
     public IReadOnlyList<AiRole> GetAvailableRoles(string shellModeName)

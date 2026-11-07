@@ -9,6 +9,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using Hymnal.Core.Infrastructure.Ai;
 using Hymnal.Core.Interfaces;
+using Hymnal.Core.Models;
 using Hymnal.Core.Models.Ai;
 using Hymnal.Core.Services.Ai;
 using Microsoft.Extensions.AI;
@@ -222,7 +223,7 @@ public class AiChatViewModel : ViewModelBase, IDisposable
 
         // Build context bundle
         var contextBuilder = GetContextBuilderForCurrentMode();
-        var systemPrompt = _roleProvider.GetSystemPrompt(SelectedRole);
+        var systemPrompt = _roleProvider.GetSystemPrompt(SelectedRole, ProjectKind.Novel); // TODO(Task 6): use _workspace.Profile.Kind
         var contextRequest = new ContextRequest(
             Scope: SelectedScope,
             WorkspaceRoot: _workspace.WorkspaceRoot,

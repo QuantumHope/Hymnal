@@ -1,3 +1,4 @@
+using Hymnal.Core.Models;
 using Hymnal.Core.Models.Ai;
 
 namespace Hymnal.Core.Interfaces;
@@ -11,6 +12,12 @@ public interface IRolePromptProvider
     /// Returns the full system prompt (common preamble + role-specific body) for the given role.
     /// </summary>
     string GetSystemPrompt(AiRole role);
+
+    /// <summary>
+    /// Returns the system prompt for the given role, with a project-kind addendum appended
+    /// for short stories and anthologies. <see cref="ProjectKind.Novel"/> matches <see cref="GetSystemPrompt(AiRole)"/>.
+    /// </summary>
+    string GetSystemPrompt(AiRole role, ProjectKind kind);
 
     /// <summary>
     /// Returns roles available for the given view, ordered by suggestion priority.

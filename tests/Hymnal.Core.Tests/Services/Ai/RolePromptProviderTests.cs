@@ -1,3 +1,4 @@
+using Hymnal.Core.Models;
 using Hymnal.Core.Models.Ai;
 using Hymnal.Core.Services.Ai;
 using Xunit;
@@ -81,5 +82,42 @@ public class RolePromptProviderTests
     {
         var roles = _sut.GetAvailableRoles("SomeUnknownView");
         Assert.Equal(5, roles.Count);
+    }
+
+    [Theory]
+    [InlineData(AiRole.WritingCoach)]
+    [InlineData(AiRole.DevelopmentalEditor)]
+    [InlineData(AiRole.Proofreader)]
+    [InlineData(AiRole.LineEditor)]
+    [InlineData(AiRole.BetaReader)]
+    public void Novel_prompt_is_unchanged(AiRole role)
+    {
+        Assert.Equal(_sut.GetSystemPrompt(role), _sut.GetSystemPrompt(role, ProjectKind.Novel));
+    }
+
+    [Theory]
+    [InlineData(AiRole.WritingCoach)]
+    [InlineData(AiRole.DevelopmentalEditor)]
+    public void Story_prompt_appends_addendum(AiRole role)
+    {
+        var novel = _sut.GetSystemPrompt(role);
+        var story = _sut.GetSystemPrompt(role, ProjectKind.Story);
+
+        Assert.StartsWith(novel + "\n\n", story);
+        Assert.Contains("## Project type: short story", story);
+        Assert.EndsWith("weigh suggestions against it.", story);
+    }
+
+    [Theory]
+    [InlineData(AiRole.WritingCoach)]
+    [InlineData(AiRole.DevelopmentalEditor)]
+    public void Anthology_prompt_appends_addendum(AiRole role)
+    {
+        var novel = _sut.GetSystemPrompt(role);
+        var anthology = _sut.GetSystemPrompt(role, ProjectKind.Anthology);
+
+        Assert.StartsWith(novel + "\n\n", anthology);
+        Assert.Contains("## Project type: anthology", anthology);
+        Assert.EndsWith("how adjacent stories play off each other.", anthology);
     }
 }
