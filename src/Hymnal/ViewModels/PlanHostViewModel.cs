@@ -25,15 +25,22 @@ public sealed class PlanHostViewModel : ViewModelBase, IDisposable
     public const string CollectionBreadcrumb = "Collection";
     public const string DefaultStoryTitle = "Story";
 
-    /// <summary>A board to show: its key, its title and the scenes its beats may link to.</summary>
-    private sealed record BoardRequest(string Key, string Title, IReadOnlyList<string> Scope)
+    /// <summary>A board to show: its workspace, key, title and the scenes its beats may link to.</summary>
+    private sealed record BoardRequest(string Root, string Key, string Title, IReadOnlyList<string> Scope)
     {
+        /// <summary>True when <paramref name="other"/> is the same board (same workspace and key).</summary>
+        public bool IsSameBoard(BoardRequest? other) => other != null && other.Root == Root && other.Key == Key;
+
         public bool Matches(BoardRequest? other) =>
-            other != null && other.Key == Key && other.Title == Title && other.Scope.SequenceEqual(Scope);
+            IsSameBoard(other) && other!.Title == Title && other.Scope.SequenceEqual(Scope);
     }
+
+    /// <summary>A scene board to move to a Part's key before the Part's board opens.</summary>
+    private sealed record Adoption(string FromKey, string SceneTitle, string PartTitle);
 
     private readonly WorkspaceViewModel _workspace;
     private readonly INotificationService? _notifications;
+    private readonly IBeatBoardService? _boards;
 
     private ProjectKind? _shownKind;
     private string? _shownRoot;
@@ -49,10 +56,12 @@ public sealed class PlanHostViewModel : ViewModelBase, IDisposable
         WorkspaceViewModel workspace,
         CorkboardViewModel corkboard,
         BeatBoardViewModel beatBoard,
-        INotificationService? notifications = null)
+        INotificationService? notifications = null,
+        IBeatBoardService? boards = null)
     {
         _workspace = workspace;
         _notifications = notifications;
+        _boards = boards;
         Corkboard = corkboard;
         BeatBoard = beatBoard;
         _content = corkboard;
@@ -99,8 +108,17 @@ public sealed class PlanHostViewModel : ViewModelBase, IDisposable
     public bool ShowFilesStrip
     {
         get => _showFilesStrip;
-        private set => this.RaiseAndSetIfChanged(ref _showFilesStrip, value);
+        private set
+        {
+            if (_showFilesStrip == value)
+                return;
+            this.RaiseAndSetIfChanged(ref _showFilesStrip, value);
+            this.RaisePropertyChanged(nameof(FilesStripContent));
+        }
     }
+
+    /// <summary>The Files strip's content: the Corkboard while the strip is shown, otherwise null.</summary>
+    public object? FilesStripContent => ShowFilesStrip ? Corkboard : null;
 
     private bool _isFilesStripExpanded;
     public bool IsFilesStripExpanded
@@ -176,7 +194,7 @@ public sealed class PlanHostViewModel : ViewModelBase, IDisposable
     {
         var chapters = IncludedChapters(_workspace.Nodes).ToList();
         var title = chapters.FirstOrDefault()?.Node.Title is { Length: > 0 } first ? first : DefaultStoryTitle;
-        RequestBoard(new BoardRequest(BeatBoardService.ShortStoryBoardKey, title, Scope(chapters)));
+        RequestBoard(new BoardRequest(_shownRoot ?? "", BeatBoardService.ShortStoryBoardKey, title, Scope(chapters)));
         Content = BeatBoard;
         ShowBreadcrumb = false;
         ShowFilesStrip = chapters.Count >= 2;
@@ -194,7 +212,9 @@ public sealed class PlanHostViewModel : ViewModelBase, IDisposable
             return;
         }
 
-        RequestBoard(new BoardRequest(story.Uuid, story.Node.Title, Scope(StoryScenes(story))));
+        var scenes = StoryScenes(story).ToList();
+        var request = new BoardRequest(_shownRoot ?? "", story.Uuid, story.Node.Title, Scope(scenes));
+        RequestBoard(request, story.Node.Kind == NodeKind.Part ? FindAdoption(request, scenes) : null);
         Content = BeatBoard;
         ShowBreadcrumb = true;
     }
@@ -230,12 +250,58 @@ public sealed class PlanHostViewModel : ViewModelBase, IDisposable
     private static IReadOnlyList<string> Scope(IEnumerable<ChapterViewModel> chapters) =>
         chapters.Select(c => c.Node.RelativePath).ToList();
 
-    private void RequestBoard(BoardRequest request)
+    /// <summary>
+    /// A story that became a Part (its file now the Part's first scene) keeps its beats: when the Part has
+    /// no board yet and its first scene has one, that board is moved to the Part. Other scenes keep theirs.
+    /// </summary>
+    private Adoption? FindAdoption(BoardRequest request, IReadOnlyList<ChapterViewModel> scenes)
+    {
+        if (_boards == null || scenes.Count == 0 || request.IsSameBoard(_requested))
+            return null;
+        var first = scenes[0];
+        if (!BeatBoardService.IsValidBoardKey(first.Uuid) || first.Uuid == request.Key
+            || _boards.BoardExists(request.Root, request.Key) || !_boards.BoardExists(request.Root, first.Uuid))
+            return null;
+        return new Adoption(first.Uuid, first.Node.Title, request.Title);
+    }
+
+    private void RequestBoard(BoardRequest request, Adoption? adoption = null)
     {
         if (request.Matches(_requested))
             return;
+
+        // Same board, new title or scenes (a rename or reorder): update it in place rather than reopen.
+        if (request.IsSameBoard(_requested) && _pendingBoardOps == 0 && BeatBoard.BoardKey == request.Key)
+        {
+            _requested = request;
+            BeatBoard.UpdateScope(request.Title, request.Scope);
+            return;
+        }
+
         _requested = request;
-        _ = TrackAsync(BeatBoard.OpenBoardAsync(request.Key, request.Title, request.Scope));
+        _ = TrackAsync(adoption == null
+            ? BeatBoard.OpenBoardAsync(request.Key, request.Title, request.Scope)
+            : AdoptThenOpenAsync(request, adoption));
+    }
+
+    private async Task AdoptThenOpenAsync(BoardRequest request, Adoption adoption)
+    {
+        // The scene's board may still be shown; close it first so a late save can't recreate its file.
+        if (BeatBoard.BoardKey == adoption.FromKey)
+            await BeatBoard.CloseBoardAsync();
+        if (_disposed || !ReferenceEquals(_requested, request))
+            return;
+
+        var moved = await _boards!.MoveBoardAsync(request.Root, adoption.FromKey, request.Key);
+        if (moved.IsSuccess)
+            _notifications?.ShowInfo($"Moved beats from '{adoption.SceneTitle}' to the story '{adoption.PartTitle}'.");
+        else
+            _notifications?.ShowError($"Could not move the beats from '{adoption.SceneTitle}': {moved.Error}");
+
+        // Another board was asked for while moving; opening this one now would replace it.
+        if (_disposed || !ReferenceEquals(_requested, request))
+            return;
+        await BeatBoard.OpenBoardAsync(request.Key, request.Title, request.Scope);
     }
 
     /// <summary>

@@ -46,7 +46,7 @@
                   IsExpanded="{Binding IsFilesStripExpanded, Mode=TwoWay}">
             <ContentControl x:Name="FilesContent"
                             Height="280"
-                            Content="{Binding Corkboard}" />
+                            Content="{Binding FilesStripContent}" />
         </Expander>
     </Grid>
 </UserControl>

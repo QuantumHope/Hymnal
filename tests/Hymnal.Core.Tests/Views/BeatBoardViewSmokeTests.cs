@@ -14,6 +14,7 @@ using Hymnal.Core.Interfaces;
 using Hymnal.Core.Models;
 using Hymnal.Core.Services;
 using Hymnal.Core.Tests.Infrastructure;
+using static Hymnal.Core.Tests.Infrastructure.PlanTestHarness;
 using Hymnal.Infrastructure;
 using Hymnal.ViewModels;
 using Hymnal.Views;
@@ -26,15 +27,13 @@ public sealed class BeatBoardViewSmokeTests
 {
     static BeatBoardViewSmokeTests() => ReactiveUiTestBootstrap.EnsureInitialized();
 
-    private const string StoryJson = "{ \"schemaVersion\": 1, \"kind\": \"story\", \"storage\": \"sidecar\" }";
-
     [Fact]
     public async Task BeatBoardView_shows_template_picker_when_empty_and_cards_after_applying()
     {
         var root = CreateStory();
         try
         {
-            await Ui(root, async context =>
+            await Ui(root, 2, async context =>
             {
                 var host = context.CreateHost();
                 await PumpUntilAsync(() => context.Board.BoardKey == BeatBoardService.ShortStoryBoardKey);
@@ -68,7 +67,7 @@ public sealed class BeatBoardViewSmokeTests
         var root = CreateStory();
         try
         {
-            await Ui(root, async context =>
+            await Ui(root, 2, async context =>
             {
                 var host = context.CreateHost();
                 await PumpUntilAsync(() => context.Board.BoardKey == BeatBoardService.ShortStoryBoardKey);
@@ -86,6 +85,7 @@ public sealed class BeatBoardViewSmokeTests
                 LayoutView(view);
                 Assert.True(strip.IsExpanded);
                 Assert.Same(host.Corkboard, view.FindControl<ContentControl>("FilesContent")!.Content);
+                Assert.Same(host.FilesStripContent, view.FindControl<ContentControl>("FilesContent")!.Content);
             });
         }
         finally { DeleteFolder(root); }
@@ -107,6 +107,7 @@ public sealed class BeatBoardViewSmokeTests
         Assert.Contains("Command=\"{Binding AddBeatCommand}\"", axaml);
         Assert.Contains("Loaded=\"BeatCard_Loaded\"", axaml);
         Assert.Contains("Text=\"Apply template…\"", axaml);
+        Assert.Contains("IsEnabled=\"{Binding CanAppend}\"", axaml);
     }
 
     [Fact]
@@ -118,11 +119,11 @@ public sealed class BeatBoardViewSmokeTests
         Assert.Contains("Command=\"{Binding DataContext.OpenInEditorCommand, ElementName=Root}\"", axaml);
         Assert.Contains("IsVisible=\"{Binding DataContext.IsAnthology, ElementName=Root}\"", axaml);
         Assert.Contains("DoubleTapped=\"PartHeader_DoubleTapped\"", axaml);
+        Assert.Contains("Click=\"PartHeader_Click\"", axaml);
+        Assert.Contains("IsVisible=\"{Binding ShowsBeatsAction}\"", axaml);
     }
 
     // ── Helpers ───────────────────────────────────────────────────────────────
-
-    private static readonly TimeSpan StepTimeout = TimeSpan.FromSeconds(10);
 
     private static void LayoutView(Control view)
     {
@@ -132,22 +133,10 @@ public sealed class BeatBoardViewSmokeTests
         view.UpdateLayout();
     }
 
-    private static string CreateStory()
-    {
-        var root = Path.Combine(Path.GetTempPath(), $"hymnal-beat-view-{Guid.NewGuid():N}");
-        Directory.CreateDirectory(Path.Combine(root, ".hymnal-data"));
-        File.WriteAllText(Path.Combine(root, "Book.txt"), "scene-one.md\nscene-two.md\n");
-        File.WriteAllText(Path.Combine(root, "scene-one.md"), "# Scene One\n\nDusk.\n");
-        File.WriteAllText(Path.Combine(root, "scene-two.md"), "# Scene Two\n\nDark.\n");
-        File.WriteAllText(Path.Combine(root, ".hymnal-data", "project.json"), StoryJson);
-        return root;
-    }
-
-    private static void DeleteFolder(string root)
-    {
-        try { if (Directory.Exists(root)) Directory.Delete(root, recursive: true); }
-        catch { /* best effort */ }
-    }
+    private static string CreateStory() =>
+        CreateWorkspace(StoryJson,
+            ("scene-one.md", "# Scene One\n\nDusk.\n"),
+            ("scene-two.md", "# Scene Two\n\nDark.\n"));
 
     private static string FindRepositoryFile(string relativePath)
     {
@@ -161,113 +150,5 @@ public sealed class BeatBoardViewSmokeTests
         }
 
         throw new FileNotFoundException($"Could not locate repository file '{relativePath}'.");
-    }
-
-    private static async Task PumpUntilAsync(Func<bool> predicate,
-        [CallerArgumentExpression(nameof(predicate))] string? what = null)
-    {
-        var deadline = DateTime.UtcNow + StepTimeout;
-        while (!predicate())
-        {
-            if (DateTime.UtcNow >= deadline)
-                Assert.Fail($"Timed out waiting for {what}.");
-            Avalonia.Threading.Dispatcher.UIThread.RunJobs();
-            await Task.Delay(25);
-        }
-    }
-
-    private static async Task Within(Task task, [CallerArgumentExpression(nameof(task))] string? what = null)
-    {
-        if (await Task.WhenAny(task, Task.Delay(StepTimeout)) != task)
-            Assert.Fail($"Timed out waiting for {what}.");
-        await task;
-    }
-
-    private static Task Ui(string root, Func<TestContext, Task> body) =>
-        ReactiveUiTestBootstrap.RunOnUiThreadAsync(async () =>
-        {
-            using var context = new TestContext(root);
-            await Within(context.OpenWorkspaceInCurrentDispatchAsync());
-            await PumpUntilAsync(() => context.Workspace.Nodes.Count == 2);
-            await body(context);
-            return 0;
-        }, TimeSpan.FromSeconds(40));
-
-    private sealed class TestContext : IDisposable
-    {
-        private readonly OwnedDisposables _owned = new();
-
-        public NotificationService Notifications { get; } = new();
-        public WorkspaceViewModel Workspace { get; }
-        public CorkboardViewModel Corkboard { get; }
-        public BeatBoardViewModel Board { get; }
-
-        public TestContext(string folder)
-        {
-            var store = new MetadataStore();
-            var exclusions = new ExclusionManifestService(store);
-            var registry = new ChapterRegistryService(store);
-            var wordCount = new WordCountService();
-            var projectSettings = new ProjectSettingsService(store);
-            var structure = new BookTxtStructureService(store, exclusions, registry);
-            var settings = new InMemoryAppSettingsStore();
-            var editor = _owned.Track(new EditorViewModel(store, Notifications, wordCount));
-            var manuscript = _owned.Track(new ManuscriptService(Notifications, exclusions));
-
-            Workspace = new WorkspaceViewModel(
-                manuscript, structure, new StubFilePickerService(), settings, new FixedFolderPickerService(folder),
-                Notifications, editor, registry, new PhaseDataService(store), new TargetsService(store), wordCount,
-                new WordCountHistoryService(store), exclusions, new OrphanFileDiscoveryService(), projectSettings,
-                new ProjectInitializer(store, projectSettings), new NeverInitPrompt());
-
-            Corkboard = _owned.Track(new CorkboardViewModel(
-                Workspace, structure, new OrphanFileDiscoveryService(), settings, Notifications, manuscript));
-            Board = _owned.Track(new BeatBoardViewModel(Workspace, new BeatBoardService(store), Notifications, new HistoricalScheduler()));
-        }
-
-        public void Dispose() => _owned.Dispose();
-
-        public PlanHostViewModel CreateHost() => _owned.Track(new PlanHostViewModel(Workspace, Corkboard, Board, Notifications));
-
-        public async Task OpenWorkspaceInCurrentDispatchAsync()
-        {
-            var method = typeof(WorkspaceViewModel).GetMethod("OpenWorkspaceAsync", BindingFlags.Instance | BindingFlags.NonPublic)
-                ?? throw new InvalidOperationException("Unable to locate OpenWorkspaceAsync.");
-            await Within((Task)method.Invoke(Workspace, Array.Empty<object>())!);
-            if (typeof(WorkspaceViewModel)
-                    .GetField("_hydrationTask", BindingFlags.Instance | BindingFlags.NonPublic)!
-                    .GetValue(Workspace) is Task hydration)
-                await Within(hydration);
-        }
-    }
-
-    private sealed class NeverInitPrompt : IProjectInitPrompt
-    {
-        public Task<bool> ConfirmInitializeAsync(string folderPath) => Task.FromResult(false);
-        public Task<ProjectKind?> ChooseProjectKindAsync() => Task.FromResult<ProjectKind?>(null);
-    }
-
-    private sealed class InMemoryAppSettingsStore : IAppSettingsStore
-    {
-        private readonly Dictionary<string, object?> _values = new(StringComparer.OrdinalIgnoreCase);
-
-        public Task<T?> GetAsync<T>(string key) =>
-            Task.FromResult(_values.TryGetValue(key, out var value) && value is T typed ? typed : default);
-
-        public Task SetAsync<T>(string key, T value)
-        {
-            _values[key] = value;
-            return Task.CompletedTask;
-        }
-    }
-
-    private sealed class FixedFolderPickerService(string folder) : IFolderPickerService
-    {
-        public Task<string?> PickFolderAsync() => Task.FromResult<string?>(folder);
-    }
-
-    private sealed class StubFilePickerService : IFilePickerService
-    {
-        public Task<string?> PickFileAsync(string? suggestedStartDirectory = null) => Task.FromResult<string?>(null);
     }
 }

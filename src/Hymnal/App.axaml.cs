@@ -229,7 +229,8 @@ public partial class App : Application
                 sp.GetRequiredService<WorkspaceViewModel>(),
                 sp.GetRequiredService<CorkboardViewModel>(),
                 sp.GetRequiredService<BeatBoardViewModel>(),
-                sp.GetRequiredService<INotificationService>()));
+                sp.GetRequiredService<INotificationService>(),
+                sp.GetRequiredService<IBeatBoardService>()));
 
         // M006 — AI chat ViewModels (must be registered after Editor/Workspace VMs)
         services.AddSingleton<ConversationListViewModel>(sp =>
@@ -257,7 +258,9 @@ public partial class App : Application
                 sp.GetRequiredService<IAiChatService>(),
                 sp.GetRequiredService<INotificationService>(),
                 sp.GetRequiredService<WorkspaceViewModel>(),
-                sp.GetRequiredService<ProjectSettingsService>()));
+                sp.GetRequiredService<ProjectSettingsService>(),
+                sp.GetRequiredService<IBeatBoardService>(),
+                sp.GetRequiredService<BeatBoardViewModel>()));
 
         services.AddTransient<MainWindowViewModel>(sp =>
             new MainWindowViewModel(

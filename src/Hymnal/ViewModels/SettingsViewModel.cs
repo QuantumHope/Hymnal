@@ -28,6 +28,8 @@ public class SettingsViewModel : ViewModelBase
     private readonly INotificationService _notifications;
     private readonly WorkspaceViewModel? _workspace;
     private readonly ProjectSettingsService? _projectSettings;
+    private readonly IBeatBoardService? _beatBoards;
+    private readonly BeatBoardViewModel? _beatBoard;
     private readonly ObservableAsPropertyHelper<string?> _projectChangeSummary;
 
     public ObservableCollection<ProviderProfileViewModel> Profiles { get; } = new();
@@ -65,7 +67,9 @@ public class SettingsViewModel : ViewModelBase
         IAiChatService aiChatService,
         INotificationService notifications,
         WorkspaceViewModel? workspace = null,
-        ProjectSettingsService? projectSettings = null)
+        ProjectSettingsService? projectSettings = null,
+        IBeatBoardService? beatBoards = null,
+        BeatBoardViewModel? beatBoard = null)
     {
         _profileService = profileService;
         _credentials = credentials;
@@ -73,6 +77,8 @@ public class SettingsViewModel : ViewModelBase
         _notifications = notifications;
         _workspace = workspace;
         _projectSettings = projectSettings;
+        _beatBoards = beatBoards;
+        _beatBoard = beatBoard;
 
         AddProfileCommand = ReactiveCommand.CreateFromTask(AddProfileAsync);
         Disposables.Add(AddProfileCommand.ThrownExceptions
@@ -121,6 +127,7 @@ public class SettingsViewModel : ViewModelBase
         if (_workspace is null || _projectSettings is null || SelectedProjectKind is not { } kind)
             return;
 
+        var previousKind = _workspace.Profile.Kind;
         var save = await _projectSettings.SaveAsync(
             _workspace.WorkspaceRoot, new ProjectSettings(kind, _workspace.Profile.Storage));
         if (!save.IsSuccess)
@@ -129,9 +136,65 @@ public class SettingsViewModel : ViewModelBase
             return;
         }
 
+        await MoveBeatBoardForKindAsync(previousKind, kind);
+
         var reload = await _workspace.ReloadProjectAsync();
         if (!reload.IsSuccess)
             _notifications.ShowError(reload.Error ?? "Could not reload the project.");
+    }
+
+    /// <summary>
+    /// Keeps the beat board with the story across a Short Story ↔ Anthology switch: the Short Story board
+    /// becomes the first story's board, and back. A board is never overwritten; when the destination
+    /// already has one, nothing moves and the author is told.
+    /// </summary>
+    private async Task MoveBeatBoardForKindAsync(ProjectKind from, ProjectKind to)
+    {
+        if (_workspace is null || _beatBoards is null)
+            return;
+
+        var root = _workspace.WorkspaceRoot;
+        var stories = _workspace.Nodes.Where(n => !n.Node.IsExcluded).ToList();
+        ChapterViewModel? story;
+        string fromKey, toKey;
+        if (from == ProjectKind.Story && to == ProjectKind.Anthology)
+        {
+            story = stories.FirstOrDefault(n => n.Node.Kind == NodeKind.Chapter);
+            fromKey = BeatBoardService.ShortStoryBoardKey;
+            toKey = story?.Uuid ?? "";
+        }
+        else if (from == ProjectKind.Anthology && to == ProjectKind.Story)
+        {
+            story = stories.FirstOrDefault();
+            fromKey = story?.Uuid ?? "";
+            toKey = BeatBoardService.ShortStoryBoardKey;
+        }
+        else
+        {
+            return;
+        }
+
+        if (story is null || string.IsNullOrEmpty(root)
+            || !BeatBoardService.IsValidBoardKey(fromKey) || !BeatBoardService.IsValidBoardKey(toKey)
+            || !_beatBoards.BoardExists(root, fromKey))
+            return;
+
+        var title = string.IsNullOrWhiteSpace(story.Node.Title) ? story.Node.RelativePath : story.Node.Title;
+        if (_beatBoards.BoardExists(root, toKey))
+        {
+            _notifications.ShowInfo(to == ProjectKind.Anthology
+                ? $"The story's beats were not moved: '{title}' already has a beat board."
+                : $"The beats of '{title}' were not moved: the short story already has a beat board.");
+            return;
+        }
+
+        // Pending edits on the shown board are written first, so they move with it.
+        if (_beatBoard is not null)
+            await _beatBoard.FlushAsync();
+
+        var moved = await _beatBoards.MoveBoardAsync(root, fromKey, toKey);
+        if (!moved.IsSuccess)
+            _notifications.ShowError($"The beats could not be moved with the story: {moved.Error}");
     }
 
     public async Task LoadAsync()

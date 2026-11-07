@@ -13,8 +13,9 @@ using Hymnal.Core.Interfaces;
 using Hymnal.Core.Models;
 using Hymnal.Core.Services;
 using Hymnal.Core.Tests.Infrastructure;
-using Hymnal.Core.Tests.TestDoubles;
+using static Hymnal.Core.Tests.Infrastructure.PlanTestHarness;
 using Hymnal.Infrastructure;
+using ReactiveUI;
 
 namespace Hymnal.ViewModels;
 
@@ -22,10 +23,6 @@ namespace Hymnal.ViewModels;
 public sealed class PlanHostViewModelTests
 {
     static PlanHostViewModelTests() => ReactiveUiTestBootstrap.EnsureInitialized();
-
-    private const string NovelJson = "{ \"schemaVersion\": 1, \"kind\": \"novel\", \"storage\": \"sidecar\" }";
-    private const string StoryJson = "{ \"schemaVersion\": 1, \"kind\": \"story\", \"storage\": \"sidecar\" }";
-    private const string AnthologyJson = "{ \"schemaVersion\": 1, \"kind\": \"anthology\", \"storage\": \"sidecar\" }";
 
     // Anthology layout: one single-file story, then a long story told as a Part with two scenes.
     private const string Lighthouse = "lighthouse.md";
@@ -229,8 +226,10 @@ public sealed class PlanHostViewModelTests
                 var card = await context.CardAsync("chapter-one.md");
                 await Within(context.Corkboard.OpenCardCommand.Execute(card).ToTask());
                 await Within(context.Corkboard.ShowBeatsCommand.Execute(card).ToTask());
+                await Within(context.Corkboard.SelectCardCommand.Execute(card).ToTask());
+                await Within(context.Corkboard.OpenSelectedCardCommand.Execute().ToTask());
 
-                Assert.Equal(["chapter-one.md"], opened.Select(o => o.Node.RelativePath));
+                Assert.Equal(["chapter-one.md", "chapter-one.md"], opened.Select(o => o.Node.RelativePath));
                 Assert.Empty(beats);
             });
         }
@@ -346,9 +345,441 @@ public sealed class PlanHostViewModelTests
         finally { DeleteFolder(root); }
     }
 
-    // ── Helpers ───────────────────────────────────────────────────────────────
+    [Fact]
+    public async Task Story_files_strip_content_is_corkboard_only_while_shown()
+    {
+        var single = CreateWorkspace(StoryJson, ("the-keeper.md", "# The Keeper\n\nShe climbs.\n"));
+        var two = CreateWorkspace(StoryJson, ("scene-one.md", "# Scene One\n\nDusk.\n"), ("scene-two.md", "# Scene Two\n\nDark.\n"));
+        try
+        {
+            await Ui(single, 1, async context =>
+            {
+                var host = context.CreateHost();
+                await PumpUntilAsync(() => context.Board.BoardKey == BeatBoardService.ShortStoryBoardKey);
+                Assert.False(host.ShowFilesStrip);
+                Assert.Null(host.FilesStripContent);
+            });
+            await Ui(two, 2, async context =>
+            {
+                var host = context.CreateHost();
+                await PumpUntilAsync(() => host.ShowFilesStrip);
+                Assert.Same(context.Corkboard, host.FilesStripContent);
+            });
+        }
+        finally
+        {
+            DeleteFolder(single);
+            DeleteFolder(two);
+        }
+    }
 
-    private static readonly TimeSpan StepTimeout = TimeSpan.FromSeconds(10);
+    [Fact]
+    public async Task Anthology_and_novel_have_no_files_strip_content()
+    {
+        var root = CreateAnthology();
+        try
+        {
+            await Ui(root, 4, async context =>
+            {
+                var host = context.CreateHost();
+                await context.SettleAsync();
+                Assert.Same(context.Corkboard, host.Content);
+                Assert.Null(host.FilesStripContent);
+            });
+        }
+        finally { DeleteFolder(root); }
+    }
+
+    [Fact]
+    public async Task Switching_between_same_shape_story_workspaces_reopens_the_board_for_the_new_one()
+    {
+        var a = CreateWorkspace(StoryJson, ("story.md", "# Untitled\n\nA.\n"));
+        var b = CreateWorkspace(StoryJson, ("story.md", "# Untitled\n\nB.\n"));
+        try
+        {
+            await Ui(a, 1, async context =>
+            {
+                var host = context.CreateHost();
+                await PumpUntilAsync(() => context.Board.BoardKey == BeatBoardService.ShortStoryBoardKey);
+
+                var closed = false;
+                using var watch = context.Board.WhenAnyValue(x => x.BoardKey).Subscribe(key => closed |= key == null);
+                await context.OpenWorkspaceInCurrentDispatchAsync(b);
+                await PumpUntilAsync(() => context.Workspace.WorkspaceRoot == b && context.Workspace.Nodes.Count == 1);
+                await PumpUntilAsync(() => closed && context.Board.BoardKey == BeatBoardService.ShortStoryBoardKey);
+
+                Assert.True(context.Board.CanEdit);
+                Assert.Same(context.Board, host.Content);
+                await Within(context.Board.AddBeatCommand.Execute().ToTask());
+                context.Board.Beats[0].Title = "B's beat";
+                Assert.True(await Within(context.Board.FlushAsync()));
+            });
+
+            Assert.Equal("B's beat", Assert.Single(await LoadFromDiskAsync(b, BeatBoardService.ShortStoryBoardKey)).Title);
+            Assert.False(File.Exists(BeatBoardService.BoardFilePath(a, BeatBoardService.ShortStoryBoardKey)));
+        }
+        finally
+        {
+            DeleteFolder(a);
+            DeleteFolder(b);
+        }
+    }
+
+    [Fact]
+    public async Task Switching_workspace_with_pending_edits_writes_them_to_the_first_workspace()
+    {
+        var a = CreateWorkspace(StoryJson, ("story.md", "# Untitled\n\nA.\n"));
+        var b = CreateWorkspace(StoryJson, ("story.md", "# Untitled\n\nB.\n"));
+        try
+        {
+            await Ui(a, 1, async context =>
+            {
+                context.CreateHost();
+                await PumpUntilAsync(() => context.Board.BoardKey == BeatBoardService.ShortStoryBoardKey);
+                await Within(context.Board.AddBeatCommand.Execute().ToTask());
+                context.Board.Beats[0].Note = "Typed in A, still debouncing";
+
+                var closed = false;
+                using var watch = context.Board.WhenAnyValue(x => x.BoardKey).Subscribe(key => closed |= key == null);
+                await context.OpenWorkspaceInCurrentDispatchAsync(b);
+                await PumpUntilAsync(() => closed && context.Board.BoardKey == BeatBoardService.ShortStoryBoardKey);
+
+                Assert.Empty(context.Board.Beats);
+                Assert.True(await Within(context.Board.FlushAsync()));
+            });
+
+            Assert.Equal("Typed in A, still debouncing",
+                Assert.Single(await LoadFromDiskAsync(a, BeatBoardService.ShortStoryBoardKey)).Note);
+            Assert.False(File.Exists(BeatBoardService.BoardFilePath(b, BeatBoardService.ShortStoryBoardKey)));
+        }
+        finally
+        {
+            DeleteFolder(a);
+            DeleteFolder(b);
+        }
+    }
+
+    [Fact]
+    public async Task Anthology_switching_a_to_b_to_a_keeps_each_story_s_edits_on_its_board()
+    {
+        var root = CreateAnthology();
+        try
+        {
+            await Ui(root, 4, async context =>
+            {
+                context.CreateHost();
+                await context.SettleAsync();
+                var lighthouse = context.Node(Lighthouse);
+                var part = context.Node(LongPart);
+                var lighthouseCard = await context.CardAsync(Lighthouse);
+                var divider = await context.PartDividerAsync(LongPart);
+
+                await Within(context.Corkboard.ShowBeatsCommand.Execute(lighthouseCard).ToTask());
+                await PumpUntilAsync(() => context.Board.BoardKey == lighthouse.Uuid);
+                await Within(context.Board.AddBeatCommand.Execute().ToTask());
+                context.Board.Beats[0].Title = "Lamp fails";
+
+                // Away to the long story and straight back, without waiting for either to open.
+                await Within(context.Corkboard.ShowBeatsCommand.Execute(divider).ToTask());
+                await Within(context.Corkboard.ShowBeatsCommand.Execute(lighthouseCard).ToTask());
+                await PumpUntilAsync(() => context.Board.BoardKey == lighthouse.Uuid && context.Board.Beats.Count == 1);
+                Assert.Equal("Lamp fails", context.Board.Beats[0].Title);
+
+                await Within(context.Corkboard.ShowBeatsCommand.Execute(divider).ToTask());
+                await PumpUntilAsync(() => context.Board.BoardKey == part.Uuid);
+                Assert.Empty(context.Board.Beats);
+                await Within(context.Board.AddBeatCommand.Execute().ToTask());
+                context.Board.Beats[0].Title = "They meet";
+
+                await Within(context.Corkboard.ShowBeatsCommand.Execute(lighthouseCard).ToTask());
+                await PumpUntilAsync(() => context.Board.BoardKey == lighthouse.Uuid && context.Board.Beats.Count == 1);
+                Assert.Equal("Lamp fails", context.Board.Beats[0].Title);
+
+                Assert.Equal("Lamp fails", Assert.Single(await LoadFromDiskAsync(root, lighthouse.Uuid)).Title);
+                Assert.Equal("They meet", Assert.Single(await LoadFromDiskAsync(root, part.Uuid)).Title);
+            });
+        }
+        finally { DeleteFolder(root); }
+    }
+
+    [Fact]
+    public async Task Reordering_scenes_updates_the_board_in_place_and_keeps_the_selection()
+    {
+        var root = CreateWorkspace(StoryJson,
+            ("scene-one.md", "# Scene One\n\nDusk.\n"),
+            ("scene-two.md", "# Scene Two\n\nDark.\n"));
+        try
+        {
+            await Ui(root, 2, async context =>
+            {
+                context.CreateHost();
+                await PumpUntilAsync(() => context.Board.BoardKey == BeatBoardService.ShortStoryBoardKey);
+                await Within(context.Board.AddBeatCommand.Execute().ToTask());
+                await Within(context.Board.AddBeatCommand.Execute().ToTask());
+                var selected = context.Board.Beats[1];
+                Assert.Same(selected, context.Board.Selected);
+
+                var reopened = false;
+                using var watch = context.Board.WhenAnyValue(x => x.BoardKey).Skip(1).Subscribe(_ => reopened = true);
+                await File.WriteAllTextAsync(Path.Combine(root, "Book.txt"), "scene-two.md\nscene-one.md\n");
+                var reload = await Within(context.Workspace.ReloadProjectAsync());
+                Assert.True(reload.IsSuccess, reload.Error);
+                await PumpUntilAsync(() => context.Board.BoardTitle == "Scene Two");
+
+                Assert.Equal(["scene-two.md", "scene-one.md"], context.Board.SceneOptions.Select(o => o.RelativePath));
+                Assert.False(reopened);
+                Assert.Same(selected, context.Board.Selected);
+                Assert.Equal(2, context.Board.Beats.Count);
+            });
+        }
+        finally { DeleteFolder(root); }
+    }
+
+    [Fact]
+    public async Task Excluded_scene_is_not_in_the_story_scope()
+    {
+        var root = CreateWorkspace(StoryJson,
+            ("scene-one.md", "# Scene One\n\nDusk.\n"),
+            ("scene-two.md", "# Scene Two\n\nDark.\n"));
+        try
+        {
+            await File.WriteAllTextAsync(Path.Combine(root, "Book.txt"), "scene-one.md\n");
+            var excluded = await new ExclusionManifestService(new MetadataStore())
+                .SaveAsync(root, new ExclusionManifest { ExcludedPaths = ["scene-two.md"] });
+            Assert.True(excluded.IsSuccess, excluded.Error);
+
+            await Ui(root, 2, async context =>
+            {
+                var host = context.CreateHost();
+                await PumpUntilAsync(() => context.Board.BoardKey == BeatBoardService.ShortStoryBoardKey);
+
+                Assert.Contains(context.Workspace.Nodes, n => n.Node.RelativePath == "scene-two.md" && n.Node.IsExcluded);
+                Assert.Equal(["scene-one.md"], context.Board.SceneOptions.Select(o => o.RelativePath));
+                Assert.False(host.ShowFilesStrip);
+            });
+        }
+        finally { DeleteFolder(root); }
+    }
+
+    [Fact]
+    public async Task Story_that_becomes_a_part_keeps_its_beats_on_the_part_board()
+    {
+        var root = CreateWorkspace(AnthologyJson, (Lighthouse, "# Lighthouse\n\nThe lamp turns.\n"));
+        try
+        {
+            await Ui(root, 1, async context =>
+            {
+                context.CreateHost();
+                await context.SettleAsync();
+                var story = context.Node(Lighthouse);
+                await SeedAsync(root, story.Uuid, new Beat("b-1", "Lamp fails", "", Lighthouse, story.Uuid));
+
+                await WritePartBeforeAsync(root, "lighthouse/part.md", "# The Lighthouse Cycle", Lighthouse);
+                var reload = await Within(context.Workspace.ReloadProjectAsync());
+                Assert.True(reload.IsSuccess, reload.Error);
+                await PumpUntilAsync(() => context.Workspace.Nodes.Count == 2);
+                Assert.Equal(story.Uuid, context.Node(Lighthouse).Uuid);
+
+                var part = context.Node("lighthouse/part.md");
+                await Within(context.Corkboard.ShowBeatsCommand.Execute(await context.PartDividerAsync("lighthouse/part.md")).ToTask());
+                await PumpUntilAsync(() => context.Board.BoardKey == part.Uuid);
+
+                var beat = Assert.Single(context.Board.Beats);
+                Assert.Equal("Lamp fails", beat.Title);
+                Assert.False(beat.IsSceneMissing);
+                Assert.False(File.Exists(BeatBoardService.BoardFilePath(root, story.Uuid)));
+                Assert.Equal("Lamp fails", Assert.Single(await LoadFromDiskAsync(root, part.Uuid)).Title);
+                Assert.Equal(["Moved beats from 'Lighthouse' to the story 'The Lighthouse Cycle'."], context.Infos);
+
+                // Back and in again: nothing more to move, no second notice.
+                await Within(context.Corkboard.ShowBeatsCommand.Execute(await context.CardAsync(Lighthouse)).ToTask());
+                await PumpUntilAsync(() => context.Board.BoardKey == part.Uuid && context.Board.Beats.Count == 1);
+                Assert.Single(context.Infos);
+            });
+        }
+        finally { DeleteFolder(root); }
+    }
+
+    [Fact]
+    public async Task Part_inserted_before_several_stories_adopts_only_the_first_scene_s_board()
+    {
+        var root = CreateWorkspace(AnthologyJson,
+            ("first.md", "# First\n\nOne.\n"),
+            ("second.md", "# Second\n\nTwo.\n"));
+        try
+        {
+            await Ui(root, 2, async context =>
+            {
+                context.CreateHost();
+                await context.SettleAsync();
+                var first = context.Node("first.md");
+                var second = context.Node("second.md");
+                await SeedAsync(root, first.Uuid, new Beat("f", "First beat", "", null));
+                await SeedAsync(root, second.Uuid, new Beat("s", "Second beat", "", null));
+
+                await WritePartBeforeAsync(root, "part.md", "# Collected", "first.md", "second.md");
+                await Within(context.Workspace.ReloadProjectAsync());
+                await PumpUntilAsync(() => context.Workspace.Nodes.Count == 3);
+
+                var part = context.Node("part.md");
+                await Within(context.Corkboard.ShowBeatsCommand.Execute(await context.PartDividerAsync("part.md")).ToTask());
+                await PumpUntilAsync(() => context.Board.BoardKey == part.Uuid && context.Board.Beats.Count == 1);
+
+                Assert.Equal("First beat", context.Board.Beats[0].Title);
+                Assert.False(File.Exists(BeatBoardService.BoardFilePath(root, first.Uuid)));
+                Assert.Equal("Second beat", Assert.Single(await LoadFromDiskAsync(root, second.Uuid)).Title);
+            });
+        }
+        finally { DeleteFolder(root); }
+    }
+
+    [Fact]
+    public async Task Part_with_its_own_board_does_not_adopt_a_scene_board()
+    {
+        var root = CreateAnthology();
+        try
+        {
+            await Ui(root, 4, async context =>
+            {
+                context.CreateHost();
+                await context.SettleAsync();
+                var part = context.Node(LongPart);
+                var scene = context.Node(LongSceneA);
+                await SeedAsync(root, part.Uuid, new Beat("p", "Part beat", "", null));
+                await SeedAsync(root, scene.Uuid, new Beat("s", "Scene beat", "", null));
+
+                await Within(context.Corkboard.ShowBeatsCommand.Execute(await context.PartDividerAsync(LongPart)).ToTask());
+                await PumpUntilAsync(() => context.Board.BoardKey == part.Uuid && context.Board.Beats.Count == 1);
+
+                Assert.Equal("Part beat", context.Board.Beats[0].Title);
+                Assert.Equal("Scene beat", Assert.Single(await LoadFromDiskAsync(root, scene.Uuid)).Title);
+                Assert.Empty(context.Infos);
+            });
+        }
+        finally { DeleteFolder(root); }
+    }
+
+    [Fact]
+    public async Task Renaming_a_linked_scene_keeps_the_link_and_saves_the_new_path()
+    {
+        var root = CreateAnthology();
+        try
+        {
+            await Ui(root, 4, async context =>
+            {
+                context.CreateHost();
+                await context.SettleAsync();
+                var part = context.Node(LongPart);
+                var scene = context.Node(LongSceneA);
+
+                await Within(context.Corkboard.ShowBeatsCommand.Execute(await context.PartDividerAsync(LongPart)).ToTask());
+                await PumpUntilAsync(() => context.Board.BoardKey == part.Uuid);
+                await Within(context.Board.AddBeatCommand.Execute().ToTask());
+                var beat = context.Board.Beats[0];
+                await Within(context.Board.LinkSceneCommand.Execute((beat.Id, LongSceneA)).ToTask());
+                Assert.Equal(scene.Uuid, Assert.Single(await LoadFromDiskAsync(root, part.Uuid)).SceneId);
+
+                var rename = context.Workspace.RenameChapterCommand
+                    .Execute(new RenameChapterRequest(LongSceneA, "Scene Alpha")).ToTask();
+                await PumpUntilAsync(() => rename.IsCompleted);
+                await rename;
+                Assert.Empty(context.Errors);
+
+                const string renamed = "long-story/scene-alpha.md";
+                await PumpUntilAsync(() => context.Board.Beats.Count == 1 && context.Board.Beats[0].ScenePath == renamed);
+                beat = context.Board.Beats[0];
+                Assert.False(beat.IsSceneMissing);
+                Assert.Equal(scene.Uuid, beat.SceneId);
+                await PumpUntilAsync(() => context.Board.SceneOptions.Any(o => o.RelativePath == renamed));
+                Assert.Equal("Scene Alpha", context.Board.SceneOptions.Single(o => o.RelativePath == renamed).Title);
+
+                context.Scheduler.AdvanceBy(TimeSpan.FromSeconds(1));
+                Assert.True(await Within(context.Board.FlushAsync()));
+                var saved = Assert.Single(await LoadFromDiskAsync(root, part.Uuid));
+                Assert.Equal(renamed, saved.ScenePath);
+                Assert.Equal(scene.Uuid, saved.SceneId);
+            });
+        }
+        finally { DeleteFolder(root); }
+    }
+
+    [Fact]
+    public async Task Anthology_enter_on_a_story_card_requests_beats_like_double_click()
+    {
+        var root = CreateAnthology();
+        try
+        {
+            await Ui(root, 4, async context =>
+            {
+                var beats = new List<ChapterViewModel>();
+                var opened = new List<ChapterViewModel>();
+                using var beatsSub = context.Corkboard.BeatsRequested.Subscribe(beats.Add);
+                using var openSub = context.Corkboard.OpenChapterRequested.Subscribe(opened.Add);
+                await context.SettleAsync();
+
+                await Within(context.Corkboard.SelectCardCommand.Execute(await context.CardAsync(Lighthouse)).ToTask());
+                await Within(context.Corkboard.OpenSelectedCardCommand.Execute().ToTask());
+                Assert.Equal([Lighthouse], beats.Select(b => b.Node.RelativePath));
+                Assert.Empty(opened);
+
+                // A scene inside a long story opens in the editor, as its double-click does.
+                await Within(context.Corkboard.SelectCardCommand.Execute(await context.CardAsync(LongSceneA)).ToTask());
+                await Within(context.Corkboard.OpenSelectedCardCommand.Execute().ToTask());
+                Assert.Equal([LongSceneA], opened.Select(o => o.Node.RelativePath));
+                Assert.Single(beats);
+            });
+        }
+        finally { DeleteFolder(root); }
+    }
+
+    [Fact]
+    public async Task Beats_action_is_offered_for_stories_in_the_book_only()
+    {
+        var root = CreateAnthology();
+        try
+        {
+            File.WriteAllText(Path.Combine(root, "cut-story.md"), "# Cut Story\n\nGone.\n");
+            var excluded = await new ExclusionManifestService(new MetadataStore())
+                .SaveAsync(root, new ExclusionManifest { ExcludedPaths = ["cut-story.md"] });
+            Assert.True(excluded.IsSuccess, excluded.Error);
+
+            await Ui(root, 5, async context =>
+            {
+                await context.SettleAsync();
+                context.Corkboard.ShowExcludedFiles = true;
+                await PumpUntilAsync(() => context.Corkboard.Items.OfType<ExcludedChapterCardItemViewModel>().Any());
+
+                Assert.True((await context.CardAsync(Lighthouse)).ShowsBeatsAction);
+                Assert.True((await context.CardAsync(LongSceneA)).ShowsBeatsAction);
+                Assert.True((await context.PartDividerAsync(LongPart)).ShowsBeatsAction);
+                Assert.All(context.Corkboard.Items.OfType<ExcludedChapterCardItemViewModel>(), cut =>
+                {
+                    Assert.False(cut.ShowsBeatsAction);
+                    Assert.False(context.Corkboard.CanShowBeats(cut));
+                });
+            });
+        }
+        finally { DeleteFolder(root); }
+    }
+
+    [Fact]
+    public async Task Novel_offers_no_beats_action()
+    {
+        var root = CreateWorkspace(NovelJson, ("chapter-one.md", "# Chapter One\n\nText.\n"));
+        try
+        {
+            await Ui(root, 1, async context =>
+            {
+                await context.SettleAsync();
+                var card = await context.CardAsync("chapter-one.md");
+                Assert.False(card.ShowsBeatsAction);
+                Assert.False(context.Corkboard.CanShowBeats(card));
+            });
+        }
+        finally { DeleteFolder(root); }
+    }
+
+    // ── Helpers ───────────────────────────────────────────────────────────────
 
     private static string CreateAnthology() =>
         CreateWorkspace(AnthologyJson,
@@ -357,215 +788,12 @@ public sealed class PlanHostViewModelTests
             (LongSceneA, "# Scene A\n\nArrival.\n"),
             (LongSceneB, "# Scene B\n\nDeparture.\n"));
 
-    private static string CreateWorkspace(string projectJson, params (string Path, string Text)[] files)
+    /// <summary>Rewrites Book.txt with a new Part (at <paramref name="partPath"/>) listed before <paramref name="stories"/>.</summary>
+    private static async Task WritePartBeforeAsync(string root, string partPath, string heading, params string[] stories)
     {
-        var root = Path.Combine(Path.GetTempPath(), $"hymnal-plan-host-{Guid.NewGuid():N}");
-        Directory.CreateDirectory(Path.Combine(root, ".hymnal-data"));
-        File.WriteAllText(Path.Combine(root, "Book.txt"), string.Join("\n", files.Select(f => f.Path)) + "\n");
-        foreach (var (path, text) in files)
-        {
-            var full = Path.Combine(root, path);
-            Directory.CreateDirectory(Path.GetDirectoryName(full)!);
-            File.WriteAllText(full, text);
-        }
-        File.WriteAllText(Path.Combine(root, ".hymnal-data", "project.json"), projectJson);
-        return root;
-    }
-
-    private static void DeleteFolder(string root)
-    {
-        try { if (Directory.Exists(root)) Directory.Delete(root, recursive: true); }
-        catch { /* best effort */ }
-    }
-
-    /// <summary>Pumps the current UI dispatcher until <paramref name="predicate"/> holds; call on the UI thread.</summary>
-    private static async Task PumpUntilAsync(Func<bool> predicate,
-        [CallerArgumentExpression(nameof(predicate))] string? what = null)
-    {
-        var deadline = DateTime.UtcNow + StepTimeout;
-        while (!predicate())
-        {
-            if (DateTime.UtcNow >= deadline)
-                Assert.Fail($"Timed out waiting for {what}.");
-            Avalonia.Threading.Dispatcher.UIThread.RunJobs();
-            await Task.Delay(25);
-        }
-    }
-
-    private static async Task Within(Task task, [CallerArgumentExpression(nameof(task))] string? what = null)
-    {
-        if (await Task.WhenAny(task, Task.Delay(StepTimeout)) != task)
-            Assert.Fail($"Timed out waiting for {what}.");
-        await task;
-    }
-
-    private static async Task<T> Within<T>(Task<T> task, [CallerArgumentExpression(nameof(task))] string? what = null)
-    {
-        await Within((Task)task, what);
-        return await task;
-    }
-
-    /// <summary>
-    /// Opens <paramref name="root"/> and runs <paramref name="body"/> in one UI Dispatch; watcher owners
-    /// and view models are disposed before the Dispatch ends.
-    /// </summary>
-    private static Task Ui(string root, int nodeCount, Func<TestContext, Task> body) =>
-        ReactiveUiTestBootstrap.RunOnUiThreadAsync(async () =>
-        {
-            using var context = new TestContext(root);
-            await Within(context.OpenWorkspaceInCurrentDispatchAsync());
-            await PumpUntilAsync(() => context.Workspace.Nodes.Count == nodeCount);
-            await body(context);
-            return 0;
-        }, TimeSpan.FromSeconds(40));
-
-    private sealed class TestContext : IDisposable
-    {
-        private readonly OwnedDisposables _owned = new();
-        private readonly MetadataStore _store = new();
-        private readonly InMemoryAppSettingsStore _settings = new();
-        private readonly ManuscriptService _manuscript;
-        private readonly EditorViewModel _editor;
-        private readonly PhaseDataService _phases;
-        private readonly TargetsService _targets;
-        private readonly BookTxtStructureService _structure;
-
-        public NotificationService Notifications { get; } = new();
-        public HistoricalScheduler Scheduler { get; } = new();
-        public ProjectSettingsService ProjectSettings { get; }
-        public WorkspaceViewModel Workspace { get; }
-        public CorkboardViewModel Corkboard { get; }
-        public BeatBoardViewModel Board { get; }
-
-        public TestContext(string folder)
-        {
-            var exclusions = new ExclusionManifestService(_store);
-            var registry = new ChapterRegistryService(_store);
-            var wordCount = new WordCountService();
-            _phases = new PhaseDataService(_store);
-            _targets = new TargetsService(_store);
-            _structure = new BookTxtStructureService(_store, exclusions, registry);
-            ProjectSettings = new ProjectSettingsService(_store);
-            _editor = _owned.Track(new EditorViewModel(_store, Notifications, wordCount));
-            _manuscript = _owned.Track(new ManuscriptService(Notifications, exclusions));
-
-            Workspace = new WorkspaceViewModel(
-                _manuscript,
-                _structure,
-                new StubFilePickerService(),
-                _settings,
-                new FixedFolderPickerService(folder),
-                Notifications,
-                _editor,
-                registry,
-                _phases,
-                _targets,
-                wordCount,
-                new WordCountHistoryService(_store),
-                exclusions,
-                new OrphanFileDiscoveryService(),
-                ProjectSettings,
-                new ProjectInitializer(_store, ProjectSettings),
-                new NeverInitPrompt());
-
-            Corkboard = _owned.Track(new CorkboardViewModel(
-                Workspace, _structure, new OrphanFileDiscoveryService(), _settings, Notifications, _manuscript));
-            Board = _owned.Track(new BeatBoardViewModel(Workspace, new BeatBoardService(_store), Notifications, Scheduler));
-        }
-
-        public void Dispose() => _owned.Dispose();
-
-        public PlanHostViewModel CreateHost() =>
-            _owned.Track(new PlanHostViewModel(Workspace, Corkboard, Board, Notifications));
-
-        public MainWindowViewModel CreateMainWindow(PlanHostViewModel host)
-        {
-            var docs = new SupplementalDocsViewModel(
-                Workspace, new SupplementalDocsService(_store), _editor, Notifications, _settings, new StubFilePickerService());
-            var history = new WordCountHistoryService(_store);
-
-            return new MainWindowViewModel(
-                Workspace,
-                _editor,
-                _owned.Track(new NotesViewModel(_editor, Workspace, new NotesService(_store), Notifications, _settings)),
-                _owned.Track(new ChapterInfoViewModel(_editor, Workspace, _phases, _targets, _settings, Notifications, history)),
-                new BookStatsViewModel(Workspace, history, _targets),
-                new GanttViewModel(Workspace, _phases, Notifications),
-                Corkboard,
-                new ResearchViewModel(Workspace, docs, _editor, AiTestDoubles.CreateStubAiChatViewModel(_editor, Workspace, Notifications)),
-                docs,
-                _owned.Track(new GitPanelViewModel(Workspace, _editor, new NoOpGitService(), Notifications)),
-                Notifications,
-                _settings,
-                AiTestDoubles.CreateStubAiChatViewModel(_editor, Workspace, Notifications),
-                AiTestDoubles.CreateStubSettingsFactory(Notifications),
-                ideasViewModel: null,
-                planHostViewModel: host);
-        }
-
-        public ChapterViewModel Node(string relativePath) =>
-            Workspace.Nodes.Single(n => n.Node.RelativePath == relativePath);
-
-        /// <summary>Runs posted handlers so the host and board have caught up with the workspace.</summary>
-        public async Task SettleAsync()
-        {
-            Avalonia.Threading.Dispatcher.UIThread.RunJobs();
-            await Task.Delay(25);
-            Avalonia.Threading.Dispatcher.UIThread.RunJobs();
-        }
-
-        public async Task<ChapterCardItemViewModel> CardAsync(string relativePath)
-        {
-            await PumpUntilAsync(() => Corkboard.Items.OfType<ChapterCardItemViewModel>().Any(i => i.RelativePath == relativePath));
-            return Corkboard.Items.OfType<ChapterCardItemViewModel>().First(i => i.RelativePath == relativePath);
-        }
-
-        public async Task<PartDividerItemViewModel> PartDividerAsync(string relativePath)
-        {
-            await PumpUntilAsync(() => Corkboard.Items.OfType<PartDividerItemViewModel>().Any(i => i.RelativePath == relativePath));
-            return Corkboard.Items.OfType<PartDividerItemViewModel>().First(i => i.RelativePath == relativePath);
-        }
-
-        public async Task OpenWorkspaceInCurrentDispatchAsync()
-        {
-            var method = typeof(WorkspaceViewModel).GetMethod("OpenWorkspaceAsync", BindingFlags.Instance | BindingFlags.NonPublic)
-                ?? throw new InvalidOperationException("Unable to locate OpenWorkspaceAsync.");
-            await Within((Task)method.Invoke(Workspace, Array.Empty<object>())!);
-            if (typeof(WorkspaceViewModel)
-                    .GetField("_hydrationTask", BindingFlags.Instance | BindingFlags.NonPublic)!
-                    .GetValue(Workspace) is Task hydration)
-                await Within(hydration);
-        }
-    }
-
-    private sealed class NeverInitPrompt : IProjectInitPrompt
-    {
-        public Task<bool> ConfirmInitializeAsync(string folderPath) => Task.FromResult(false);
-        public Task<ProjectKind?> ChooseProjectKindAsync() => Task.FromResult<ProjectKind?>(null);
-    }
-
-    /// <summary>Never reports a last workspace, so the main window's startup restore doesn't reopen one.</summary>
-    private sealed class InMemoryAppSettingsStore : IAppSettingsStore
-    {
-        private readonly Dictionary<string, object?> _values = new(StringComparer.OrdinalIgnoreCase);
-
-        public Task<T?> GetAsync<T>(string key) =>
-            Task.FromResult(key != "lastWorkspacePath" && _values.TryGetValue(key, out var value) && value is T typed ? typed : default);
-
-        public Task SetAsync<T>(string key, T value)
-        {
-            _values[key] = value;
-            return Task.CompletedTask;
-        }
-    }
-
-    private sealed class FixedFolderPickerService(string folder) : IFolderPickerService
-    {
-        public Task<string?> PickFolderAsync() => Task.FromResult<string?>(folder);
-    }
-
-    private sealed class StubFilePickerService : IFilePickerService
-    {
-        public Task<string?> PickFileAsync(string? suggestedStartDirectory = null) => Task.FromResult<string?>(null);
+        var full = Path.Combine(root, partPath);
+        Directory.CreateDirectory(Path.GetDirectoryName(full)!);
+        await File.WriteAllTextAsync(full, "{class: part}\n" + heading + "\n");
+        await File.WriteAllTextAsync(Path.Combine(root, "Book.txt"), string.Join("\n", [partPath, .. stories]) + "\n");
     }
 }
