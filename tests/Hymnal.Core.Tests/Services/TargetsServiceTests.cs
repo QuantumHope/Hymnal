@@ -186,4 +186,44 @@ public class TargetsServiceTests
             Directory.Delete(tempDir, recursive: true);
         }
     }
+
+    [Fact]
+    public async Task Targets_round_trip_preset()
+    {
+        var tempDir = Path.Combine(Path.GetTempPath(), Path.GetRandomFileName());
+        Directory.CreateDirectory(tempDir);
+        try
+        {
+            var svc = new TargetsService(new RealFileMetadataStore());
+            await svc.UpsertAsync(tempDir, "u1",
+                new WordCountTarget { MinWords = 1000, MaxWords = 7500, Preset = "shortStory" });
+            var loaded = await svc.LoadAsync(tempDir);
+            Assert.Equal("shortStory", loaded["u1"].Preset);
+            Assert.Equal(1000, loaded["u1"].MinWords);
+            Assert.Equal(7500, loaded["u1"].MaxWords);
+        }
+        finally
+        {
+            Directory.Delete(tempDir, recursive: true);
+        }
+    }
+
+    [Fact]
+    public async Task Targets_load_without_preset_field()
+    {
+        var tempDir = Path.Combine(Path.GetTempPath(), Path.GetRandomFileName());
+        Directory.CreateDirectory(Path.Combine(tempDir, ".hymnal-data"));
+        try
+        {
+            await File.WriteAllTextAsync(Path.Combine(tempDir, ".hymnal-data", "targets.json"),
+                "{\"schemaVersion\":1,\"targets\":{\"u1\":{\"minWords\":500,\"maxWords\":4000}}}");
+            var loaded = await new TargetsService(new RealFileMetadataStore()).LoadAsync(tempDir);
+            Assert.Null(loaded["u1"].Preset);
+            Assert.Equal(500, loaded["u1"].MinWords);
+        }
+        finally
+        {
+            Directory.Delete(tempDir, recursive: true);
+        }
+    }
 }
