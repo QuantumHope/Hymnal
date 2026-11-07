@@ -1,11 +1,12 @@
 using System.Text.Json;
+using System.Text.RegularExpressions;
 using Hymnal.Core.Common;
 using Hymnal.Core.Interfaces;
 using Hymnal.Core.Models;
 
 namespace Hymnal.Core.Services;
 
-public sealed class BeatBoardService(IMetadataStore store) : IBeatBoardService
+public sealed partial class BeatBoardService(IMetadataStore store) : IBeatBoardService
 {
     /// <summary>Board key for a Short Story project, which has exactly one story.</summary>
     public const string ShortStoryBoardKey = "story";
@@ -38,12 +39,15 @@ public sealed class BeatBoardService(IMetadataStore store) : IBeatBoardService
                 return Result<IReadOnlyList<Beat>>.Fail(
                     $"{name} has unsupported schemaVersion {doc.SchemaVersion}. Expected {CurrentSchemaVersion}.");
             var beats = new List<Beat>();
+            var seenIds = new HashSet<string>(StringComparer.Ordinal);
             foreach (var b in doc.Beats ?? [])
             {
                 if (b is null)
                     return Result<IReadOnlyList<Beat>>.Fail($"{name} contains an empty beat entry.");
                 if (string.IsNullOrWhiteSpace(b.Id) || b.Title is null)
                     return Result<IReadOnlyList<Beat>>.Fail($"{name} contains a beat without an id or title.");
+                if (!seenIds.Add(b.Id))
+                    return Result<IReadOnlyList<Beat>>.Fail($"{name} contains duplicate beat id '{b.Id}'.");
                 beats.Add(b with { Note = b.Note ?? "" });
             }
             return Result<IReadOnlyList<Beat>>.Ok(beats);
@@ -66,6 +70,9 @@ public sealed class BeatBoardService(IMetadataStore store) : IBeatBoardService
     {
         if (!IsValidBoardKey(boardKey))
             return Result<Unit>.Fail("Beat board key is not valid.");
+
+        if (beats is null || beats.Any(b => b is null))
+            return Result<Unit>.Fail("Beat board cannot be saved with missing beats.");
 
         var path = BoardFilePath(workspaceRoot, boardKey);
         try
@@ -93,13 +100,12 @@ public sealed class BeatBoardService(IMetadataStore store) : IBeatBoardService
         return Path.Combine(workspaceRoot, ".hymnal-data", "beats", boardKey + ".json");
     }
 
-    /// <summary>A key must be usable as a bare file name: no separators, no "..", no invalid filename characters.</summary>
+    /// <summary>A key must be a bare, platform-independent file name: ASCII letters, digits, '_' and '-' only.</summary>
     public static bool IsValidBoardKey(string? boardKey) =>
-        !string.IsNullOrWhiteSpace(boardKey)
-        && boardKey != "."
-        && !boardKey.Contains("..", StringComparison.Ordinal)
-        && boardKey.IndexOfAny(Path.GetInvalidFileNameChars()) < 0
-        && boardKey.IndexOfAny(['/', '\\']) < 0;
+        boardKey is not null && BoardKeyPattern().IsMatch(boardKey);
+
+    [GeneratedRegex("^[A-Za-z0-9_-]+$")]
+    private static partial Regex BoardKeyPattern();
 
     private sealed class BoardFile
     {

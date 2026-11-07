@@ -88,6 +88,8 @@ public class BeatBoardServiceTests
     [InlineData("""{ "schemaVersion": 1, "beats": [ { "title": "T" } ] }""")]
     [InlineData("""{ "schemaVersion": 1, "beats": [ { "id": "  ", "title": "T" } ] }""")]
     [InlineData("""{ "schemaVersion": 1, "beats": [ { "id": "x" } ] }""")]
+    [InlineData("""{ "schemaVersion": 1, "beats": [ { "id": "x", "title": "A" }, { "id": "x", "title": "B" } ] }""")]
+    [InlineData("""{ "schemaVersion": 1, "beats": [ "x" ] }""")]
     public Task Load_null_entry_or_missing_id_or_title_fails(string json) => WithTempDirAsync(async (dir, svc) =>
     {
         WriteRaw(dir, "story", json);
@@ -132,6 +134,11 @@ public class BeatBoardServiceTests
     [InlineData("")]
     [InlineData("   ")]
     [InlineData("a\0b")]
+    [InlineData("a:b")]
+    [InlineData("a*")]
+    [InlineData("abc ")]
+    [InlineData("abc.")]
+    [InlineData("caf\u00e9")]
     public Task Key_with_path_characters_is_rejected(string key) => WithTempDirAsync(async (dir, svc) =>
     {
         Assert.False((await svc.LoadAsync(dir, key)).IsSuccess);
@@ -140,4 +147,31 @@ public class BeatBoardServiceTests
         Assert.False(Directory.Exists(Path.Combine(dir, ".hymnal-data")));
         Assert.Empty(Directory.GetFileSystemEntries(dir));
     });
+
+    [Fact]
+    public Task Null_beats_property_loads_empty() => WithTempDirAsync(async (dir, svc) =>
+    {
+        WriteRaw(dir, "story", """{ "schemaVersion": 1, "beats": null }""");
+
+        var result = await svc.LoadAsync(dir, "story");
+
+        Assert.True(result.IsSuccess);
+        Assert.Empty(result.Value!);
+    });
+
+    [Fact]
+    public Task Save_null_beats_or_null_entry_fails_and_writes_nothing() => WithTempDirAsync(async (dir, svc) =>
+    {
+        Assert.False((await svc.SaveAsync(dir, "story", null!)).IsSuccess);
+        Assert.False((await svc.SaveAsync(dir, "story", [new Beat("1", "T", "", null), null!])).IsSuccess);
+
+        Assert.Empty(Directory.GetFileSystemEntries(dir));
+    });
+
+    [Fact]
+    public void Registry_uuid_and_story_keys_are_valid()
+    {
+        Assert.True(BeatBoardService.IsValidBoardKey("story"));
+        Assert.True(BeatBoardService.IsValidBoardKey(Guid.NewGuid().ToString()));
+    }
 }
