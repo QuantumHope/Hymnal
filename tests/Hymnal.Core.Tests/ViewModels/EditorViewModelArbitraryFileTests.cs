@@ -12,6 +12,7 @@ using Hymnal.Core.Common;
 using Hymnal.Core.Interfaces;
 using Hymnal.Core.Models;
 using Hymnal.Core.Services;
+using Hymnal.Core.Tests.Infrastructure;
 using ReactiveUI.Builder;
 using Xunit;
 using CoreUnit = Hymnal.Core.Common.Unit;
@@ -30,6 +31,7 @@ public sealed class EditorViewModelArbitraryFileTests : IDisposable
     private readonly WordCountService _wordCountService = new();
     private readonly EditorViewModel _editor;
     private readonly WorkspaceViewModel _workspace;
+    private readonly OwnedDisposables _owned = new();
 
     static EditorViewModelArbitraryFileTests()
     {
@@ -46,13 +48,13 @@ public sealed class EditorViewModelArbitraryFileTests : IDisposable
         Directory.CreateDirectory(_manuscriptRoot);
         Directory.CreateDirectory(_docsRoot);
 
-        _editor = new EditorViewModel(_metadataStore, _notifications, _wordCountService)
+        _editor = _owned.Track(new EditorViewModel(_metadataStore, _notifications, _wordCountService)
         {
             HasWorkspace = true
-        };
+        });
 
         _workspace = new WorkspaceViewModel(
-            new ManuscriptService(_notifications),
+            _owned.Track(new ManuscriptService(_notifications)),
             new FakeBookTxtStructureService(),
             new FakeFilePickerService(),
             _settingsStore,
@@ -296,7 +298,18 @@ public sealed class EditorViewModelArbitraryFileTests : IDisposable
 
     public void Dispose()
     {
-        _editor.Dispose();
+        try
+        {
+            _owned.Dispose();
+        }
+        finally
+        {
+            DeleteTempFolders();
+        }
+    }
+
+    private void DeleteTempFolders()
+    {
         try
         {
             if (Directory.Exists(_root))

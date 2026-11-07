@@ -16,6 +16,7 @@ using Hymnal.Core.Infrastructure;
 using Hymnal.Core.Interfaces;
 using Hymnal.Core.Models;
 using Hymnal.Core.Services;
+using Hymnal.Core.Tests.Infrastructure;
 using Hymnal.Core.Tests.TestDoubles;
 using Hymnal.Infrastructure;
 using ReactiveUI;
@@ -119,6 +120,7 @@ public sealed class MainWindowPlanModeTests
 
     private sealed class TestContext : IDisposable
     {
+        private readonly OwnedDisposables _owned = new();
         public NotificationService NotificationService { get; } = new();
         public FakeMetadataStore MetadataStore { get; } = new();
         public FakeAppSettingsStore SettingsStore { get; } = new();
@@ -143,12 +145,12 @@ public sealed class MainWindowPlanModeTests
             ManuscriptRoot = Path.Combine(root, "manuscript");
             Directory.CreateDirectory(ManuscriptRoot);
 
-            EditorViewModel = new EditorViewModel(MetadataStore, NotificationService, WordCountService);
+            EditorViewModel = _owned.Track(new EditorViewModel(MetadataStore, NotificationService, WordCountService));
             RegistryService = new ChapterRegistryService(MetadataStore);
             PhaseDataService = new PhaseDataService(MetadataStore);
             TargetsService = new TargetsService(MetadataStore);
             HistoryService = new WordCountHistoryService(MetadataStore);
-            ManuscriptService = new ManuscriptService(NotificationService);
+            ManuscriptService = _owned.Track(new ManuscriptService(NotificationService));
             Workspace = new SpyWorkspaceViewModel(
                 ManuscriptService,
                 StructureService,
@@ -217,7 +219,7 @@ public sealed class MainWindowPlanModeTests
                 new CorkboardViewModel(Workspace, StructureService, new OrphanFileDiscoveryService(), SettingsStore, NotificationService, ManuscriptService),
                 new ResearchViewModel(Workspace, docs, EditorViewModel, AiTestDoubles.CreateStubAiChatViewModel(EditorViewModel, Workspace, NotificationService)),
                 docs,
-                new GitPanelViewModel(Workspace, EditorViewModel, new FakeGitService(), NotificationService),
+                _owned.Track(new GitPanelViewModel(Workspace, EditorViewModel, new FakeGitService(), NotificationService)),
                 NotificationService,
                 SettingsStore,
                 AiTestDoubles.CreateStubAiChatViewModel(EditorViewModel, Workspace, NotificationService),
@@ -238,6 +240,18 @@ public sealed class MainWindowPlanModeTests
         }
 
         public void Dispose()
+        {
+            try
+            {
+                _owned.Dispose();
+            }
+            finally
+            {
+                DeleteTempFolders();
+            }
+        }
+
+        private void DeleteTempFolders()
         {
             try
             {

@@ -267,6 +267,7 @@ public sealed class CorkboardViewSmokeTests
 
     private sealed class TestContext : IDisposable
     {
+        private readonly OwnedDisposables _owned = new();
         public FakeNotificationService NotificationService { get; } = new();
         public FakeMetadataStore MetadataStore { get; } = new();
         public FakeAppSettingsStore SettingsStore { get; } = new();
@@ -290,12 +291,12 @@ public sealed class CorkboardViewSmokeTests
             ManuscriptRoot = Path.Combine(root, "manuscript");
             Directory.CreateDirectory(ManuscriptRoot);
 
-            EditorViewModel = new EditorViewModel(MetadataStore, NotificationService, WordCountService);
+            EditorViewModel = _owned.Track(new EditorViewModel(MetadataStore, NotificationService, WordCountService));
             RegistryService = new ChapterRegistryService(MetadataStore);
             PhaseDataService = new PhaseDataService(MetadataStore);
             TargetsService = new TargetsService(MetadataStore);
             HistoryService = new WordCountHistoryService(MetadataStore);
-            ManuscriptService = new ManuscriptService(NotificationService);
+            ManuscriptService = _owned.Track(new ManuscriptService(NotificationService));
             Workspace = new SpyWorkspaceViewModel(
                 ManuscriptService,
                 StructureService,
@@ -370,6 +371,18 @@ public sealed class CorkboardViewSmokeTests
         }
 
         public void Dispose()
+        {
+            try
+            {
+                _owned.Dispose();
+            }
+            finally
+            {
+                DeleteTempFolders();
+            }
+        }
+
+        private void DeleteTempFolders()
         {
             try
             {

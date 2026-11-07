@@ -16,6 +16,7 @@ using Hymnal.Core.Infrastructure;
 using Hymnal.Core.Interfaces;
 using Hymnal.Core.Models;
 using Hymnal.Core.Services;
+using Hymnal.Core.Tests.Infrastructure;
 using Hymnal.Core.Tests.TestDoubles;
 using Hymnal.Infrastructure;
 using ReactiveUI;
@@ -150,6 +151,7 @@ public sealed class MainWindowResearchModeTests
 
     private sealed class TestContext : IDisposable
     {
+        private readonly OwnedDisposables _owned = new();
         public NotificationService NotificationService { get; } = new();
         public FakeMetadataStore MetadataStore { get; } = new();
         public FakeAppSettingsStore SettingsStore { get; } = new();
@@ -171,9 +173,9 @@ public sealed class MainWindowResearchModeTests
             Directory.CreateDirectory(ManuscriptRoot);
             Directory.CreateDirectory(DocsRoot);
 
-            EditorViewModel = new EditorViewModel(MetadataStore, NotificationService, WordCountService);
+            EditorViewModel = _owned.Track(new EditorViewModel(MetadataStore, NotificationService, WordCountService));
             Workspace = new SpyWorkspaceViewModel(
-                new ManuscriptService(NotificationService),
+                _owned.Track(new ManuscriptService(NotificationService)),
                 new FakeBookTxtStructureService(),
                 FilePickerService,
                 SettingsStore,
@@ -253,10 +255,10 @@ public sealed class MainWindowResearchModeTests
                 new ChapterInfoViewModel(EditorViewModel, Workspace, new PhaseDataService(MetadataStore), new TargetsService(MetadataStore), SettingsStore, NotificationService, new WordCountHistoryService(MetadataStore)),
                 new BookStatsViewModel(Workspace, new WordCountHistoryService(MetadataStore), new TargetsService(MetadataStore)),
                 new GanttViewModel(Workspace, new PhaseDataService(MetadataStore), NotificationService),
-                new CorkboardViewModel(Workspace, new FakeBookTxtStructureService(), new OrphanFileDiscoveryService(), SettingsStore, NotificationService, new ManuscriptService(NotificationService)),
+                new CorkboardViewModel(Workspace, new FakeBookTxtStructureService(), new OrphanFileDiscoveryService(), SettingsStore, NotificationService, _owned.Track(new ManuscriptService(NotificationService))),
                 new ResearchViewModel(Workspace, docs, EditorViewModel, AiTestDoubles.CreateStubAiChatViewModel(EditorViewModel, Workspace, NotificationService)),
                 docs,
-                new GitPanelViewModel(Workspace, EditorViewModel, new FakeGitService(), NotificationService),
+                _owned.Track(new GitPanelViewModel(Workspace, EditorViewModel, new FakeGitService(), NotificationService)),
                 NotificationService,
                 SettingsStore,
                 AiTestDoubles.CreateStubAiChatViewModel(EditorViewModel, Workspace, NotificationService),
@@ -273,6 +275,18 @@ public sealed class MainWindowResearchModeTests
         }
 
         public void Dispose()
+        {
+            try
+            {
+                _owned.Dispose();
+            }
+            finally
+            {
+                DeleteTempFolders();
+            }
+        }
+
+        private void DeleteTempFolders()
         {
             try
             {

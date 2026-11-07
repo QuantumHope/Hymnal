@@ -31,7 +31,7 @@ public sealed class WorkspaceSidebarRenameTests
 
         try
         {
-            var context = new TestContext(workspace.Root);
+            using var context = new TestContext(workspace.Root);
             await context.OpenWorkspaceAsync();
             await WaitForNodeAsync(context.Workspace, "part-one/chapter-one.md");
 
@@ -80,7 +80,7 @@ public sealed class WorkspaceSidebarRenameTests
 
         try
         {
-            var context = new TestContext(workspace.Root);
+            using var context = new TestContext(workspace.Root);
             await context.OpenWorkspaceAsync();
             await WaitForNodesAsync(context.Workspace, 3);
 
@@ -125,7 +125,7 @@ public sealed class WorkspaceSidebarRenameTests
 
         try
         {
-            var context = new TestContext(workspace.Root);
+            using var context = new TestContext(workspace.Root);
             await context.OpenWorkspaceAsync();
             await WaitForNodeAsync(context.Workspace, "chapter-one.md");
 
@@ -163,7 +163,7 @@ public sealed class WorkspaceSidebarRenameTests
         try
         {
             var structure = new RecordingStructureService();
-            var context = new TestContext(workspace.Root, structure);
+            using var context = new TestContext(workspace.Root, structure);
             await context.OpenWorkspaceAsync();
             await WaitForNodeAsync(context.Workspace, "chapter-one.md");
 
@@ -353,8 +353,9 @@ public sealed class WorkspaceSidebarRenameTests
         ReactiveUiTestBootstrap.RunOnUiThread(() => { });
     }
 
-    private sealed class TestContext
+    private sealed class TestContext : IDisposable
     {
+        private readonly OwnedDisposables _owned = new();
         public RecordingNotificationService NotificationService { get; } = new();
         public MetadataStore MetadataStore { get; } = new();
         public InMemoryAppSettingsStore SettingsStore { get; } = new();
@@ -378,9 +379,9 @@ public sealed class WorkspaceSidebarRenameTests
             var effectiveStructureService = structureService ?? new BookTxtStructureService(MetadataStore, ExclusionManifestService, RegistryService);
             PhaseDataService = new PhaseDataService(MetadataStore);
             TargetsService = new TargetsService(MetadataStore);
-            Editor = new EditorViewModel(MetadataStore, NotificationService, WordCountService);
+            Editor = _owned.Track(new EditorViewModel(MetadataStore, NotificationService, WordCountService));
             var history = new WordCountHistoryService(MetadataStore);
-            ManuscriptService = new ManuscriptService(NotificationService, ExclusionManifestService);
+            ManuscriptService = _owned.Track(new ManuscriptService(NotificationService, ExclusionManifestService));
 
             Workspace = new WorkspaceViewModel(
                 ManuscriptService,
@@ -398,6 +399,8 @@ public sealed class WorkspaceSidebarRenameTests
                 ExclusionManifestService,
                 OrphanFileDiscoveryService);
         }
+
+        public void Dispose() => _owned.Dispose();
 
         public async Task OpenWorkspaceAsync()
         {

@@ -33,7 +33,7 @@ public sealed class SettingsProjectSectionTests : IDisposable
     {
         await Run(async () =>
         {
-            var ctx = new Ctx(null);
+            using var ctx = new Ctx(null);
             Assert.False(ctx.Settings.HasWorkspace);
             Assert.False(ctx.Workspace.HasWorkspace);
             return 0;
@@ -46,7 +46,7 @@ public sealed class SettingsProjectSectionTests : IDisposable
         var root = CreateFolder(".hymnal-data/project.json", StoryJson);
         try
         {
-            var ctx = new Ctx(root);
+            using var ctx = new Ctx(root);
             await ctx.OpenAsync();
             await Run(() =>
             {
@@ -67,7 +67,7 @@ public sealed class SettingsProjectSectionTests : IDisposable
         var root = CreateFolder();
         try
         {
-            var ctx = new Ctx(root);
+            using var ctx = new Ctx(root);
             await ctx.OpenAsync();
             await Run(() =>
             {
@@ -91,7 +91,7 @@ public sealed class SettingsProjectSectionTests : IDisposable
             "{ \"schemaVersion\": 1, \"kind\": \"novel\", \"storage\": \"embedded\" }");
         try
         {
-            var ctx = new Ctx(root);
+            using var ctx = new Ctx(root);
             await ctx.OpenAsync();
             await Run(async () =>
             {
@@ -116,7 +116,7 @@ public sealed class SettingsProjectSectionTests : IDisposable
         var root = CreateFolder();
         try
         {
-            var ctx = new Ctx(root);
+            using var ctx = new Ctx(root);
             await ctx.OpenAsync();
             await Run(() =>
             {
@@ -164,7 +164,9 @@ public sealed class SettingsProjectSectionTests : IDisposable
     {
         private readonly ManuscriptService _manuscript;
 
-        public void Dispose() => _manuscript.Dispose();
+        private readonly OwnedDisposables _owned = new();
+
+        public void Dispose() => _owned.Dispose();
 
         public RecordingNotifications Notifications { get; } = new();
         public ProjectSettingsService ProjectSettings { get; }
@@ -178,8 +180,8 @@ public sealed class SettingsProjectSectionTests : IDisposable
             var registry = new ChapterRegistryService(store);
             var wordCount = new WordCountService();
             ProjectSettings = new ProjectSettingsService(store);
-            var editor = new EditorViewModel(store, Notifications, wordCount);
-            _manuscript = new ManuscriptService(Notifications, exclusions);
+            var editor = _owned.Track(new EditorViewModel(store, Notifications, wordCount));
+            _manuscript = _owned.Track(new ManuscriptService(Notifications, exclusions));
             LiveContexts.Add(this);
             Workspace = new WorkspaceViewModel(
                 _manuscript,

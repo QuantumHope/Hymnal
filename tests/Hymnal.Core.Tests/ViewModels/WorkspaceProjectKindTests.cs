@@ -35,7 +35,7 @@ public sealed class WorkspaceProjectKindTests : IDisposable
         var root = CreateFolder(("Book.txt", "chapter-one.md\n"), ("chapter-one.md", "# One\n"));
         try
         {
-            var context = new TestContext(root);
+            using var context = new TestContext(root);
             await context.OpenAsync();
             await WaitForNodesAsync(context, 1);
 
@@ -59,7 +59,7 @@ public sealed class WorkspaceProjectKindTests : IDisposable
             (".hymnal-data/project.json", StoryProjectJson));
         try
         {
-            var context = new TestContext(root);
+            using var context = new TestContext(root);
             await context.OpenAsync();
             await WaitForNodesAsync(context, 2);
 
@@ -84,7 +84,7 @@ public sealed class WorkspaceProjectKindTests : IDisposable
         var before = await File.ReadAllBytesAsync(projectPath);
         try
         {
-            var context = new TestContext(root);
+            using var context = new TestContext(root);
             await context.OpenAsync();
             await WaitForNodesAsync(context, 1);
 
@@ -102,7 +102,7 @@ public sealed class WorkspaceProjectKindTests : IDisposable
         var root = CreateFolder();
         try
         {
-            var context = new TestContext(root);
+            using var context = new TestContext(root);
             context.Prompt.ConfirmResult = true;
             context.Prompt.ChooseResult = ProjectKind.Story;
 
@@ -127,7 +127,7 @@ public sealed class WorkspaceProjectKindTests : IDisposable
         var before = Snapshot(root);
         try
         {
-            var context = new TestContext(root);
+            using var context = new TestContext(root);
             context.Prompt.ConfirmResult = false;
 
             await context.OpenAsync();
@@ -148,7 +148,7 @@ public sealed class WorkspaceProjectKindTests : IDisposable
         var before = Snapshot(root);
         try
         {
-            var context = new TestContext(root);
+            using var context = new TestContext(root);
             context.Prompt.ConfirmResult = true;
             context.Prompt.ChooseResult = null;
 
@@ -168,7 +168,7 @@ public sealed class WorkspaceProjectKindTests : IDisposable
         var root = CreateFolder(("Book.txt", "chapter-one.md\n"), ("chapter-one.md", "# One\n"));
         try
         {
-            var context = new TestContext(root);
+            using var context = new TestContext(root);
             await context.OpenAsync();
             await WaitForNodesAsync(context, 1);
             Assert.Equal(ProjectKind.Novel, context.Workspace.Profile.Kind);
@@ -292,7 +292,9 @@ public sealed class WorkspaceProjectKindTests : IDisposable
     {
         private readonly ManuscriptService _manuscript;
 
-        public void Dispose() => _manuscript.Dispose();
+        private readonly OwnedDisposables _owned = new();
+
+        public void Dispose() => _owned.Dispose();
 
         public RecordingNotificationService Notifications { get; } = new();
         public FakeProjectInitPrompt Prompt { get; } = new();
@@ -306,8 +308,8 @@ public sealed class WorkspaceProjectKindTests : IDisposable
             var registry = new ChapterRegistryService(store);
             var wordCount = new WordCountService();
             ProjectSettings = new ProjectSettingsService(store);
-            var editor = new EditorViewModel(store, Notifications, wordCount);
-            _manuscript = new ManuscriptService(Notifications, exclusions);
+            var editor = _owned.Track(new EditorViewModel(store, Notifications, wordCount));
+            _manuscript = _owned.Track(new ManuscriptService(Notifications, exclusions));
             LiveContexts.Add(this);
 
             Workspace = new WorkspaceViewModel(

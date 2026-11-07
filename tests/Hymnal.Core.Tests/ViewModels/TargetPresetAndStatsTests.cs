@@ -164,7 +164,7 @@ public sealed class TargetPresetAndStatsTests : IDisposable
         var root = CreateAnthologyFolder();
         try
         {
-            var context = await OpenAsync(root, expectedNodes: 3);
+            using var context = await OpenAsync(root, expectedNodes: 3);
             var part = context.Workspace.Nodes.First(n => n.Node.Kind == NodeKind.Part);
 
             Assert.True(part.CanSetTarget);
@@ -187,7 +187,7 @@ public sealed class TargetPresetAndStatsTests : IDisposable
             ("chapter-a.md", "# A\n"));
         try
         {
-            var context = await OpenAsync(root, expectedNodes: 2);
+            using var context = await OpenAsync(root, expectedNodes: 2);
             var part = context.Workspace.Nodes.First(n => n.Node.Kind == NodeKind.Part);
 
             Assert.False(part.CanSetTarget);
@@ -208,7 +208,7 @@ public sealed class TargetPresetAndStatsTests : IDisposable
             ("Book.txt", "scene-one.md\n"), ("scene-one.md", "# One\n"), (".hymnal-data/project.json", StoryJson));
         try
         {
-            var context = await OpenAsync(root, expectedNodes: 1);
+            using var context = await OpenAsync(root, expectedNodes: 1);
             var stats = context.CreateStats();
 
             Assert.False(stats.IsVisible);
@@ -222,7 +222,7 @@ public sealed class TargetPresetAndStatsTests : IDisposable
         var root = CreateFolder(("Book.txt", "chapter-a.md\n"), ("chapter-a.md", "# A\n"));
         try
         {
-            var context = await OpenAsync(root, expectedNodes: 1);
+            using var context = await OpenAsync(root, expectedNodes: 1);
             var stats = context.CreateStats();
 
             Assert.True(stats.IsVisible);
@@ -238,7 +238,7 @@ public sealed class TargetPresetAndStatsTests : IDisposable
         var root = CreateAnthologyFolder();
         try
         {
-            var context = await OpenAsync(root, expectedNodes: 3);
+            using var context = await OpenAsync(root, expectedNodes: 3);
             var stats = context.CreateStats();
 
             Assert.True(stats.IsVisible);
@@ -266,7 +266,7 @@ public sealed class TargetPresetAndStatsTests : IDisposable
             ("Book.txt", "scene-one.md\n"), ("scene-one.md", "# One\n"), (".hymnal-data/project.json", StoryJson));
         try
         {
-            var context = await OpenAsync(root, expectedNodes: 1);
+            using var context = await OpenAsync(root, expectedNodes: 1);
             var node = context.Workspace.Nodes.First();
             await WaitUntilAsync(() => !string.IsNullOrEmpty(node.Uuid), () => "No UUID.");
             var info = await context.CreateChapterInfoForAsync(node);
@@ -344,7 +344,7 @@ public sealed class TargetPresetAndStatsTests : IDisposable
         var root = CreateAnthologyFolder();
         try
         {
-            var first = await OpenAsync(root, expectedNodes: 3);
+            using var first = await OpenAsync(root, expectedNodes: 3);
             var part = first.Workspace.Nodes.First(n => n.Node.Kind == NodeKind.Part);
             await WaitUntilAsync(() => !string.IsNullOrEmpty(part.Uuid), () => "No part UUID.");
             await RunOnUiThreadWithPumpingAsync(async () =>
@@ -354,7 +354,7 @@ public sealed class TargetPresetAndStatsTests : IDisposable
                 return 0;
             });
 
-            var second = await OpenAsync(root, expectedNodes: 3);
+            using var second = await OpenAsync(root, expectedNodes: 3);
             var reloaded = second.Workspace.Nodes.First(n => n.Node.Kind == NodeKind.Part);
             await WaitUntilAsync(() => reloaded.Target is not null, () => "Part target did not reload.");
             Assert.Equal("shortStory", reloaded.Target!.Preset);
@@ -470,7 +470,9 @@ public sealed class TargetPresetAndStatsTests : IDisposable
     {
         private readonly ManuscriptService _manuscript;
 
-        public void Dispose() => _manuscript.Dispose();
+        private readonly OwnedDisposables _owned = new();
+
+        public void Dispose() => _owned.Dispose();
 
         private readonly MetadataStore _store = new();
         private readonly InMemoryAppSettingsStore _settings = new();
@@ -487,8 +489,8 @@ public sealed class TargetPresetAndStatsTests : IDisposable
             var wordCount = new WordCountService();
             var projectSettings = new ProjectSettingsService(_store);
             PhaseService = new PhaseDataService(_store);
-            _editor = new EditorViewModel(_store, Notifications, wordCount);
-            _manuscript = new ManuscriptService(Notifications, exclusions);
+            _editor = _owned.Track(new EditorViewModel(_store, Notifications, wordCount));
+            _manuscript = _owned.Track(new ManuscriptService(Notifications, exclusions));
             LiveContexts.Add(this);
 
             Workspace = new WorkspaceViewModel(

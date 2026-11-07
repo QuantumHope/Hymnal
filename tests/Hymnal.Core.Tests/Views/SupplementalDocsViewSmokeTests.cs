@@ -11,6 +11,7 @@ using Hymnal.Core.Infrastructure;
 using Hymnal.Core.Interfaces;
 using Hymnal.Core.Models;
 using Hymnal.Core.Services;
+using Hymnal.Core.Tests.Infrastructure;
 using Hymnal.Core.Tests.TestDoubles;
 using Hymnal.Infrastructure;
 using Hymnal.ViewModels;
@@ -81,7 +82,7 @@ public sealed class SupplementalDocsViewSmokeTests
         context.EditorViewModel.Text = expected;
         await context.EditorViewModel.SaveAsync();
 
-        var reopenedEditor = new EditorViewModel(context.MetadataStore, context.NotificationService, context.WordCountService);
+        using var reopenedEditor = new EditorViewModel(context.MetadataStore, context.NotificationService, context.WordCountService);
         var reopenedDocsVm = context.CreateDocsViewModel(reopenedEditor);
         await reopenedDocsVm.RefreshAsync();
 
@@ -135,6 +136,7 @@ public sealed class SupplementalDocsViewSmokeTests
 
     private sealed class TestContext : IDisposable
     {
+        private readonly OwnedDisposables _owned = new();
         public NotificationService NotificationService { get; } = new();
         public FakeMetadataStore MetadataStore { get; } = new();
         public FakeAppSettingsStore SettingsStore { get; } = new();
@@ -158,12 +160,12 @@ public sealed class SupplementalDocsViewSmokeTests
             Directory.CreateDirectory(ManuscriptRoot);
             File.WriteAllText(Path.Combine(ManuscriptRoot, "Book.txt"), string.Empty);
 
-            EditorViewModel = new EditorViewModel(MetadataStore, NotificationService, WordCountService);
+            EditorViewModel = _owned.Track(new EditorViewModel(MetadataStore, NotificationService, WordCountService));
             RegistryService = new ChapterRegistryService(MetadataStore);
             PhaseDataService = new PhaseDataService(MetadataStore);
             TargetsService = new TargetsService(MetadataStore);
             HistoryService = new WordCountHistoryService(MetadataStore);
-            ManuscriptService = new ManuscriptService(NotificationService);
+            ManuscriptService = _owned.Track(new ManuscriptService(NotificationService));
             DocsService = new SupplementalDocsService(MetadataStore);
             Workspace = new WorkspaceViewModel(
                 ManuscriptService,
@@ -189,7 +191,7 @@ public sealed class SupplementalDocsViewSmokeTests
         {
             var docsVm = CreateDocsViewModel(EditorViewModel);
             var corkboardVm = new CorkboardViewModel(Workspace, new FakeBookTxtStructureService(), new OrphanFileDiscoveryService(), SettingsStore, NotificationService, ManuscriptService);
-            var gitPanelVm = new GitPanelViewModel(Workspace, EditorViewModel, new FakeGitService(), NotificationService);
+            var gitPanelVm = _owned.Track(new GitPanelViewModel(Workspace, EditorViewModel, new FakeGitService(), NotificationService));
             return new MainWindowViewModel(
                 Workspace,
                 EditorViewModel,
@@ -221,7 +223,19 @@ public sealed class SupplementalDocsViewSmokeTests
 
         public void Dispose()
         {
-            NotificationService.Dispose();
+            try
+            {
+                _owned.Dispose();
+            }
+            finally
+            {
+                NotificationService.Dispose();
+                DeleteTempFolders();
+            }
+        }
+
+        private void DeleteTempFolders()
+        {
             try
             {
                 if (Directory.Exists(WorkspaceRoot))

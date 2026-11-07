@@ -10,6 +10,7 @@ using Hymnal.Core.Interfaces;
 using Hymnal.Core.Infrastructure;
 using Hymnal.Core.Models;
 using Hymnal.Core.Services;
+using Hymnal.Core.Tests.Infrastructure;
 using Hymnal.Core.Tests.TestDoubles;
 using Hymnal.Infrastructure;
 using ReactiveUI.Builder;
@@ -64,6 +65,7 @@ public sealed class MainWindowSupplementalDocsTests : IDisposable
 
     private sealed class TestContext : IDisposable
     {
+        private readonly OwnedDisposables _owned = new();
         public NotificationService NotificationService { get; } = new();
         public RecordingMetadataStore MetadataStore { get; } = new();
         public FakeAppSettingsStore SettingsStore { get; } = new();
@@ -83,9 +85,9 @@ public sealed class MainWindowSupplementalDocsTests : IDisposable
             Directory.CreateDirectory(ManuscriptRoot);
             Directory.CreateDirectory(DocsRoot);
 
-            Editor = new EditorViewModel(MetadataStore, NotificationService, WordCountService);
+            Editor = _owned.Track(new EditorViewModel(MetadataStore, NotificationService, WordCountService));
             Workspace = new WorkspaceViewModel(
-                new ManuscriptService(NotificationService),
+                _owned.Track(new ManuscriptService(NotificationService)),
                 new FakeBookTxtStructureService(),
                 new FakeFilePickerService(),
                 SettingsStore,
@@ -102,7 +104,7 @@ public sealed class MainWindowSupplementalDocsTests : IDisposable
         public MainWindowViewModel CreateMainWindow()
         {
             var docs = new SupplementalDocsViewModel(Workspace, new SupplementalDocsService(MetadataStore), Editor, NotificationService, SettingsStore, new FakeFilePickerService());
-            var gitPanel = new GitPanelViewModel(Workspace, Editor, new FakeGitService(), NotificationService);
+            var gitPanel = _owned.Track(new GitPanelViewModel(Workspace, Editor, new FakeGitService(), NotificationService));
             return new MainWindowViewModel(
                 Workspace,
                 Editor,
@@ -110,7 +112,7 @@ public sealed class MainWindowSupplementalDocsTests : IDisposable
                 new ChapterInfoViewModel(Editor, Workspace, new PhaseDataService(MetadataStore), new TargetsService(MetadataStore), SettingsStore, NotificationService, new WordCountHistoryService(MetadataStore)),
                 new BookStatsViewModel(Workspace, new WordCountHistoryService(MetadataStore), new TargetsService(MetadataStore)),
                 new GanttViewModel(Workspace, new PhaseDataService(MetadataStore), NotificationService),
-                new CorkboardViewModel(Workspace, new FakeBookTxtStructureService(), new OrphanFileDiscoveryService(), SettingsStore, NotificationService, new ManuscriptService(NotificationService)),
+                new CorkboardViewModel(Workspace, new FakeBookTxtStructureService(), new OrphanFileDiscoveryService(), SettingsStore, NotificationService, _owned.Track(new ManuscriptService(NotificationService))),
                 new ResearchViewModel(Workspace, docs, Editor, AiTestDoubles.CreateStubAiChatViewModel(Editor, Workspace, NotificationService)),
                 docs,
                 gitPanel,
@@ -139,6 +141,18 @@ public sealed class MainWindowSupplementalDocsTests : IDisposable
         }
 
         public void Dispose()
+        {
+            try
+            {
+                _owned.Dispose();
+            }
+            finally
+            {
+                DeleteTempFolders();
+            }
+        }
+
+        private void DeleteTempFolders()
         {
             try
             {

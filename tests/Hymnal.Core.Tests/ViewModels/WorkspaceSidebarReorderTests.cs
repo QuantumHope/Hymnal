@@ -33,7 +33,7 @@ public sealed class WorkspaceSidebarReorderTests
         try
         {
             var structure = new RecordingStructureService();
-            var context = new TestContext(workspace.Root, structure);
+            using var context = new TestContext(workspace.Root, structure);
             var excluded = await context.ExclusionManifestService.ExcludeAsync(workspace.Root, "part-one/chapter-two.md");
             Assert.True(excluded.IsSuccess, excluded.Error);
             await context.OpenWorkspaceAsync();
@@ -84,7 +84,7 @@ public sealed class WorkspaceSidebarReorderTests
         try
         {
             var structure = new RecordingStructureService();
-            var context = new TestContext(workspace.Root, structure);
+            using var context = new TestContext(workspace.Root, structure);
             await context.OpenWorkspaceAsync();
             await WaitForNodesAsync(context.Workspace, 6);
 
@@ -141,7 +141,7 @@ public sealed class WorkspaceSidebarReorderTests
             {
                 ReorderFailure = "Book.txt validation rejected simulated reorder."
             };
-            var context = new TestContext(workspace.Root, structure);
+            using var context = new TestContext(workspace.Root, structure);
             await context.OpenWorkspaceAsync();
             await WaitForVisibleOrderAsync(context.Workspace,
                 "part-one/part.md",
@@ -183,7 +183,7 @@ public sealed class WorkspaceSidebarReorderTests
         try
         {
             var structure = new RecordingStructureService();
-            var context = new TestContext(workspace.Root, structure);
+            using var context = new TestContext(workspace.Root, structure);
             var excluded = await context.ExclusionManifestService.ExcludeAsync(workspace.Root, "chapter-two.md");
             Assert.True(excluded.IsSuccess, excluded.Error);
             await context.OpenWorkspaceAsync();
@@ -216,7 +216,7 @@ public sealed class WorkspaceSidebarReorderTests
         try
         {
             var structure = new RecordingStructureService();
-            var context = new TestContext(workspace.Root, structure);
+            using var context = new TestContext(workspace.Root, structure);
             await context.OpenWorkspaceAsync();
             await WaitForNodesAsync(context.Workspace, 2);
 
@@ -250,7 +250,7 @@ public sealed class WorkspaceSidebarReorderTests
         try
         {
             var structure = new RecordingStructureService();
-            var context = new TestContext(workspace.Root, structure);
+            using var context = new TestContext(workspace.Root, structure);
             await context.OpenWorkspaceAsync();
             await WaitForNodesAsync(context.Workspace, 4);
 
@@ -284,7 +284,7 @@ public sealed class WorkspaceSidebarReorderTests
         try
         {
             var structure = new RecordingStructureService();
-            var context = new TestContext(workspace.Root, structure);
+            using var context = new TestContext(workspace.Root, structure);
             await context.OpenWorkspaceAsync();
             await WaitForNodesAsync(context.Workspace, 4);
 
@@ -318,7 +318,7 @@ public sealed class WorkspaceSidebarReorderTests
         try
         {
             var structure = new RecordingStructureService();
-            var context = new TestContext(workspace.Root, structure);
+            using var context = new TestContext(workspace.Root, structure);
             await context.OpenWorkspaceAsync();
             await WaitForNodesAsync(context.Workspace, 2);
 
@@ -422,8 +422,9 @@ public sealed class WorkspaceSidebarReorderTests
         Assert.Fail(failureMessage);
     }
 
-    private sealed class TestContext
+    private sealed class TestContext : IDisposable
     {
+        private readonly OwnedDisposables _owned = new();
         public RecordingNotificationService NotificationService { get; } = new();
         public MetadataStore MetadataStore { get; } = new();
         public InMemoryAppSettingsStore SettingsStore { get; } = new();
@@ -446,9 +447,9 @@ public sealed class WorkspaceSidebarReorderTests
             RegistryService = new ChapterRegistryService(MetadataStore);
             PhaseDataService = new PhaseDataService(MetadataStore);
             TargetsService = new TargetsService(MetadataStore);
-            Editor = new EditorViewModel(MetadataStore, NotificationService, WordCountService);
+            Editor = _owned.Track(new EditorViewModel(MetadataStore, NotificationService, WordCountService));
             var history = new WordCountHistoryService(MetadataStore);
-            ManuscriptService = new ManuscriptService(NotificationService, ExclusionManifestService);
+            ManuscriptService = _owned.Track(new ManuscriptService(NotificationService, ExclusionManifestService));
             var effectiveStructureService = structureService ?? new RecordingStructureService();
             effectiveStructureService.Configure(new BookTxtStructureService(MetadataStore, ExclusionManifestService, RegistryService), ManuscriptService);
 
@@ -468,6 +469,8 @@ public sealed class WorkspaceSidebarReorderTests
                 ExclusionManifestService,
                 OrphanFileDiscoveryService);
         }
+
+        public void Dispose() => _owned.Dispose();
 
         public async Task OpenWorkspaceAsync()
         {

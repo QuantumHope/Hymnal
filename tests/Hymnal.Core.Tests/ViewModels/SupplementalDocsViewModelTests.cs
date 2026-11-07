@@ -15,6 +15,7 @@ using ReactiveUI;
 using ReactiveUI.Builder;
 using Xunit;
 using CoreUnit = Hymnal.Core.Common.Unit;
+using Hymnal.Core.Tests.Infrastructure;
 
 namespace Hymnal.ViewModels;
 
@@ -215,6 +216,7 @@ public sealed class SupplementalDocsViewModelTests : IDisposable
 
     private sealed class TestContext : IDisposable
     {
+        private readonly OwnedDisposables _owned = new();
         public FakeNotificationService Notifications { get; } = new();
         public RecordingMetadataStore MetadataStore { get; } = new();
         public FakeAppSettingsStore SettingsStore { get; } = new();
@@ -235,9 +237,9 @@ public sealed class SupplementalDocsViewModelTests : IDisposable
             Directory.CreateDirectory(ManuscriptRoot);
             Directory.CreateDirectory(DocsRoot);
 
-            Editor = new EditorViewModel(MetadataStore, Notifications, WordCountService);
+            Editor = _owned.Track(new EditorViewModel(MetadataStore, Notifications, WordCountService));
             Workspace = new WorkspaceViewModel(
-                new ManuscriptService(Notifications),
+                _owned.Track(new ManuscriptService(Notifications)),
                 new FakeBookTxtStructureService(),
                 FilePicker,
                 SettingsStore,
@@ -312,6 +314,18 @@ public sealed class SupplementalDocsViewModelTests : IDisposable
             => SetPrivateField(Workspace, "_selectedNode", chapter);
 
         public void Dispose()
+        {
+            try
+            {
+                _owned.Dispose();
+            }
+            finally
+            {
+                DeleteTempFolders();
+            }
+        }
+
+        private void DeleteTempFolders()
         {
             try
             {

@@ -16,6 +16,7 @@ using Hymnal.Infrastructure;
 using ReactiveUI.Builder;
 using Xunit;
 using CoreUnit = Hymnal.Core.Common.Unit;
+using Hymnal.Core.Tests.Infrastructure;
 
 namespace Hymnal.ViewModels;
 
@@ -186,6 +187,7 @@ public sealed class MainWindowWriteLayoutTests : IDisposable
 
     private sealed class TestContext : IDisposable
     {
+        private readonly OwnedDisposables _owned = new();
         // FakeAppSettingsStore and FakeMetadataStore are defined as private classes below.
         public FakeAppSettingsStore SettingsStore { get; } = new();
         public NotificationService NotificationService { get; } = new();
@@ -201,9 +203,9 @@ public sealed class MainWindowWriteLayoutTests : IDisposable
             WorkspaceRoot = Path.Combine(Path.GetTempPath(), "hymnal-layout-tests", Guid.NewGuid().ToString("N"));
             Directory.CreateDirectory(Path.Combine(WorkspaceRoot, "manuscript"));
 
-            Editor = new EditorViewModel(MetadataStore, NotificationService, WordCountService);
+            Editor = _owned.Track(new EditorViewModel(MetadataStore, NotificationService, WordCountService));
             Workspace = new WorkspaceViewModel(
-                new ManuscriptService(NotificationService),
+                _owned.Track(new ManuscriptService(NotificationService)),
                 new FakeBookTxtStructureService(),
                 new FakeFilePickerService(),
                 SettingsStore,
@@ -227,7 +229,7 @@ public sealed class MainWindowWriteLayoutTests : IDisposable
                 SettingsStore,
                 new FakeFilePickerService());
 
-            var gitPanel = new GitPanelViewModel(Workspace, Editor, new FakeGitService(), NotificationService);
+            var gitPanel = _owned.Track(new GitPanelViewModel(Workspace, Editor, new FakeGitService(), NotificationService));
 
             return new MainWindowViewModel(
                 Workspace,
@@ -236,7 +238,7 @@ public sealed class MainWindowWriteLayoutTests : IDisposable
                 new ChapterInfoViewModel(Editor, Workspace, new PhaseDataService(MetadataStore), new TargetsService(MetadataStore), SettingsStore, NotificationService, new WordCountHistoryService(MetadataStore)),
                 new BookStatsViewModel(Workspace, new WordCountHistoryService(MetadataStore), new TargetsService(MetadataStore)),
                 new GanttViewModel(Workspace, new PhaseDataService(MetadataStore), NotificationService),
-                new CorkboardViewModel(Workspace, new FakeBookTxtStructureService(), new OrphanFileDiscoveryService(), SettingsStore, NotificationService, new ManuscriptService(NotificationService)),
+                new CorkboardViewModel(Workspace, new FakeBookTxtStructureService(), new OrphanFileDiscoveryService(), SettingsStore, NotificationService, _owned.Track(new ManuscriptService(NotificationService))),
                 new ResearchViewModel(Workspace, docs, Editor, AiTestDoubles.CreateStubAiChatViewModel(Editor, Workspace, NotificationService)),
                 docs,
                 gitPanel,
@@ -257,6 +259,18 @@ public sealed class MainWindowWriteLayoutTests : IDisposable
         }
 
         public void Dispose()
+        {
+            try
+            {
+                _owned.Dispose();
+            }
+            finally
+            {
+                DeleteTempFolders();
+            }
+        }
+
+        private void DeleteTempFolders()
         {
             try { if (Directory.Exists(WorkspaceRoot)) Directory.Delete(WorkspaceRoot, true); }
             catch { /* best-effort cleanup */ }

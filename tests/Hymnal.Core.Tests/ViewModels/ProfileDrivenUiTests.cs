@@ -39,7 +39,7 @@ public sealed class ProfileDrivenUiTests : IDisposable
         var root = CreateStoryFolder();
         try
         {
-            var context = await OpenAsync(root, expectedNodes: 2);
+            using var context = await OpenAsync(root, expectedNodes: 2);
             var info = context.CreateChapterInfo();
 
             Assert.Equal(["Idea", "Drafting", "Revising", "Done"], info.StatusOptions.Select(o => o.Label));
@@ -57,7 +57,7 @@ public sealed class ProfileDrivenUiTests : IDisposable
         var root = CreateFolder(("Book.txt", "chapter-one.md\n"), ("chapter-one.md", "# One\n"));
         try
         {
-            var context = await OpenAsync(root, expectedNodes: 1);
+            using var context = await OpenAsync(root, expectedNodes: 1);
             var info = context.CreateChapterInfo();
 
             Assert.Equal(
@@ -77,7 +77,7 @@ public sealed class ProfileDrivenUiTests : IDisposable
         var root = CreateStoryFolder();
         try
         {
-            var context = await OpenAsync(root, expectedNodes: 2);
+            using var context = await OpenAsync(root, expectedNodes: 2);
             var info = context.CreateChapterInfo();
 
             Assert.Equal("Story Info", info.PanelTitle);
@@ -93,7 +93,7 @@ public sealed class ProfileDrivenUiTests : IDisposable
         var root = CreateStoryFolder();
         try
         {
-            var context = await OpenAsync(root, expectedNodes: 2);
+            using var context = await OpenAsync(root, expectedNodes: 2);
             var gantt = new GanttViewModel(context.Workspace, context.PhaseService, context.Notifications);
 
             var chapterRows = gantt.Rows.Where(r => r.IsChapter).ToList();
@@ -165,7 +165,7 @@ public sealed class ProfileDrivenUiTests : IDisposable
         var root = CreateStoryFolder();
         try
         {
-            var context = await OpenAsync(root, expectedNodes: 2);
+            using var context = await OpenAsync(root, expectedNodes: 2);
             var node = await SeedFirstNodeAsync(context, new PhaseData
             {
                 Status = ChapterStatus.Polishing,
@@ -227,7 +227,7 @@ public sealed class ProfileDrivenUiTests : IDisposable
         var root = CreateStoryFolder();
         try
         {
-            var context = await OpenAsync(root, expectedNodes: 2);
+            using var context = await OpenAsync(root, expectedNodes: 2);
             var node = await SeedFirstNodeAsync(context, new PhaseData { Status = ChapterStatus.Polishing });
             await RunOnUiThreadWithPumpingAsync(async () =>
             {
@@ -252,7 +252,7 @@ public sealed class ProfileDrivenUiTests : IDisposable
         var root = CreateFolder(("Book.txt", "chapter-one.md\n"), ("chapter-one.md", "# One\n"));
         try
         {
-            var context = await OpenAsync(root, expectedNodes: 1);
+            using var context = await OpenAsync(root, expectedNodes: 1);
             var node = await SeedFirstNodeAsync(context, new PhaseData { Status = ChapterStatus.Polishing });
             await RunOnUiThreadWithPumpingAsync(async () =>
             {
@@ -277,12 +277,12 @@ public sealed class ProfileDrivenUiTests : IDisposable
         var novelRoot = CreateFolder(("Book.txt", "chapter-one.md\n"), ("chapter-one.md", "# One\n"));
         try
         {
-            var story = await OpenAsync(storyRoot, expectedNodes: 2);
+            using var story = await OpenAsync(storyRoot, expectedNodes: 2);
             var storyGantt = new GanttViewModel(story.Workspace, story.PhaseService, story.Notifications);
             Assert.Equal(["Drafting", "Revising"], storyGantt.LegendItems.Select(i => i.Label));
             Assert.Equal(["#38BDF8", "#9D4EDD"], storyGantt.LegendItems.Select(i => i.ColorHex));
 
-            var novel = await OpenAsync(novelRoot, expectedNodes: 1);
+            using var novel = await OpenAsync(novelRoot, expectedNodes: 1);
             var novelGantt = new GanttViewModel(novel.Workspace, novel.PhaseService, novel.Notifications);
             Assert.Equal(GanttProjection.PhaseNames, novelGantt.LegendItems.Select(i => i.Label));
             Assert.Equal(
@@ -302,7 +302,7 @@ public sealed class ProfileDrivenUiTests : IDisposable
         var root = CreateStoryFolder();
         try
         {
-            var context = await OpenAsync(root, expectedNodes: 2);
+            using var context = await OpenAsync(root, expectedNodes: 2);
             var node = await SeedFirstNodeAsync(context, new PhaseData
             {
                 Status = ChapterStatus.Drafting,
@@ -395,7 +395,7 @@ public sealed class ProfileDrivenUiTests : IDisposable
         var root = CreateStoryFolder();
         try
         {
-            var context = await OpenAsync(root, expectedNodes: 2);
+            using var context = await OpenAsync(root, expectedNodes: 2);
             var nodes = context.Workspace.Nodes.ToList();
 
             await RunOnUiThreadWithPumpingAsync(() =>
@@ -426,7 +426,7 @@ public sealed class ProfileDrivenUiTests : IDisposable
         var root = CreateFolder(("Book.txt", "chapter-one.md\n"), ("chapter-one.md", "# One\n"));
         try
         {
-            var context = await OpenAsync(root, expectedNodes: 1);
+            using var context = await OpenAsync(root, expectedNodes: 1);
             var oldNode = await SeedFirstNodeAsync(context, new PhaseData { Status = ChapterStatus.Outlining });
             Assert.Equal("Outlining", oldNode.StatusLabel);
 
@@ -484,7 +484,7 @@ public sealed class ProfileDrivenUiTests : IDisposable
         var root = CreateStoryFolder();
         try
         {
-            var context = await OpenAsync(root, expectedNodes: 2);
+            using var context = await OpenAsync(root, expectedNodes: 2);
             var nodes = context.Workspace.Nodes.ToList();
 
             await RunOnUiThreadWithPumpingAsync(() =>
@@ -511,7 +511,7 @@ public sealed class ProfileDrivenUiTests : IDisposable
         var root = CreateFolder(("Book.txt", "chapter-one.md\n"), ("chapter-one.md", "# One\n"));
         try
         {
-            var context = await OpenAsync(root, expectedNodes: 1);
+            using var context = await OpenAsync(root, expectedNodes: 1);
             var node = context.Workspace.Nodes.Single();
             await RunOnUiThreadWithPumpingAsync(() =>
             {
@@ -704,7 +704,9 @@ public sealed class ProfileDrivenUiTests : IDisposable
     {
         private readonly ManuscriptService _manuscript;
 
-        public void Dispose() => _manuscript.Dispose();
+        private readonly OwnedDisposables _owned = new();
+
+        public void Dispose() => _owned.Dispose();
 
         private readonly MetadataStore _store = new();
         private readonly InMemoryAppSettingsStore _settings = new();
@@ -721,8 +723,8 @@ public sealed class ProfileDrivenUiTests : IDisposable
             var wordCount = new WordCountService();
             var projectSettings = new ProjectSettingsService(_store);
             PhaseService = new PhaseDataService(_store);
-            _editor = new EditorViewModel(_store, Notifications, wordCount);
-            _manuscript = new ManuscriptService(Notifications, exclusions);
+            _editor = _owned.Track(new EditorViewModel(_store, Notifications, wordCount));
+            _manuscript = _owned.Track(new ManuscriptService(Notifications, exclusions));
             LiveContexts.Add(this);
 
             Workspace = new WorkspaceViewModel(

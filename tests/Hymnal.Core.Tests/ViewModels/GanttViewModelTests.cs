@@ -797,7 +797,7 @@ public class GanttViewModelTests
 
         try
         {
-            var context = new IntegrationWorkspaceContext(workspace.Root);
+            using var context = new IntegrationWorkspaceContext(workspace.Root);
             await context.OpenWorkspaceAsync();
 
             var gantt = context.CreateGanttViewModel();
@@ -837,7 +837,7 @@ public class GanttViewModelTests
 
         try
         {
-            var context = new IntegrationWorkspaceContext(workspace.Root);
+            using var context = new IntegrationWorkspaceContext(workspace.Root);
             await context.OpenWorkspaceAsync();
 
             var gantt = context.CreateGanttViewModel();
@@ -979,6 +979,7 @@ public class GanttViewModelTests
 
     private sealed class IntegrationWorkspaceContext : IDisposable
     {
+        private readonly OwnedDisposables _owned = new();
         public RecordingNotificationService NotificationService { get; } = new();
         public MetadataStore MetadataStore { get; } = new();
         public InMemoryAppSettingsStore SettingsStore { get; } = new();
@@ -1002,9 +1003,9 @@ public class GanttViewModelTests
             RegistryService = new ChapterRegistryService(MetadataStore);
             PhaseDataService = new PhaseDataService(MetadataStore);
             TargetsService = new TargetsService(MetadataStore);
-            Editor = new EditorViewModel(MetadataStore, NotificationService, WordCountService);
+            Editor = _owned.Track(new EditorViewModel(MetadataStore, NotificationService, WordCountService));
             var history = new WordCountHistoryService(MetadataStore);
-            ManuscriptService = new ManuscriptService(NotificationService, ExclusionManifestService);
+            ManuscriptService = _owned.Track(new ManuscriptService(NotificationService, ExclusionManifestService));
             StructureService = new RecordingStructureService();
             StructureService.Configure(new BookTxtStructureService(MetadataStore, ExclusionManifestService, RegistryService), ManuscriptService);
 
@@ -1028,10 +1029,7 @@ public class GanttViewModelTests
         public GanttViewModel CreateGanttViewModel() =>
             new(Workspace, PhaseDataService, NotificationService);
 
-        public void Dispose()
-        {
-            ManuscriptService.Dispose();
-        }
+        public void Dispose() => _owned.Dispose();
 
         public async Task OpenWorkspaceAsync()
         {
@@ -1245,6 +1243,7 @@ public class GanttViewModelTests
 
     private sealed class ReorderTestContext : IDisposable
     {
+        private readonly OwnedDisposables _owned = new();
         private readonly string _workspaceRoot;
         private readonly PhaseDataService _phaseDataService;
         private readonly TargetsService _targetsService;
@@ -1264,10 +1263,10 @@ public class GanttViewModelTests
             _notificationService = Substitute.For<INotificationService>();
             StructureService = new RecordingBookTxtStructureService();
 
-            var manuscriptService = new ManuscriptService(
+            var manuscriptService = _owned.Track(new ManuscriptService(
                 _notificationService,
-                new ExclusionManifestService(metadataStore));
-            var editor = new EditorViewModel(metadataStore, _notificationService, new WordCountService());
+                new ExclusionManifestService(metadataStore)));
+            var editor = _owned.Track(new EditorViewModel(metadataStore, _notificationService, new WordCountService()));
 
             Workspace = new WorkspaceViewModel(
                 manuscriptService,
@@ -1363,8 +1362,15 @@ public class GanttViewModelTests
 
         public void Dispose()
         {
-            if (Directory.Exists(_workspaceRoot))
-                Directory.Delete(_workspaceRoot, recursive: true);
+            try
+            {
+                _owned.Dispose();
+            }
+            finally
+            {
+                if (Directory.Exists(_workspaceRoot))
+                    Directory.Delete(_workspaceRoot, recursive: true);
+            }
         }
     }
 

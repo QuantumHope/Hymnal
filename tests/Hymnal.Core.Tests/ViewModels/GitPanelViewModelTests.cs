@@ -10,6 +10,7 @@ using Hymnal.Core.Common;
 using Hymnal.Core.Interfaces;
 using Hymnal.Core.Models;
 using Hymnal.Core.Services;
+using Hymnal.Core.Tests.Infrastructure;
 using Hymnal.Core.Tests.TestDoubles;
 using ReactiveUI.Builder;
 using Xunit;
@@ -392,6 +393,7 @@ public sealed class GitPanelViewModelTests : IDisposable
 
     private sealed class TestContext : IDisposable
     {
+        private readonly OwnedDisposables _owned = new();
         public RecordingNotificationService Notifications { get; } = new();
         public RecordingGitService GitService { get; } = new();
         public RecordingMetadataStore MetadataStore { get; } = new();
@@ -410,13 +412,13 @@ public sealed class GitPanelViewModelTests : IDisposable
             Directory.CreateDirectory(WorkspaceRoot);
             Directory.CreateDirectory(ManuscriptRoot);
 
-            Editor = new EditorViewModel(MetadataStore, Notifications, WordCountService)
+            Editor = _owned.Track(new EditorViewModel(MetadataStore, Notifications, WordCountService)
             {
                 HasWorkspace = true
-            };
+            });
 
             Workspace = new WorkspaceViewModel(
-                new ManuscriptService(Notifications),
+                _owned.Track(new ManuscriptService(Notifications)),
                 new FakeBookTxtStructureService(),
                 new FakeFilePickerService(),
                 SettingsStore,
@@ -433,7 +435,7 @@ public sealed class GitPanelViewModelTests : IDisposable
         }
 
         public GitPanelViewModel CreateGitPanel()
-            => new(Workspace, Editor, GitService, Notifications);
+            => _owned.Track(new GitPanelViewModel(Workspace, Editor, GitService, Notifications));
 
         public void EnableWorkspace()
         {
@@ -494,13 +496,16 @@ public sealed class GitPanelViewModelTests : IDisposable
         {
             try
             {
-                Editor.Dispose();
+                _owned.Dispose();
             }
-            catch
+            finally
             {
-                // Best-effort cleanup.
+                DeleteTempFolders();
             }
+        }
 
+        private void DeleteTempFolders()
+        {
             try
             {
                 if (Directory.Exists(WorkspaceRoot))

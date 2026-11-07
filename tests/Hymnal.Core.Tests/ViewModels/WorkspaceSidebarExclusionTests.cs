@@ -33,7 +33,7 @@ public sealed class WorkspaceSidebarExclusionTests
 
         try
         {
-            var context = new TestContext(workspace.Root);
+            using var context = new TestContext(workspace.Root);
             var excluded = await context.ExclusionManifestService.ExcludeAsync(workspace.Root, "part-one/chapter-02.md");
             Assert.True(excluded.IsSuccess, excluded.Error);
 
@@ -75,14 +75,14 @@ public sealed class WorkspaceSidebarExclusionTests
 
         try
         {
-            var firstContext = new TestContext(workspace.Root);
+            using var firstContext = new TestContext(workspace.Root);
             var excluded = await firstContext.ExclusionManifestService.ExcludeAsync(workspace.Root, "chapter-two.md");
             Assert.True(excluded.IsSuccess, excluded.Error);
             await firstContext.OpenWorkspaceAsync();
             await WaitForNodesAsync(firstContext.Workspace, 2);
             Assert.Contains(firstContext.Workspace.Nodes, node => node.Node.RelativePath == "chapter-two.md" && node.Node.IsExcluded);
 
-            var secondContext = new TestContext(workspace.Root);
+            using var secondContext = new TestContext(workspace.Root);
             await secondContext.OpenWorkspaceAsync();
             await WaitForNodesAsync(secondContext.Workspace, 2);
 
@@ -107,7 +107,7 @@ public sealed class WorkspaceSidebarExclusionTests
 
         try
         {
-            var context = new TestContext(workspace.Root);
+            using var context = new TestContext(workspace.Root);
             var excluded = await context.ExclusionManifestService.ExcludeAsync(workspace.Root, "chapter-two.md");
             Assert.True(excluded.IsSuccess, excluded.Error);
             await context.OpenWorkspaceAsync();
@@ -149,7 +149,7 @@ public sealed class WorkspaceSidebarExclusionTests
 
         try
         {
-            var context = new TestContext(workspace.Root);
+            using var context = new TestContext(workspace.Root);
             await context.OpenWorkspaceAsync();
             await WaitForNodesAsync(context.Workspace, 3);
 
@@ -179,7 +179,7 @@ public sealed class WorkspaceSidebarExclusionTests
 
         try
         {
-            var context = new TestContext(workspace.Root);
+            using var context = new TestContext(workspace.Root);
             await context.OpenWorkspaceAsync();
             await WaitForNodesAsync(context.Workspace, 3);
 
@@ -212,7 +212,7 @@ public sealed class WorkspaceSidebarExclusionTests
 
         try
         {
-            var context = new TestContext(workspace.Root, new FailingIncludeStructureService("simulated manifest save after Book.txt write failure"));
+            using var context = new TestContext(workspace.Root, new FailingIncludeStructureService("simulated manifest save after Book.txt write failure"));
             var excluded = await context.ExclusionManifestService.ExcludeAsync(workspace.Root, "chapter-two.md");
             Assert.True(excluded.IsSuccess, excluded.Error);
             await context.OpenWorkspaceAsync();
@@ -242,7 +242,7 @@ public sealed class WorkspaceSidebarExclusionTests
 
         try
         {
-            var context = new TestContext(workspace.Root, new FailingExcludeStructureService("simulated Book.txt write or validation failure"));
+            using var context = new TestContext(workspace.Root, new FailingExcludeStructureService("simulated Book.txt write or validation failure"));
             await context.OpenWorkspaceAsync();
             await WaitForNodesAsync(context.Workspace, 2);
             var before = context.Workspace.Nodes.Select(node => (node.Node.RelativePath, node.Node.IsExcluded)).ToArray();
@@ -270,7 +270,7 @@ public sealed class WorkspaceSidebarExclusionTests
 
         try
         {
-            var context = new TestContext(workspace.Root);
+            using var context = new TestContext(workspace.Root);
             var excluded = await context.ExclusionManifestService.ExcludeAsync(workspace.Root, "chapter-two.md");
             Assert.True(excluded.IsSuccess, excluded.Error);
             await context.OpenWorkspaceAsync();
@@ -378,8 +378,9 @@ public sealed class WorkspaceSidebarExclusionTests
     private static string FormatErrors(RecordingNotificationService notifications) =>
         notifications.Errors.Count == 0 ? "none" : string.Join(" | ", notifications.Errors);
 
-    private sealed class TestContext
+    private sealed class TestContext : IDisposable
     {
+        private readonly OwnedDisposables _owned = new();
         public RecordingNotificationService NotificationService { get; } = new();
         public MetadataStore MetadataStore { get; } = new();
         public InMemoryAppSettingsStore SettingsStore { get; } = new();
@@ -401,10 +402,10 @@ public sealed class WorkspaceSidebarExclusionTests
             var effectiveStructureService = structureService ?? new BookTxtStructureService(MetadataStore, ExclusionManifestService);
             PhaseDataService = new PhaseDataService(MetadataStore);
             TargetsService = new TargetsService(MetadataStore);
-            Editor = new EditorViewModel(MetadataStore, NotificationService, WordCountService);
+            Editor = _owned.Track(new EditorViewModel(MetadataStore, NotificationService, WordCountService));
             var registry = new ChapterRegistryService(MetadataStore);
             var history = new WordCountHistoryService(MetadataStore);
-            ManuscriptService = new ManuscriptService(NotificationService, ExclusionManifestService);
+            ManuscriptService = _owned.Track(new ManuscriptService(NotificationService, ExclusionManifestService));
 
             Workspace = new WorkspaceViewModel(
                 ManuscriptService,
@@ -422,6 +423,8 @@ public sealed class WorkspaceSidebarExclusionTests
                 ExclusionManifestService,
                 OrphanFileDiscoveryService);
         }
+
+        public void Dispose() => _owned.Dispose();
 
         public async Task OpenWorkspaceAsync()
         {

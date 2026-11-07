@@ -27,7 +27,7 @@ public sealed class CorkboardViewModelTests
     [Fact]
     public void Ctor_ProjectsMixedItemsInBookOrder()
     {
-        var context = CreateContext();
+        using var context = CreateContext();
         SeedWorkspaceNodes(context,
             CreateChapter(context, "part-one/part.md", "Part One", NodeKind.Part),
             CreateChapter(context, "part-one/chapter-one.md", "Chapter One"),
@@ -54,7 +54,7 @@ public sealed class CorkboardViewModelTests
     [Fact]
     public void Ctor_IncludesEmptyPartHintsAndEmptyWorkspaceHasNoItems()
     {
-        var context = CreateContext();
+        using var context = CreateContext();
 
         using var emptyBoard = context.CreateCorkboard();
         Assert.Empty(emptyBoard.Items);
@@ -81,7 +81,7 @@ public sealed class CorkboardViewModelTests
     [Fact]
     public void WorkspaceNodeCollectionChanges_RebuildBoardLive()
     {
-        var context = CreateContext();
+        using var context = CreateContext();
         SeedWorkspaceNodes(context,
             CreateChapter(context, "part-one/part.md", "Part One", NodeKind.Part),
             CreateChapter(context, "part-one/chapter-one.md", "Chapter One"));
@@ -100,7 +100,7 @@ public sealed class CorkboardViewModelTests
     [Fact]
     public async Task SelectCardCommand_EnforcesSelectionExclusivity()
     {
-        var context = CreateContext();
+        using var context = CreateContext();
         SeedWorkspaceNodes(context,
             CreateChapter(context, "part-one/part.md", "Part One", NodeKind.Part),
             CreateChapter(context, "part-one/chapter-one.md", "Chapter One"),
@@ -124,7 +124,7 @@ public sealed class CorkboardViewModelTests
     [Fact]
     public async Task SelectCardCommand_IgnoresPartItems()
     {
-        var context = CreateContext();
+        using var context = CreateContext();
         SeedWorkspaceNodes(context,
             CreateChapter(context, "part-one/part.md", "Part One", NodeKind.Part),
             CreateChapter(context, "part-one/chapter-one.md", "Chapter One"));
@@ -144,7 +144,7 @@ public sealed class CorkboardViewModelTests
     [Fact]
     public void OpenSelectedCardCommand_WithNoSelection_DoesNotEmit()
     {
-        var context = CreateContext();
+        using var context = CreateContext();
         SeedWorkspaceNodes(context,
             CreateChapter(context, "part-one/part.md", "Part One", NodeKind.Part),
             CreateChapter(context, "part-one/chapter-one.md", "Chapter One"));
@@ -161,7 +161,7 @@ public sealed class CorkboardViewModelTests
     [Fact]
     public async Task OpenSelectedCardCommand_EmitsSelectedChapter()
     {
-        var context = CreateContext();
+        using var context = CreateContext();
         var chapterNode = CreateChapter(context, "part-one/chapter-one.md", "Chapter One");
         SeedWorkspaceNodes(context,
             CreateChapter(context, "part-one/part.md", "Part One", NodeKind.Part),
@@ -183,7 +183,7 @@ public sealed class CorkboardViewModelTests
     [Fact]
     public async Task OpenCardCommand_EmitsSpecificChapter()
     {
-        var context = CreateContext();
+        using var context = CreateContext();
         var chapterNode = CreateChapter(context, "part-one/chapter-one.md", "Chapter One");
         SeedWorkspaceNodes(context,
             CreateChapter(context, "part-one/part.md", "Part One", NodeKind.Part),
@@ -204,7 +204,7 @@ public sealed class CorkboardViewModelTests
     [Fact]
     public async Task ReorderCardCommand_CallsStructureServiceAndReorders()
     {
-        var context = CreateContext();
+        using var context = CreateContext();
         context.EnableWorkspace();
         SeedWorkspaceNodes(context,
             CreateChapter(context, "part-one/part.md", "Part One", NodeKind.Part),
@@ -230,7 +230,7 @@ public sealed class CorkboardViewModelTests
     [Fact]
     public async Task DropCardCommand_SamePartAfterSibling_ReordersAtAllNodeBookTxtIndex()
     {
-        var context = CreateContext();
+        using var context = CreateContext();
         context.EnableWorkspace();
         SeedWorkspaceNodes(context,
             CreateChapter(context, "part-one/part.md", "Part One", NodeKind.Part),
@@ -257,7 +257,7 @@ public sealed class CorkboardViewModelTests
     [Fact]
     public async Task DropCardCommand_CrossPartAfterSibling_MovesFileToTargetPartFolder()
     {
-        var context = CreateContext();
+        using var context = CreateContext();
         context.EnableWorkspace();
         SeedWorkspaceNodes(context,
             CreateChapter(context, "part-one/part.md", "Part One", NodeKind.Part),
@@ -283,7 +283,7 @@ public sealed class CorkboardViewModelTests
     [Fact]
     public async Task DropCardCommand_CrossPartIntoNestedPart_UsesFullTargetFolderPath()
     {
-        var context = CreateContext();
+        using var context = CreateContext();
         context.EnableWorkspace();
         SeedWorkspaceNodes(context,
             CreateChapter(context, "part-one/part.md", "Part One", NodeKind.Part),
@@ -310,7 +310,7 @@ public sealed class CorkboardViewModelTests
     [Fact]
     public async Task DropCardCommand_IntoEmptyPart_MovesToSlotImmediatelyAfterPartDivider()
     {
-        var context = CreateContext();
+        using var context = CreateContext();
         context.EnableWorkspace();
         SeedWorkspaceNodes(context,
             CreateChapter(context, "part-one/part.md", "Part One", NodeKind.Part),
@@ -334,7 +334,7 @@ public sealed class CorkboardViewModelTests
     [Fact]
     public async Task DropCardCommand_InvalidMissingExcludedAndSelfDrops_DoNotCallCoreAndSurfaceStructuralError()
     {
-        var context = CreateContext();
+        using var context = CreateContext();
         context.EnableWorkspace();
         context.OrphanDiscovery.Orphans = new[]
         {
@@ -382,7 +382,7 @@ public sealed class CorkboardViewModelTests
     [Fact]
     public async Task DropCardCommand_MoveFailure_LeavesProjectionIntactAndSurfacesStructuralError()
     {
-        var context = CreateContext();
+        using var context = CreateContext();
         context.EnableWorkspace();
         context.StructureService.MoveResult = Result<Unit>.Fail("move failed on disk");
         SeedWorkspaceNodes(context,
@@ -418,7 +418,7 @@ public sealed class CorkboardViewModelTests
     [Fact]
     public async Task DropCardCommand_ReloadFailure_SurfacesStructuralErrorAfterSuccessfulMove()
     {
-        var context = CreateContext();
+        using var context = CreateContext();
         context.EnableWorkspace();
         context.Workspace.ReloadResult = Result<Unit>.Fail("reload failed after move");
         SeedWorkspaceNodes(context,
@@ -447,7 +447,7 @@ public sealed class CorkboardViewModelTests
     [Fact]
     public async Task RemoveFromBookCommand_UsesCanonicalExcludeReloadsAndClearsSelectionWhenCardBecomesExcluded()
     {
-        var context = CreateContext();
+        using var context = CreateContext();
         context.EnableWorkspace();
         context.OrphanDiscovery.Orphans = new[]
         {
@@ -480,7 +480,7 @@ public sealed class CorkboardViewModelTests
     [Fact]
     public async Task IncludeExistingChapterCommand_WithIndex_UsesCanonicalIncludeAndReloads()
     {
-        var context = CreateContext();
+        using var context = CreateContext();
         context.EnableWorkspace();
         context.OrphanDiscovery.Orphans = new[]
         {
@@ -522,7 +522,7 @@ public sealed class CorkboardViewModelTests
     [Fact]
     public async Task IncludeExistingChapterCommand_WithPartPath_UsesCanonicalIncludeAfterPartAndReloads()
     {
-        var context = CreateContext();
+        using var context = CreateContext();
         context.EnableWorkspace();
         context.OrphanDiscovery.Orphans = new[]
         {
@@ -557,7 +557,7 @@ public sealed class CorkboardViewModelTests
     [Fact]
     public async Task IncludeExistingChapterCommand_WithoutIndexOrPartPath_FailsLocallyWithoutCallingCore()
     {
-        var context = CreateContext();
+        using var context = CreateContext();
         context.EnableWorkspace();
         SeedWorkspaceNodes(context,
             CreateChapter(context, "part-one/part.md", "Part One", NodeKind.Part));
@@ -582,7 +582,7 @@ public sealed class CorkboardViewModelTests
     [Fact]
     public async Task IncludeExistingChapterCommand_CoreFailure_LeavesProjectionIntactAndSurfacesStructuralError()
     {
-        var context = CreateContext();
+        using var context = CreateContext();
         context.EnableWorkspace();
         context.StructureService.IncludeExistingIndexResult = Result<Unit>.Fail("include denied by structure service");
         context.OrphanDiscovery.Orphans = new[]
@@ -616,7 +616,7 @@ public sealed class CorkboardViewModelTests
     [Fact]
     public async Task RemoveFromBookCommand_CoreFailure_LeavesProjectionIntactAndSurfacesStructuralError()
     {
-        var context = CreateContext();
+        using var context = CreateContext();
         context.EnableWorkspace();
         context.StructureService.ExcludeResult = Result<Unit>.Fail("exclude denied by structure service");
         SeedWorkspaceNodes(context,
@@ -646,7 +646,7 @@ public sealed class CorkboardViewModelTests
     [Fact]
     public async Task StructuralFailure_LeavesSelectionIntactAndSurfacesError()
     {
-        var context = CreateContext();
+        using var context = CreateContext();
         context.EnableWorkspace();
         context.StructureService.ReorderResult = Result<Unit>.Fail("disk write exploded");
         SeedWorkspaceNodes(context,
@@ -676,7 +676,7 @@ public sealed class CorkboardViewModelTests
     [Fact]
     public void CardDisplaySize_DefaultsToLarge()
     {
-        var context = CreateContext();
+        using var context = CreateContext();
         using var board = context.CreateCorkboard();
 
         Assert.Equal(CardDisplaySize.Large, board.CardDisplaySize);
@@ -685,7 +685,7 @@ public sealed class CorkboardViewModelTests
     [Fact]
     public async Task SetCardSizeCommand_UpdatesCardDisplaySize()
     {
-        var context = CreateContext();
+        using var context = CreateContext();
         using var board = context.CreateCorkboard();
 
         await ExecuteCommandAsync(board.SetCardSizeCommand.Execute(CardDisplaySize.Medium));
@@ -704,7 +704,7 @@ public sealed class CorkboardViewModelTests
     [Fact]
     public async Task TogglePartExpandedCommand_CollapsesAndExpandsChildCards()
     {
-        var context = CreateContext();
+        using var context = CreateContext();
         SeedWorkspaceNodes(context,
             CreateChapter(context, "part-one/part.md", "Part One", NodeKind.Part),
             CreateChapter(context, "part-one/chapter-one.md", "Chapter One"),
@@ -736,7 +736,7 @@ public sealed class CorkboardViewModelTests
     [Fact]
     public async Task RebuildItems_PreservesCollapsedPartState()
     {
-        var context = CreateContext();
+        using var context = CreateContext();
         SeedWorkspaceNodes(context,
             CreateChapter(context, "part-one/part.md", "Part One", NodeKind.Part),
             CreateChapter(context, "part-one/chapter-one.md", "Chapter One"));
@@ -764,7 +764,7 @@ public sealed class CorkboardViewModelTests
     [Fact]
     public async Task DeleteChapterCommand_RequiresConfirmation()
     {
-        var context = CreateContext();
+        using var context = CreateContext();
         context.EnableWorkspace();
         SeedWorkspaceNodes(context,
             CreateChapter(context, "part-one/part.md", "Part One", NodeKind.Part),
@@ -788,7 +788,7 @@ public sealed class CorkboardViewModelTests
     [Fact]
     public void BeginInlineCreate_BetweenChapterCards_InsertsPlaceholderAtRequestedVisualPosition()
     {
-        var context = CreateContext();
+        using var context = CreateContext();
         SeedWorkspaceNodes(context,
             CreateChapter(context, "part-one/part.md", "Part One", NodeKind.Part),
             CreateChapter(context, "part-one/chapter-one.md", "Chapter One"),
@@ -816,7 +816,7 @@ public sealed class CorkboardViewModelTests
     [Fact]
     public void BeginInlineCreate_BeforeFirstPart_InsertsPlaceholderAtBoardStart()
     {
-        var context = CreateContext();
+        using var context = CreateContext();
         SeedWorkspaceNodes(context,
             CreateChapter(context, "part-one/part.md", "Part One", NodeKind.Part),
             CreateChapter(context, "part-one/chapter-one.md", "Chapter One"));
@@ -834,7 +834,7 @@ public sealed class CorkboardViewModelTests
     [Fact]
     public void BeginInlineCreate_AfterPartIntoEmptyPart_InsertsImmediatelyAfterDivider()
     {
-        var context = CreateContext();
+        using var context = CreateContext();
         SeedWorkspaceNodes(context,
             CreateChapter(context, "part-one/part.md", "Part One", NodeKind.Part));
 
@@ -851,7 +851,7 @@ public sealed class CorkboardViewModelTests
     [Fact]
     public void BeginInlineCreate_AfterLastChapterInPart_DoesNotCrossIntoNextPart()
     {
-        var context = CreateContext();
+        using var context = CreateContext();
         SeedWorkspaceNodes(context,
             CreateChapter(context, "part-one/part.md", "Part One", NodeKind.Part),
             CreateChapter(context, "part-one/chapter-one.md", "Chapter One"),
@@ -871,7 +871,7 @@ public sealed class CorkboardViewModelTests
     [Fact]
     public void GetInsertIndexAfterChapter_UsesAllBookTxtEntries()
     {
-        var context = CreateContext();
+        using var context = CreateContext();
         SeedWorkspaceNodes(context,
             CreateChapter(context, "part-one/part.md", "Part One", NodeKind.Part),
             CreateChapter(context, "part-one/chapter-one.md", "Chapter One"),
@@ -887,7 +887,7 @@ public sealed class CorkboardViewModelTests
     [Fact]
     public async Task CommitInlineCreateAsync_BetweenChapterCards_CallsCreateNewChapterAndReloads()
     {
-        var context = CreateContext();
+        using var context = CreateContext();
         context.EnableWorkspace();
         SeedWorkspaceNodes(context,
             CreateChapter(context, "part-one/part.md", "Part One", NodeKind.Part),
@@ -910,7 +910,7 @@ public sealed class CorkboardViewModelTests
     [Fact]
     public async Task CommitInlineCreateAsync_NestedPart_PreservesPartFolderPrefix()
     {
-        var context = CreateContext();
+        using var context = CreateContext();
         context.EnableWorkspace();
         SeedWorkspaceNodes(context,
             CreateChapter(context, "part-two/part.md", "Part Two", NodeKind.Part),
@@ -931,7 +931,7 @@ public sealed class CorkboardViewModelTests
     [Fact]
     public async Task CommitInlineCreateAsync_DuplicatePathFailure_SurfacesCreateChapterErrorWithProposedPath()
     {
-        var context = CreateContext();
+        using var context = CreateContext();
         context.EnableWorkspace();
         context.StructureService.CreateResult = Result<Unit>.Fail("Chapter file 'part-two/act-one/scene-1.md' already exists.");
         SeedWorkspaceNodes(context,
@@ -958,7 +958,7 @@ public sealed class CorkboardViewModelTests
     [Fact]
     public void GetBookChapterInsertIndex_WithParts_ReturnsIndexOfFirstPart()
     {
-        var context = CreateContext();
+        using var context = CreateContext();
         SeedWorkspaceNodes(context,
             CreateChapter(context, "prologue.md", "Prologue"),
             CreateChapter(context, "part-one/part.md", "Part One", NodeKind.Part),
@@ -975,7 +975,7 @@ public sealed class CorkboardViewModelTests
     [Fact]
     public void GetBookChapterInsertIndex_WithNoParts_ReturnsNodeCount()
     {
-        var context = CreateContext();
+        using var context = CreateContext();
         SeedWorkspaceNodes(context,
             CreateChapter(context, "chapter-one.md", "Chapter One"),
             CreateChapter(context, "chapter-two.md", "Chapter Two"));
@@ -988,7 +988,7 @@ public sealed class CorkboardViewModelTests
     [Fact]
     public void GetBookChapterInsertIndex_WithEmptyBook_ReturnsZero()
     {
-        var context = CreateContext();
+        using var context = CreateContext();
 
         using var board = context.CreateCorkboard();
 
@@ -1057,8 +1057,9 @@ public sealed class CorkboardViewModelTests
         return observed;
     }
 
-    private sealed class TestContext
+    private sealed class TestContext : IDisposable
     {
+        private readonly OwnedDisposables _owned = new();
         public FakeNotificationService NotificationService { get; } = new();
         public FakeMetadataStore MetadataStore { get; } = new();
         public FakeAppSettingsStore SettingsStore { get; } = new();
@@ -1078,12 +1079,12 @@ public sealed class CorkboardViewModelTests
 
         public TestContext()
         {
-            EditorViewModel = new EditorViewModel(MetadataStore, NotificationService, WordCountService);
+            EditorViewModel = _owned.Track(new EditorViewModel(MetadataStore, NotificationService, WordCountService));
             RegistryService = new ChapterRegistryService(MetadataStore);
             PhaseDataService = new PhaseDataService(MetadataStore);
             TargetsService = new TargetsService(MetadataStore);
             HistoryService = new WordCountHistoryService(MetadataStore);
-            ManuscriptService = new ManuscriptService(NotificationService);
+            ManuscriptService = _owned.Track(new ManuscriptService(NotificationService));
             Workspace = new SpyWorkspaceViewModel(
                 ManuscriptService,
                 StructureService,
@@ -1114,6 +1115,8 @@ public sealed class CorkboardViewModelTests
             SetPrivateField(Workspace, "_model", model);
             SetPrivateField(Workspace, "_hasWorkspace", true);
         }
+
+        public void Dispose() => _owned.Dispose();
     }
 
     private sealed class SpyWorkspaceViewModel : WorkspaceViewModel
