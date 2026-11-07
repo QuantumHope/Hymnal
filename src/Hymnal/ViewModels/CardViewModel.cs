@@ -174,24 +174,8 @@ public sealed class CardViewModel : ViewModelBase, IDisposable
         this.RaisePropertyChanged(nameof(PhaseEndDateDisplay));
     }
 
-    private static string FormatTargetDisplay(WordCountTarget? target, ProjectProfile profile)
-    {
-        if (target is null)
-            return "No target";
-
-        string text;
-        if (target.MinWords.HasValue && target.MaxWords.HasValue)
-            text = $"{target.MinWords:N0}–{target.MaxWords:N0} w";
-        else if (target.MinWords.HasValue)
-            text = $"{target.MinWords:N0} w";
-        else if (target.MaxWords.HasValue)
-            text = $"≤{target.MaxWords:N0} w";
-        else
-            return "No target";
-
-        var label = profile.PresetLabel(target.Preset);
-        return label is not null && target.Preset != "custom" ? $"{label} · {text}" : text;
-    }
+    private static string FormatTargetDisplay(WordCountTarget? target, ProjectProfile profile) =>
+        TargetFormatter.Format(target, profile, "No target");
 
     private static double CalculateProximityFill(WordCountTarget? target, int wordCount)
     {

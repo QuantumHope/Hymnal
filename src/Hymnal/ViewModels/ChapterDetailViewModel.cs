@@ -134,7 +134,7 @@ public sealed class ChapterDetailViewModel : ViewModelBase, IDisposable
         _wordCount = chapterVm.WordCount;
         _hasTarget = chapterVm.HasTarget;
         _proximityFill = chapterVm.ProximityFill;
-        _targetDisplay = FormatTargetDisplay(chapterVm.Target);
+        _targetDisplay = FormatTargetDisplay(chapterVm.Target, chapterVm.Profile);
         _pendingTarget = chapterVm.Target?.MinWords;
 
         PhaseScheduleRows = new ObservableCollection<PhaseScheduleRowViewModel>(
@@ -152,7 +152,7 @@ public sealed class ChapterDetailViewModel : ViewModelBase, IDisposable
         _innerDisposables.Add(chapterVm.WhenAnyValue(x => x.ProximityFill)
             .Subscribe(f => ProximityFill = f));
         _innerDisposables.Add(chapterVm.WhenAnyValue(x => x.Target)
-            .Subscribe(t => TargetDisplay = FormatTargetDisplay(t)));
+            .Subscribe(t => TargetDisplay = FormatTargetDisplay(t, Profile)));
         _innerDisposables.Add(chapterVm.WhenAnyValue(x => x.PhaseData)
             .Subscribe(pd => SyncScheduleRows(pd)));
 
@@ -368,17 +368,8 @@ public sealed class ChapterDetailViewModel : ViewModelBase, IDisposable
 
     // ── Static helpers ────────────────────────────────────────────────────────
 
-    private static string FormatTargetDisplay(WordCountTarget? target)
-    {
-        if (target == null) return "—";
-        if (target.MinWords.HasValue && target.MaxWords.HasValue)
-            return $"{target.MinWords:N0}–{target.MaxWords:N0} w";
-        if (target.MinWords.HasValue)
-            return $"{target.MinWords:N0} w";
-        if (target.MaxWords.HasValue)
-            return $"≤{target.MaxWords:N0} w";
-        return "—";
-    }
+    private static string FormatTargetDisplay(WordCountTarget? target, ProjectProfile profile) =>
+        TargetFormatter.Format(target, profile, "—");
 
     // ── IDisposable ───────────────────────────────────────────────────────────
 

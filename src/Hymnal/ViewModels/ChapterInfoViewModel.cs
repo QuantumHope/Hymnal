@@ -789,6 +789,8 @@ public sealed class ChapterInfoViewModel : ViewModelBase, IDisposable
             target = new WordCountTarget
             {
                 MinWords = minWords.Value,
+                // Editing only the min keeps the existing max in presets-capable projects.
+                MaxWords = HasTargetPresets ? preset?.MaxWords ?? chapterVm.Target?.MaxWords : null,
                 Preset = preset is null ? null : TargetPresets.FirstOrDefault(p => p.MinWords is null && p.MaxWords is null)?.Key
             };
 
@@ -851,22 +853,8 @@ public sealed class ChapterInfoViewModel : ViewModelBase, IDisposable
 
     // ── Static helpers ───────────────────────────────────────────────────────
 
-    private static string FormatTargetDisplay(WordCountTarget? target, ProjectProfile profile)
-    {
-        if (target == null) return "—";
-        string text;
-        if (target.MinWords.HasValue && target.MaxWords.HasValue)
-            text = $"{target.MinWords:N0}–{target.MaxWords:N0} w";
-        else if (target.MinWords.HasValue)
-            text = $"{target.MinWords:N0} w";
-        else if (target.MaxWords.HasValue)
-            text = $"≤{target.MaxWords:N0} w";
-        else
-            return "—";
-
-        var label = profile.PresetLabel(target.Preset);
-        return label is not null && target.Preset != "custom" ? $"{label} · {text}" : text;
-    }
+    private static string FormatTargetDisplay(WordCountTarget? target, ProjectProfile profile) =>
+        TargetFormatter.Format(target, profile, "—");
 
     public async Task RestoreSettingsAsync()
     {

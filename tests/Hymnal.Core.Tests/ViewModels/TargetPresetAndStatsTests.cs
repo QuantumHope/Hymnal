@@ -250,6 +250,84 @@ public sealed class TargetPresetAndStatsTests
         finally { DeleteFolder(root); }
     }
 
+    [Fact]
+    public async Task Chapter_info_min_only_edit_keeps_existing_max()
+    {
+        var root = CreateFolder(
+            ("Book.txt", "scene-one.md\n"), ("scene-one.md", "# One\n"), (".hymnal-data/project.json", StoryJson));
+        try
+        {
+            var context = await OpenAsync(root, expectedNodes: 1);
+            var node = context.Workspace.Nodes.First();
+            await WaitUntilAsync(() => !string.IsNullOrEmpty(node.Uuid), () => "No UUID.");
+            var info = await context.CreateChapterInfoForAsync(node);
+            await RunOnUiThreadWithPumpingAsync(async () =>
+            {
+                await node.SetTargetCommand.Execute(
+                    new WordCountTarget { MinWords = 1000, MaxWords = 7500, Preset = "shortStory" });
+                await info.SetTargetCommand.Execute(2000);
+                return 0;
+            });
+
+            var saved = (await new TargetsService(new MetadataStore()).LoadAsync(root))[node.Uuid];
+            Assert.Equal(2000, saved.MinWords);
+            Assert.Equal(7500, saved.MaxWords);
+            Assert.Equal("custom", saved.Preset);
+        }
+        finally { DeleteFolder(root); }
+    }
+
+    [Fact]
+    public async Task Confirm_without_edits_on_loaded_preset_target_leaves_it_unchanged()
+    {
+        var root = CreateFolder();
+        try
+        {
+            var targets = new TargetsService(new MetadataStore());
+            var stored = new WordCountTarget { MinWords = 7500, MaxWords = 17500, Preset = "novelette" };
+            await targets.UpsertAsync(root, "uuid-1", stored);
+            var chapter = CreateChapter(root, ProjectKind.Story, NodeKind.Chapter, targets, stored);
+
+            await RunOnUiThreadWithPumpingAsync(async () =>
+            {
+                await chapter.OpenTargetFlyoutCommand.Execute();
+                await chapter.ConfirmTargetCommand.Execute();
+                return 0;
+            });
+
+            var saved = (await targets.LoadAsync(root))["uuid-1"];
+            Assert.Equal("novelette", saved.Preset);
+            Assert.Equal(7500, saved.MinWords);
+            Assert.Equal(17500, saved.MaxWords);
+        }
+        finally { DeleteFolder(root); }
+    }
+
+    [Fact]
+    public async Task Anthology_part_target_persists_and_reloads()
+    {
+        var root = CreateAnthologyFolder();
+        try
+        {
+            var first = await OpenAsync(root, expectedNodes: 3);
+            var part = first.Workspace.Nodes.First(n => n.Node.Kind == NodeKind.Part);
+            await WaitUntilAsync(() => !string.IsNullOrEmpty(part.Uuid), () => "No part UUID.");
+            await RunOnUiThreadWithPumpingAsync(async () =>
+            {
+                await part.SetTargetCommand.Execute(
+                    new WordCountTarget { MinWords = 1000, MaxWords = 7500, Preset = "shortStory" });
+                return 0;
+            });
+
+            var second = await OpenAsync(root, expectedNodes: 3);
+            var reloaded = second.Workspace.Nodes.First(n => n.Node.Kind == NodeKind.Part);
+            await WaitUntilAsync(() => reloaded.Target is not null, () => "Part target did not reload.");
+            Assert.Equal("shortStory", reloaded.Target!.Preset);
+            Assert.Equal(7500, reloaded.Target.MaxWords);
+        }
+        finally { DeleteFolder(root); }
+    }
+
     // ── Helpers ───────────────────────────────────────────────────────────────
 
     private static string CreateAnthologyFolder() => CreateFolder(

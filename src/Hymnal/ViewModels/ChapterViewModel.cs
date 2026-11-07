@@ -320,6 +320,7 @@ public sealed class ChapterViewModel : ViewModelBase, IDisposable
         _target = target;
         _pendingMinWords = target?.MinWords;
         _pendingMaxWords = target?.MaxWords;
+        _pendingPreset = ResolvePreset(target);
 
         // ── OAPH: WordCountDisplay ────────────────────────────────────────────
         _wordCountDisplay = this
@@ -398,7 +399,11 @@ public sealed class ChapterViewModel : ViewModelBase, IDisposable
             ClearTargetCommand.ThrownExceptions
                 .Subscribe(ex => _notificationService.ShowError(ex.Message)));
 
-        OpenTargetFlyoutCommand = ReactiveCommand.Create(() => TargetFlyoutOpenRequested?.Invoke(this));
+        OpenTargetFlyoutCommand = ReactiveCommand.Create(() =>
+        {
+            ResetPendingFromTarget();
+            TargetFlyoutOpenRequested?.Invoke(this);
+        });
         Disposables.Add(
             OpenTargetFlyoutCommand.ThrownExceptions
                 .Subscribe(ex => _notificationService.ShowError(ex.Message)));
@@ -520,12 +525,7 @@ public sealed class ChapterViewModel : ViewModelBase, IDisposable
         await Avalonia.Threading.Dispatcher.UIThread.InvokeAsync(() =>
         {
             Target = target;
-            _pendingPreset = target?.Preset is { } key
-                ? Profile.TargetPresets.FirstOrDefault(p => p.Key == key)
-                : null;
-            this.RaisePropertyChanged(nameof(PendingPreset));
-            PendingMinWords = target?.MinWords;
-            PendingMaxWords = target?.MaxWords;
+            ResetPendingFromTarget();
         });
     }
 
@@ -539,6 +539,18 @@ public sealed class ChapterViewModel : ViewModelBase, IDisposable
         };
         await SetTargetAsync(newTarget).ConfigureAwait(false);
         TargetFlyoutCloseRequested?.Invoke(this);
+    }
+
+    private TargetPreset? ResolvePreset(WordCountTarget? target) =>
+        target?.Preset is { } key ? Profile.TargetPresets.FirstOrDefault(p => p.Key == key) : null;
+
+    /// <summary>Re-stages the flyout fields from the stored <see cref="Target"/> (without re-applying preset ranges).</summary>
+    private void ResetPendingFromTarget()
+    {
+        _pendingPreset = ResolvePreset(Target);
+        this.RaisePropertyChanged(nameof(PendingPreset));
+        PendingMinWords = Target?.MinWords;
+        PendingMaxWords = Target?.MaxWords;
     }
 
     /// <summary>Preset key to persist: the staged preset, or the custom preset once its range was edited.</summary>
