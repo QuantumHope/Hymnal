@@ -324,6 +324,8 @@ public sealed class IdeasViewModel : ViewModelBase, IDisposable
         while (true)
         {
             await FlushAsync();
+            if (_disposed)
+                return;
             if (generation != _loadGeneration)
             {
                 await _currentLoad;
@@ -346,6 +348,8 @@ public sealed class IdeasViewModel : ViewModelBase, IDisposable
             }
 
             var result = await _ideas.LoadAsync(root);
+            if (_disposed)
+                return;
             if (generation != _loadGeneration)
             {
                 await _currentLoad;
@@ -509,6 +513,10 @@ public sealed class IdeasViewModel : ViewModelBase, IDisposable
             var result = await _promoter.PromoteAsync(
                 root, _workspace.BookTxtPath, card.ToIdea(), fileName.Trim(), _workspace.Profile);
 
+            // Disposed mid-promote (window closed): the story exists on disk; there is no view left to update.
+            if (_disposed)
+                return;
+
             if (!result.IsSuccess)
                 _notifications.ShowError(result.Error!);
 
@@ -519,7 +527,7 @@ public sealed class IdeasViewModel : ViewModelBase, IDisposable
                 var reload = await _workspace.ReloadProjectAsync();
                 if (!reload.IsSuccess)
                     _notifications.ShowError(reload.Error!);
-                else if (result.IsSuccess && _workspace.SelectChapterByPath(result.Value!))
+                else if (result.IsSuccess && !_disposed && _workspace.SelectChapterByPath(result.Value!))
                     _storyOpened.OnNext(result.Value!);
             }
         }
@@ -527,7 +535,7 @@ public sealed class IdeasViewModel : ViewModelBase, IDisposable
         {
             try
             {
-                if (promoterRan)
+                if (promoterRan && !_disposed)
                     await LoadAsync();
             }
             finally
@@ -598,7 +606,7 @@ public sealed class IdeasViewModel : ViewModelBase, IDisposable
     {
         // While promoting, the cards are about to be replaced by the reloaded file; saving them
         // would write back a stale copy of the promoted idea.
-        if (IsReadOnly || IsPromoting || _loadedRoot == null)
+        if (_disposed || IsReadOnly || IsPromoting || _loadedRoot == null)
             return;
         _savePending = true;
         _saveRequests.OnNext(Unit.Default);

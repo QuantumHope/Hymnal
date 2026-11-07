@@ -503,6 +503,42 @@ public sealed class IdeasViewModelTests : IDisposable
     }
 
     [Fact]
+    public async Task Dispose_during_promote_finishes_the_promote_without_touching_disposed_subjects()
+    {
+        var root = CreateWorkspace(AnthologyJson);
+        try
+        {
+            await SeedAsync(root, Idea("a", "The Lighthouse", Day1));
+
+            await Ui(root, async context =>
+            {
+                var vm = await Within(context.CreateIdeasAsync());
+                vm.Selected = vm.Cards.Single();
+                vm.AskFileNameAsync = suggestion => Task.FromResult<string?>(suggestion);
+                var opened = new List<string>();
+                using var openedSubscription = vm.StoryOpened.Subscribe(opened.Add);
+
+                // Hold the promoter's pre-flight read, then close the view (as the window would).
+                var hold = context.Ideas.HoldNextLoad(root);
+                var promote = vm.PromoteSelectedAsync();
+                await PumpUntilAsync(() => context.Ideas.IsHeld(root));
+                vm.Dispose();
+
+                hold.SetResult();
+                await Within(promote);
+
+                Assert.Empty(opened);
+                Assert.Empty(context.Notifications.Errors);
+            });
+
+            // The promote still completed on disk.
+            Assert.True(File.Exists(Path.Combine(root, "the-lighthouse.md")));
+            Assert.Equal(IdeaState.Used, Assert.Single(await LoadFromDiskAsync(root)).State);
+        }
+        finally { DeleteFolder(root); }
+    }
+
+    [Fact]
     public async Task Promote_failure_after_creating_the_file_still_lists_the_story()
     {
         var root = CreateWorkspace(AnthologyJson);
