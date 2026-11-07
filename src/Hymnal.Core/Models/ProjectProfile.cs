@@ -112,6 +112,7 @@ public sealed class ProjectProfile
     public string PartStatsBarLabel { get; }
     public bool ShowsBookStats { get; }
     public bool AllowsPartTargets { get; }
+    public bool ShowsIdeas => Kind != ProjectKind.Novel;
     public IReadOnlyList<StatusOption> VisibleStatuses { get; }
     public IReadOnlyList<string> GanttPhases { get; }
     public ChapterStatus DefaultStatus { get; }

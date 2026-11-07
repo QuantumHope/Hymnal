@@ -112,4 +112,11 @@ public class ProjectProfileTests
         Assert.Equal(showsBook, p.ShowsBookStats);
         Assert.Equal(partTargets, p.AllowsPartTargets);
     }
+
+    [Theory]
+    [InlineData(ProjectKind.Novel, false)]
+    [InlineData(ProjectKind.Story, true)]
+    [InlineData(ProjectKind.Anthology, true)]
+    public void ShowsIdeas_per_kind(ProjectKind kind, bool expected) =>
+        Assert.Equal(expected, ForKind(kind).ShowsIdeas);
 }
