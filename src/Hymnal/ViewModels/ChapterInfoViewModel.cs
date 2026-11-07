@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
+using System.Collections.Specialized;
 using System.Linq;
 using System.Reactive;
 using System.Reactive.Concurrency;
@@ -359,15 +360,44 @@ public sealed class ChapterInfoViewModel : ViewModelBase, IDisposable
                 .WhenAnyValue(x => x.ActiveNode)
                 .Subscribe(node => OnActiveNodeChanged(node)));
 
+        // ── Re-attach to the rebuilt ChapterViewModel when the workspace nodes are replaced ──
+        var nodes = (INotifyCollectionChanged)workspaceViewModel.Nodes;
+        nodes.CollectionChanged += OnWorkspaceNodesChanged;
+        Disposables.Add(Disposable.Create(() => nodes.CollectionChanged -= OnWorkspaceNodesChanged));
+
         // Prefill preference restored during RestoreSettingsAsync().
     }
 
     // ── Active-node transition handler ───────────────────────────────────────
 
-    private void OnActiveNodeChanged(ChapterNode? node)
+    /// <summary>
+    /// Workspace reloads (e.g. a project-kind switch) dispose and replace every ChapterViewModel
+    /// while the editor's active file stays open. Re-resolve the active chapter so the panel never
+    /// keeps a disposed view-model that carries the old profile.
+    /// </summary>
+    private void OnWorkspaceNodesChanged(object? sender, NotifyCollectionChangedEventArgs e)
+    {
+        var node = _editorViewModel.ActiveNode;
+        if (node == null)
+            return;
+
+        var current = _workspaceViewModel.Nodes
+            .FirstOrDefault(vm => vm.Node.RelativePath == node.RelativePath);
+        if (ReferenceEquals(current, _activeChapterVm))
+            return;
+        if (current == null && _activeChapterVm != null && _workspaceViewModel.Nodes.Contains(_activeChapterVm))
+            return;
+
+        // Same chapter, new view-model: no outgoing edits to flush.
+        OnActiveNodeChanged(node, flushPendingSchedule: false);
+    }
+
+    private void OnActiveNodeChanged(ChapterNode? node) => OnActiveNodeChanged(node, flushPendingSchedule: true);
+
+    private void OnActiveNodeChanged(ChapterNode? node, bool flushPendingSchedule)
     {
         // Flush any pending schedule edits for the outgoing chapter before switching.
-        if (_loadedUuid != null && !_suppressAutoSave)
+        if (flushPendingSchedule && _loadedUuid != null && !_suppressAutoSave)
             _ = SaveScheduleAsync();
 
         // Cancel any pending in-flight operation for the previous chapter.
@@ -560,6 +590,8 @@ public sealed class ChapterInfoViewModel : ViewModelBase, IDisposable
         this.RaisePropertyChanged(nameof(DisplayStatus));
         RebuildScheduleRows();
         SyncScheduleRows(_activeChapterVm?.PhaseData);
+        if (_activeChapterVm != null)
+            TargetDisplay = FormatTargetDisplay(_activeChapterVm.Target, Profile);
     }
 
     /// <summary>Recreates <see cref="PhaseScheduleRows"/> from the current profile's Gantt phases.</summary>

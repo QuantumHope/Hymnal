@@ -583,15 +583,30 @@ public class WorkspaceViewModel : ViewModelBase
 
     /// <summary>
     /// Re-reads the workspace's project settings, updates <see cref="Profile"/>, and rebuilds
-    /// the chapter list so every chapter picks up the new profile. The editor's active file is kept.
+    /// the chapter list so every chapter picks up the new profile. The editor's active file is kept,
+    /// and the selection moves to the rebuilt node for the same path so it never points at a
+    /// disposed view-model carrying the old profile.
     /// </summary>
     public async Task<Result<Unit>> ReloadProjectAsync()
     {
         if (_model == null)
             return Result<Unit>.Ok(Unit.Default);
 
+        var selectedPath = SelectedNode?.Node.RelativePath ?? _editor.ActiveNode?.RelativePath;
+
         // ReloadWorkspaceAsync re-reads project.json before rebinding.
-        return await ReloadWorkspaceAsync(WorkspaceRoot, BookTxtPath, reselectBook: false);
+        var result = await ReloadWorkspaceAsync(WorkspaceRoot, BookTxtPath, reselectBook: false);
+        if (!result.IsSuccess)
+            return result;
+
+        var hydrationTask = _hydrationTask;
+        if (hydrationTask != null)
+            await hydrationTask;
+
+        if (selectedPath != null)
+            SelectReplacementNodeIfPresent(selectedPath);
+
+        return result;
     }
 
     /// <summary>
