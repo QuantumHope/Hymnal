@@ -18,8 +18,17 @@ namespace Hymnal.ViewModels;
 /// <see cref="ProjectProfile"/>; Novel keeps the original lists.
 /// </summary>
 [Collection("AvaloniaUi")]
-public sealed class ProfileDrivenUiTests
+public sealed class ProfileDrivenUiTests : IDisposable
 {
+    /// <summary>Contexts created by the running test; their file watchers are released in <see cref="Dispose"/>.</summary>
+    private static readonly List<TestContext> LiveContexts = new();
+
+    public void Dispose()
+    {
+        foreach (var context in LiveContexts) context.Dispose();
+        LiveContexts.Clear();
+    }
+
     static ProfileDrivenUiTests() => ReactiveUiTestBootstrap.EnsureInitialized();
 
     private const string StoryProjectJson = "{ \"schemaVersion\": 1, \"kind\": \"story\", \"storage\": \"sidecar\" }";
@@ -220,11 +229,14 @@ public sealed class ProfileDrivenUiTests
         {
             var context = await OpenAsync(root, expectedNodes: 2);
             var node = await SeedFirstNodeAsync(context, new PhaseData { Status = ChapterStatus.Polishing });
-            var gantt = new GanttViewModel(context.Workspace, context.PhaseService, context.Notifications);
-            var row = gantt.Rows.First(r => r.IsChapter && r.RelativePath == node.Node.RelativePath);
-
-            row.EditableStartDate = new DateTime(2026, 3, 1);
-            await gantt.SaveInlineCellAsync(row, GanttEditableColumn.StartDate);
+            await RunOnUiThreadWithPumpingAsync(async () =>
+            {
+                var gantt = new GanttViewModel(context.Workspace, context.PhaseService, context.Notifications);
+                var row = gantt.Rows.First(r => r.IsChapter && r.RelativePath == node.Node.RelativePath);
+                row.EditableStartDate = new DateTime(2026, 3, 1);
+                await gantt.SaveInlineCellAsync(row, GanttEditableColumn.StartDate);
+                return 0;
+            });
 
             var saved = (await context.PhaseService.LoadAsync(root))[node.Uuid];
             Assert.Equal(ChapterStatus.Polishing, saved.Status);
@@ -242,11 +254,14 @@ public sealed class ProfileDrivenUiTests
         {
             var context = await OpenAsync(root, expectedNodes: 1);
             var node = await SeedFirstNodeAsync(context, new PhaseData { Status = ChapterStatus.Polishing });
-            var gantt = new GanttViewModel(context.Workspace, context.PhaseService, context.Notifications);
-            var row = gantt.Rows.First(r => r.IsChapter);
-
-            row.EditableStartDate = new DateTime(2026, 3, 1);
-            await gantt.SaveInlineCellAsync(row, GanttEditableColumn.StartDate);
+            await RunOnUiThreadWithPumpingAsync(async () =>
+            {
+                var gantt = new GanttViewModel(context.Workspace, context.PhaseService, context.Notifications);
+                var row = gantt.Rows.First(r => r.IsChapter);
+                row.EditableStartDate = new DateTime(2026, 3, 1);
+                await gantt.SaveInlineCellAsync(row, GanttEditableColumn.StartDate);
+                return 0;
+            });
 
             var saved = (await context.PhaseService.LoadAsync(root))[node.Uuid];
             Assert.Equal("2026-03-01", saved.Schedule!["Polishing"].StartDate);
@@ -405,6 +420,183 @@ public sealed class ProfileDrivenUiTests
         finally { DeleteFolder(root); }
     }
 
+    [Fact]
+    public async Task Switching_novel_to_story_reselects_rebuilt_node_and_chapter_info_follows()
+    {
+        var root = CreateFolder(("Book.txt", "chapter-one.md\n"), ("chapter-one.md", "# One\n"));
+        try
+        {
+            var context = await OpenAsync(root, expectedNodes: 1);
+            var oldNode = await SeedFirstNodeAsync(context, new PhaseData { Status = ChapterStatus.Outlining });
+            Assert.Equal("Outlining", oldNode.StatusLabel);
+
+            var info = context.CreateChapterInfo();
+            // Select and wait in one Dispatch so the chapter switch's UI continuations aren't lost.
+            var loaded = await RunOnUiThreadWithPumpingAsync(async () =>
+            {
+                context.Workspace.SelectedNode = oldNode;
+                var deadline = DateTime.UtcNow + TimeSpan.FromSeconds(30);
+                while (DateTime.UtcNow < deadline && info.ChapterTitle != oldNode.Node.Title)
+                {
+                    Avalonia.Threading.Dispatcher.UIThread.RunJobs();
+                    await Task.Delay(25);
+                }
+                return info.ChapterTitle == oldNode.Node.Title;
+            });
+            Assert.True(loaded, "Chapter info did not load the chapter.");
+            Assert.Equal("Chapter Info", info.PanelTitle);
+
+            var saved = await new ProjectSettingsService(new MetadataStore())
+                .SaveAsync(root, new ProjectSettings(ProjectKind.Story));
+            Assert.True(saved.IsSuccess, saved.Error);
+
+            var reload = await RunOnUiThreadWithPumpingAsync(() => context.Workspace.ReloadProjectAsync());
+            Assert.True(reload.IsSuccess, reload.Error);
+
+            var selected = context.Workspace.SelectedNode;
+            Assert.NotNull(selected);
+            Assert.NotSame(oldNode, selected);
+            Assert.Contains(selected, context.Workspace.Nodes);
+            Assert.Equal(ProjectKind.Story, context.Workspace.Profile.Kind);
+            Assert.Equal(ProjectKind.Story, selected!.Profile.Kind);
+            Assert.Equal(ChapterStatus.Outlining, selected.Status);
+            Assert.Equal("Idea", selected.StatusLabel);
+
+            Assert.Equal(ProjectKind.Story, info.Profile.Kind);
+            Assert.Equal("Story Info", info.PanelTitle);
+            Assert.Equal(ChapterStatus.Planned, info.DisplayStatus);
+            Assert.Equal("Idea", info.StatusOptions.Single(o => o.Value == info.DisplayStatus).Label);
+
+            // The panel is attached to the rebuilt view-model, not the disposed one.
+            await RunOnUiThreadWithPumpingAsync(() =>
+            {
+                selected.UpdateWordCount(321);
+                return Task.FromResult(0);
+            });
+            Assert.Equal(321, info.WordCount);
+        }
+        finally { DeleteFolder(root); }
+    }
+
+    [Fact]
+    public async Task Status_summary_buckets_carry_profile_labels()
+    {
+        var root = CreateStoryFolder();
+        try
+        {
+            var context = await OpenAsync(root, expectedNodes: 2);
+            var nodes = context.Workspace.Nodes.ToList();
+
+            await RunOnUiThreadWithPumpingAsync(() =>
+            {
+                nodes[0].ApplyPhaseData(new PhaseData { Status = ChapterStatus.Outlining });
+                nodes[1].ApplyPhaseData(new PhaseData { Status = ChapterStatus.Reviewing });
+                return Task.FromResult(0);
+            });
+
+            await WaitUntilAsync(
+                () => context.Workspace.BookStatusSummary.Count == 2,
+                () => "Expected two status buckets.");
+
+            Assert.Equal(
+                ["Idea", "Revising"],
+                context.Workspace.BookStatusSummary.OrderBy(s => s.Status).Select(s => s.DisplayLabel));
+        }
+        finally { DeleteFolder(root); }
+    }
+
+    [Fact]
+    public async Task Novel_status_summary_labels_are_enum_names()
+    {
+        var root = CreateFolder(("Book.txt", "chapter-one.md\n"), ("chapter-one.md", "# One\n"));
+        try
+        {
+            var context = await OpenAsync(root, expectedNodes: 1);
+            var node = context.Workspace.Nodes.Single();
+            await RunOnUiThreadWithPumpingAsync(() =>
+            {
+                node.ApplyPhaseData(new PhaseData { Status = ChapterStatus.Polishing });
+                return Task.FromResult(0);
+            });
+
+            await WaitUntilAsync(
+                () => context.Workspace.BookStatusSummary.Any(s => s.Status == ChapterStatus.Polishing),
+                () => "Expected a Polishing bucket.");
+            Assert.Equal("Polishing", Assert.Single(context.Workspace.BookStatusSummary).DisplayLabel);
+        }
+        finally { DeleteFolder(root); }
+    }
+
+    [Fact]
+    public void Story_gantt_row_label_and_active_phase_follow_display_status()
+    {
+        var profile = ProjectProfile.For(new ProjectSettings(ProjectKind.Story));
+        var node = new ChapterNode("scene.md", "scene.md", "Scene", NodeKind.Chapter, IsMissing: false, Index: 0);
+        var row = new GanttRowViewModel(
+            GanttProjection.Project(node, new PhaseData
+            {
+                Status = ChapterStatus.Polishing,
+                Schedule = new() { ["Editing"] = new PhaseScheduleEntry { StartDate = "2026-02-01" } }
+            }, profile), profile);
+
+        Assert.Equal(ChapterStatus.Editing, row.DisplayStatus);
+        Assert.Equal("Revising", row.StatusLabel);
+        Assert.True(row.IsActivePhase("Editing"));
+        Assert.False(row.IsActivePhase("Polishing"));
+        Assert.Equal("Editing", row.CurrentSegment?.PhaseName);
+    }
+
+    [Fact]
+    public void Novel_gantt_row_label_and_active_phase_use_stored_status()
+    {
+        var node = new ChapterNode("ch.md", "ch.md", "Chapter", NodeKind.Chapter, IsMissing: false, Index: 0);
+        var row = new GanttRowViewModel(
+            GanttProjection.Project(node, new PhaseData { Status = ChapterStatus.Polishing }, ProjectProfile.Novel),
+            ProjectProfile.Novel);
+
+        Assert.Equal(ChapterStatus.Polishing, row.DisplayStatus);
+        Assert.Equal("Polishing", row.StatusLabel);
+        Assert.True(row.IsActivePhase("Polishing"));
+        Assert.False(row.IsActivePhase("Editing"));
+    }
+
+    [Fact]
+    public async Task Sidebar_status_change_keeps_phase_schedules()
+    {
+        var root = CreateFolder(("Book.txt", "scene.md\n"), ("scene.md", "# Scene\n"));
+        try
+        {
+            var store = new MetadataStore();
+            var phaseService = new PhaseDataService(store);
+            var stored = new PhaseData
+            {
+                Status = ChapterStatus.Drafting,
+                Schedule = new()
+                {
+                    ["Drafting"] = new PhaseScheduleEntry { StartDate = "2026-01-01", EndDate = "2026-01-20" },
+                    ["Editing"] = new PhaseScheduleEntry { StartDate = "2026-02-01" }
+                }
+            };
+            await phaseService.UpsertAsync(root, "uuid-1", _ => stored);
+            var vm = CreateStoryChapter(root, store, phaseService, stored);
+
+            await RunOnUiThreadWithPumpingAsync(async () =>
+            {
+                await vm.ChangeStatusCommand.Execute(ChapterStatus.Editing);
+                return 0;
+            });
+
+            var saved = (await phaseService.LoadAsync(root))["uuid-1"];
+            Assert.Equal(ChapterStatus.Editing, saved.Status);
+            Assert.NotNull(saved.Schedule);
+            Assert.Equal("2026-01-01", saved.Schedule!["Drafting"].StartDate);
+            Assert.Equal("2026-01-20", saved.Schedule["Drafting"].EndDate);
+            Assert.Equal("2026-02-01", saved.Schedule["Editing"].StartDate);
+            Assert.NotNull(vm.PhaseData?.Schedule);
+        }
+        finally { DeleteFolder(root); }
+    }
+
     // ── Helpers ───────────────────────────────────────────────────────────────
 
     private static ChapterViewModel CreateStoryChapter(
@@ -468,6 +660,10 @@ public sealed class ProfileDrivenUiTests
         await RunOnUiThreadWithPumpingAsync(async () =>
         {
             await (Task)method.Invoke(context.Workspace, Array.Empty<object>())!;
+            // Wait for hydration inside this Dispatch: each Dispatch gets a fresh dispatcher, so
+            // the node rebuild it posts would be lost once this job returns.
+            if (HydrationTask(context.Workspace) is { } hydration)
+                await hydration;
             return 0;
         });
         await WaitUntilAsync(
@@ -477,14 +673,14 @@ public sealed class ProfileDrivenUiTests
         return context;
     }
 
+    private static Task? HydrationTask(WorkspaceViewModel workspace) =>
+        typeof(WorkspaceViewModel)
+            .GetField("_hydrationTask", BindingFlags.Instance | BindingFlags.NonPublic)!
+            .GetValue(workspace) as Task;
+
     /// <summary>Runs <paramref name="action"/> on the headless UI thread, keeping its dispatcher loop alive until done.</summary>
-    private static async Task<T> RunOnUiThreadWithPumpingAsync<T>(Func<Task<T>> action)
-    {
-        var task = ReactiveUiTestBootstrap.RunOnUiThreadAsync(action);
-        if (await Task.WhenAny(task, Task.Delay(TimeSpan.FromSeconds(40))) != task)
-            Assert.Fail("UI-thread operation did not complete in time.");
-        return await task;
-    }
+    private static Task<T> RunOnUiThreadWithPumpingAsync<T>(Func<Task<T>> action) =>
+        ReactiveUiTestBootstrap.RunOnUiThreadAsync(action, TimeSpan.FromSeconds(40));
 
     /// <summary>Polls on the UI thread so background <c>Dispatcher.UIThread.InvokeAsync</c> work can run.</summary>
     private static async Task WaitUntilAsync(Func<bool> predicate, Func<string> failureMessage)
@@ -504,8 +700,12 @@ public sealed class ProfileDrivenUiTests
             Assert.Fail(failureMessage());
     }
 
-    private sealed class TestContext
+    private sealed class TestContext : IDisposable
     {
+        private readonly ManuscriptService _manuscript;
+
+        public void Dispose() => _manuscript.Dispose();
+
         private readonly MetadataStore _store = new();
         private readonly InMemoryAppSettingsStore _settings = new();
         private readonly EditorViewModel _editor;
@@ -522,9 +722,11 @@ public sealed class ProfileDrivenUiTests
             var projectSettings = new ProjectSettingsService(_store);
             PhaseService = new PhaseDataService(_store);
             _editor = new EditorViewModel(_store, Notifications, wordCount);
+            _manuscript = new ManuscriptService(Notifications, exclusions);
+            LiveContexts.Add(this);
 
             Workspace = new WorkspaceViewModel(
-                new ManuscriptService(Notifications, exclusions),
+                _manuscript,
                 new BookTxtStructureService(_store, exclusions, registry),
                 new StubFilePickerService(),
                 _settings,

@@ -15,8 +15,17 @@ namespace Hymnal.ViewModels;
 
 /// <summary>Story-length target presets, Part targets for anthologies and collection stats titles.</summary>
 [Collection("AvaloniaUi")]
-public sealed class TargetPresetAndStatsTests
+public sealed class TargetPresetAndStatsTests : IDisposable
 {
+    /// <summary>Contexts created by the running test; their file watchers are released in <see cref="Dispose"/>.</summary>
+    private static readonly List<TestContext> LiveContexts = new();
+
+    public void Dispose()
+    {
+        foreach (var context in LiveContexts) context.Dispose();
+        LiveContexts.Clear();
+    }
+
     static TargetPresetAndStatsTests() => ReactiveUiTestBootstrap.EnsureInitialized();
 
     private const string StoryJson = "{ \"schemaVersion\": 1, \"kind\": \"story\", \"storage\": \"sidecar\" }";
@@ -304,6 +313,32 @@ public sealed class TargetPresetAndStatsTests
     }
 
     [Fact]
+    public async Task Novel_confirm_without_edits_keeps_stored_preset_key()
+    {
+        var root = CreateFolder();
+        try
+        {
+            var targets = new TargetsService(new MetadataStore());
+            var stored = new WordCountTarget { MinWords = 1000, MaxWords = 7500, Preset = "shortStory" };
+            await targets.UpsertAsync(root, "uuid-1", stored);
+            var chapter = CreateChapter(root, ProjectKind.Novel, NodeKind.Chapter, targets, stored);
+
+            await RunOnUiThreadWithPumpingAsync(async () =>
+            {
+                await chapter.OpenTargetFlyoutCommand.Execute();
+                await chapter.ConfirmTargetCommand.Execute();
+                return 0;
+            });
+
+            var saved = (await targets.LoadAsync(root))["uuid-1"];
+            Assert.Equal("shortStory", saved.Preset);
+            Assert.Equal(1000, saved.MinWords);
+            Assert.Equal(7500, saved.MaxWords);
+        }
+        finally { DeleteFolder(root); }
+    }
+
+    [Fact]
     public async Task Anthology_part_target_persists_and_reloads()
     {
         var root = CreateAnthologyFolder();
@@ -391,6 +426,10 @@ public sealed class TargetPresetAndStatsTests
         await RunOnUiThreadWithPumpingAsync(async () =>
         {
             await (Task)method.Invoke(context.Workspace, Array.Empty<object>())!;
+            // Wait for hydration inside this Dispatch: each Dispatch gets a fresh dispatcher, so
+            // the node rebuild it posts would be lost once this job returns.
+            if (HydrationTask(context.Workspace) is { } hydration)
+                await hydration;
             return 0;
         });
         await WaitUntilAsync(
@@ -400,14 +439,14 @@ public sealed class TargetPresetAndStatsTests
         return context;
     }
 
+    private static Task? HydrationTask(WorkspaceViewModel workspace) =>
+        typeof(WorkspaceViewModel)
+            .GetField("_hydrationTask", BindingFlags.Instance | BindingFlags.NonPublic)!
+            .GetValue(workspace) as Task;
+
     /// <summary>Runs <paramref name="action"/> on the headless UI thread, keeping its dispatcher loop alive until done.</summary>
-    private static async Task<T> RunOnUiThreadWithPumpingAsync<T>(Func<Task<T>> action)
-    {
-        var task = ReactiveUiTestBootstrap.RunOnUiThreadAsync(action);
-        if (await Task.WhenAny(task, Task.Delay(TimeSpan.FromSeconds(40))) != task)
-            Assert.Fail("UI-thread operation did not complete in time.");
-        return await task;
-    }
+    private static Task<T> RunOnUiThreadWithPumpingAsync<T>(Func<Task<T>> action) =>
+        ReactiveUiTestBootstrap.RunOnUiThreadAsync(action, TimeSpan.FromSeconds(40));
 
     /// <summary>Polls on the UI thread so background <c>Dispatcher.UIThread.InvokeAsync</c> work can run.</summary>
     private static async Task WaitUntilAsync(Func<bool> predicate, Func<string> failureMessage)
@@ -427,8 +466,12 @@ public sealed class TargetPresetAndStatsTests
             Assert.Fail(failureMessage());
     }
 
-    private sealed class TestContext
+    private sealed class TestContext : IDisposable
     {
+        private readonly ManuscriptService _manuscript;
+
+        public void Dispose() => _manuscript.Dispose();
+
         private readonly MetadataStore _store = new();
         private readonly InMemoryAppSettingsStore _settings = new();
         private readonly EditorViewModel _editor;
@@ -445,9 +488,11 @@ public sealed class TargetPresetAndStatsTests
             var projectSettings = new ProjectSettingsService(_store);
             PhaseService = new PhaseDataService(_store);
             _editor = new EditorViewModel(_store, Notifications, wordCount);
+            _manuscript = new ManuscriptService(Notifications, exclusions);
+            LiveContexts.Add(this);
 
             Workspace = new WorkspaceViewModel(
-                new ManuscriptService(Notifications, exclusions),
+                _manuscript,
                 new BookTxtStructureService(_store, exclusions, registry),
                 new StubFilePickerService(),
                 _settings,

@@ -15,8 +15,17 @@ using Hymnal.Core.Tests.TestDoubles;
 namespace Hymnal.ViewModels;
 
 [Collection("AvaloniaUi")]
-public sealed class SettingsProjectSectionTests
+public sealed class SettingsProjectSectionTests : IDisposable
 {
+    /// <summary>Contexts created by the running test; their file watchers are released in <see cref="Dispose"/>.</summary>
+    private static readonly List<Ctx> LiveContexts = new();
+
+    public void Dispose()
+    {
+        foreach (var context in LiveContexts) context.Dispose();
+        LiveContexts.Clear();
+    }
+
     static SettingsProjectSectionTests() => ReactiveUiTestBootstrap.EnsureInitialized();
 
     [Fact]
@@ -151,8 +160,12 @@ public sealed class SettingsProjectSectionTests
         catch { /* best effort */ }
     }
 
-    private sealed class Ctx
+    private sealed class Ctx : IDisposable
     {
+        private readonly ManuscriptService _manuscript;
+
+        public void Dispose() => _manuscript.Dispose();
+
         public RecordingNotifications Notifications { get; } = new();
         public ProjectSettingsService ProjectSettings { get; }
         public WorkspaceViewModel Workspace { get; }
@@ -166,8 +179,10 @@ public sealed class SettingsProjectSectionTests
             var wordCount = new WordCountService();
             ProjectSettings = new ProjectSettingsService(store);
             var editor = new EditorViewModel(store, Notifications, wordCount);
+            _manuscript = new ManuscriptService(Notifications, exclusions);
+            LiveContexts.Add(this);
             Workspace = new WorkspaceViewModel(
-                new ManuscriptService(Notifications, exclusions),
+                _manuscript,
                 new BookTxtStructureService(store, exclusions, registry),
                 new StubFilePickerService(),
                 new MemorySettings(),

@@ -67,7 +67,7 @@ dotnet run --project src/Hymnal/Hymnal.csproj
 dotnet test Hymnal.slnx
 ```
 
-Baseline: 567 tests, 0 failures.
+Baseline: 574 tests. That count is the **sum of per-filter runs** (see Tests below), not one full run — a single full `dotnet test Hymnal.slnx` run hangs. Per-filter runs: 573 pass; `GanttView_RowMoveShortcutHelper_DelegatesForEditableChapterRowsAndIgnoresPartRows` always hangs.
 
 ## Key Patterns
 
@@ -93,7 +93,18 @@ Baseline: 567 tests, 0 failures.
 - `FolderPickerService` requires a `Func<TopLevel?>` accessor — see `App.axaml.cs` for the factory registration pattern
 
 ### Tests
-- The combined run has a known intermittent hang in the headless ViewModel tests (pre-existing; the test host can stall after tests pass, or UI-thread tests time out when many classes share a run). Run per namespace/class instead: `timeout 400 dotnet test Hymnal.slnx --no-build --filter "FullyQualifiedName~Hymnal.Core.Tests.Services" --blame-hang-timeout 60s`
+- **Hangs (pre-existing):** a single full run does not finish. Two causes:
+  - `GanttViewSmokeTests.GanttView_RowMoveShortcutHelper_DelegatesForEditableChapterRowsAndIgnoresPartRows` hangs every time, even run alone (it blocks the UI thread on an async move command).
+  - `WorkspaceSidebarReorderTests` hangs now and then (usually `ReorderChapterCommand_ReordersIncludedPartAsWholeBlockWhenDroppedOnPartDivider`; sometimes another test in that class when it shares a run with the rest of `Hymnal.ViewModels`).
+  - Once a UI-thread job hangs, every later headless test in the run stalls behind it. `--blame-hang-timeout` reports the culprit in `TestResults/*/Sequence_*.xml` (look for `Completed="False"`).
+- **Workaround: run one filter per command**, e.g. `timeout 400 dotnet test Hymnal.slnx --no-build --filter "<filter>" --blame-hang-timeout 60s`. These filters add up to the baseline:
+  - `FullyQualifiedName~Hymnal.Core.Tests.Common|FullyQualifiedName~Hymnal.Core.Tests.Infrastructure|FullyQualifiedName~Hymnal.Core.Tests.Models|FullyQualifiedName~Hymnal.Core.Tests.Performance|FullyQualifiedName~Hymnal.Core.Tests.Services`
+  - `FullyQualifiedName~Hymnal.Core.Tests.ViewModels`
+  - `FullyQualifiedName~Hymnal.Core.Tests.Views&FullyQualifiedName!~GanttView_RowMoveShortcutHelper`
+  - `FullyQualifiedName~Hymnal.Views`
+  - `FullyQualifiedName~Hymnal.ViewModels&FullyQualifiedName!~Hymnal.ViewModels.Workspace`
+  - `FullyQualifiedName~Hymnal.ViewModels.Workspace` (re-run it if a Reorder test hangs)
+- **Headless isolation:** `ReactiveUiTestBootstrap` uses the default (PerTest) isolation. Outside a `Dispatch`, `Application.Current` is null, and production code checks for that to run dispatcher work inline. PerAssembly keeps one Application alive, which deadlocks the tests that run off the UI thread, so don't switch to it. Each `Dispatch` gets a fresh dispatcher. So await any background UI work (such as `WorkspaceViewModel` hydration) inside the same `Dispatch` that started it. Bound async UI work with `RunOnUiThreadAsync(action, timeout)`.
 - Test fixtures (sample manuscripts) live in `tests/Hymnal.Core.Tests/Fixtures/SampleManuscripts/` — load via `AppContext.BaseDirectory`
 - Prefer hand-rolled fakes (e.g., `FakeNotificationService`) over NSubstitute for simple interfaces; use NSubstitute for complex interfaces with many members
 - Infra tests that touch the file system use temp directories and clean up in `try/finally`

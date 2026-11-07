@@ -14,8 +14,17 @@ using Hymnal.Core.Tests.Infrastructure;
 namespace Hymnal.ViewModels;
 
 [Collection("AvaloniaUi")]
-public sealed class WorkspaceProjectKindTests
+public sealed class WorkspaceProjectKindTests : IDisposable
 {
+    /// <summary>Contexts created by the running test; their file watchers are released in <see cref="Dispose"/>.</summary>
+    private static readonly List<TestContext> LiveContexts = new();
+
+    public void Dispose()
+    {
+        foreach (var context in LiveContexts) context.Dispose();
+        LiveContexts.Clear();
+    }
+
     static WorkspaceProjectKindTests() => ReactiveUiTestBootstrap.EnsureInitialized();
 
     private const string StoryProjectJson = "{ \"schemaVersion\": 1, \"kind\": \"story\", \"storage\": \"sidecar\" }";
@@ -242,14 +251,14 @@ public sealed class WorkspaceProjectKindTests
             .Select(p => Path.GetRelativePath(root, p) + (File.Exists(p) ? ":" + File.ReadAllText(p) : "/"))
             .OrderBy(s => s, StringComparer.Ordinal));
 
+    private static Task? HydrationTask(WorkspaceViewModel workspace) =>
+        typeof(WorkspaceViewModel)
+            .GetField("_hydrationTask", BindingFlags.Instance | BindingFlags.NonPublic)!
+            .GetValue(workspace) as Task;
+
     /// <summary>Runs <paramref name="action"/> on the headless UI thread, keeping its dispatcher loop alive until done.</summary>
-    private static async Task<T> RunOnUiThreadWithPumpingAsync<T>(Func<Task<T>> action)
-    {
-        var task = ReactiveUiTestBootstrap.RunOnUiThreadAsync(action);
-        if (await Task.WhenAny(task, Task.Delay(TimeSpan.FromSeconds(40))) != task)
-            Assert.Fail("UI-thread operation did not complete in time.");
-        return await task;
-    }
+    private static Task<T> RunOnUiThreadWithPumpingAsync<T>(Func<Task<T>> action) =>
+        ReactiveUiTestBootstrap.RunOnUiThreadAsync(action, TimeSpan.FromSeconds(40));
 
     private static Task WaitForNodesAsync(TestContext context, int expectedCount) =>
         WaitUntilAsync(() => context.Workspace.Nodes.Count == expectedCount,
@@ -279,8 +288,12 @@ public sealed class WorkspaceProjectKindTests
             Assert.Fail(failureMessage());
     }
 
-    private sealed class TestContext
+    private sealed class TestContext : IDisposable
     {
+        private readonly ManuscriptService _manuscript;
+
+        public void Dispose() => _manuscript.Dispose();
+
         public RecordingNotificationService Notifications { get; } = new();
         public FakeProjectInitPrompt Prompt { get; } = new();
         public ProjectSettingsService ProjectSettings { get; }
@@ -294,9 +307,11 @@ public sealed class WorkspaceProjectKindTests
             var wordCount = new WordCountService();
             ProjectSettings = new ProjectSettingsService(store);
             var editor = new EditorViewModel(store, Notifications, wordCount);
+            _manuscript = new ManuscriptService(Notifications, exclusions);
+            LiveContexts.Add(this);
 
             Workspace = new WorkspaceViewModel(
-                new ManuscriptService(Notifications, exclusions),
+                _manuscript,
                 new BookTxtStructureService(store, exclusions, registry),
                 new StubFilePickerService(),
                 new InMemoryAppSettingsStore(),
@@ -322,6 +337,10 @@ public sealed class WorkspaceProjectKindTests
             return RunOnUiThreadWithPumpingAsync(async () =>
             {
                 await (Task)method.Invoke(Workspace, Array.Empty<object>())!;
+                // Wait for hydration inside this Dispatch: each Dispatch gets a fresh dispatcher, so
+                // the node rebuild it posts would be lost once this job returns.
+                if (HydrationTask(Workspace) is { } hydration)
+                    await hydration;
                 return 0;
             });
         }
