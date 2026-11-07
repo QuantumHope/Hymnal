@@ -56,35 +56,36 @@ public sealed class StoryIdeaPromoter
 
     /// <summary>
     /// Creates the story file, registers it, and marks the idea used.
-    /// Returns the story's path relative to the Book.txt directory.
+    /// Returns the story's path relative to the Book.txt directory; on failure,
+    /// <see cref="PromoteResult.FileCreated"/> tells whether the story file was already created.
     /// </summary>
-    public async Task<Result<string>> PromoteAsync(
+    public async Task<PromoteResult> PromoteAsync(
         string workspaceRoot, string bookTxtPath, StoryIdea idea, string fileName, ProjectProfile profile)
     {
         if (profile.Kind != ProjectKind.Anthology)
-            return Result<string>.Fail("Ideas can only be promoted to stories in an Anthology project.");
+            return PromoteResult.Fail("Ideas can only be promoted to stories in an Anthology project.");
         if (!IsBareMarkdownName(fileName))
-            return Result<string>.Fail($"'{fileName}' is not a valid story file name. Use a plain name ending in .md.");
+            return PromoteResult.Fail($"'{fileName}' is not a valid story file name. Use a plain name ending in .md.");
 
         var preload = await _ideas.LoadAsync(workspaceRoot).ConfigureAwait(false);
         if (!preload.IsSuccess)
-            return Result<string>.Fail(preload.Error!);
+            return PromoteResult.Fail(preload.Error!);
         var persisted = preload.Value!.FirstOrDefault(i => i.Id == idea.Id);
         if (persisted is null)
-            return Result<string>.Fail($"Idea '{idea.Title}' was not found in the ideas file.");
+            return PromoteResult.Fail($"Idea '{idea.Title}' was not found in the ideas file.");
         if (persisted.State == IdeaState.Used)
-            return Result<string>.Fail($"Idea '{persisted.Title}' has already been used.");
+            return PromoteResult.Fail($"Idea '{persisted.Title}' has already been used.");
         idea = persisted;
 
         var entries = await _structure.ReadNormalizedEntriesAsync(bookTxtPath).ConfigureAwait(false);
         if (!entries.IsSuccess)
-            return Result<string>.Fail(entries.Error!);
+            return PromoteResult.Fail(entries.Error!);
 
         var create = await _structure
             .CreateNewChapterAsync(bookTxtPath, fileName, $"# {idea.Title}\n\n", entries.Value!.Count)
             .ConfigureAwait(false);
         if (!create.IsSuccess)
-            return Result<string>.Fail(create.Error!);
+            return PromoteResult.Fail(create.Error!);
 
         try
         {
@@ -107,14 +108,21 @@ public sealed class StoryIdeaPromoter
             if (notes.Length > 0)
                 await _notes.SaveAsync(INotesService.DeriveNotesPath(workspaceRoot, fileName), notes).ConfigureAwait(false);
 
-            var updated = preload.Value!
-                .Select(i => i.Id == idea.Id ? i with { State = IdeaState.Used, StoryId = uuid } : i)
+            // Re-read so ideas written since the pre-flight load survive; change only this idea.
+            var current = await _ideas.LoadAsync(workspaceRoot).ConfigureAwait(false);
+            if (!current.IsSuccess)
+                return CreatedButFailed(fileName, current.Error!);
+            var ideaId = idea.Id;
+            if (current.Value!.All(i => i.Id != ideaId))
+                return CreatedButFailed(fileName, $"idea '{idea.Title}' is no longer in the ideas file");
+            var updated = current.Value!
+                .Select(i => i.Id == ideaId ? i with { State = IdeaState.Used, StoryId = uuid } : i)
                 .ToList();
             var saved = await _ideas.SaveAsync(workspaceRoot, updated).ConfigureAwait(false);
             if (!saved.IsSuccess)
                 return CreatedButFailed(fileName, saved.Error!);
 
-            return Result<string>.Ok(fileName);
+            return PromoteResult.Ok(fileName);
         }
         catch (Exception ex)
         {
@@ -122,8 +130,8 @@ public sealed class StoryIdeaPromoter
         }
     }
 
-    private static Result<string> CreatedButFailed(string fileName, string error) =>
-        Result<string>.Fail($"Story file '{fileName}' was created but finishing setup failed: {error}");
+    private static PromoteResult CreatedButFailed(string fileName, string error) =>
+        PromoteResult.FailAfterCreate($"Story file '{fileName}' was created but finishing setup failed: {error}");
 
     private static bool IsBareMarkdownName(string fileName) =>
         !string.IsNullOrWhiteSpace(fileName)

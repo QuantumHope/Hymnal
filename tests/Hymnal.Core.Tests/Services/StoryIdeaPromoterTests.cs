@@ -19,6 +19,32 @@ public class StoryIdeaPromoterTests
             Task.FromResult(Result<Unit>.Fail("disk full"));
     }
 
+    /// <summary>
+    /// After the first (pre-flight) load, another writer adds an idea; later loads can be made to fail.
+    /// </summary>
+    private sealed class ConcurrentWriterIdeasService(IStoryIdeasService inner, StoryIdea added) : IStoryIdeasService
+    {
+        public int Loads { get; private set; }
+        public bool FailLaterLoads { get; init; }
+
+        public async Task<Result<IReadOnlyList<StoryIdea>>> LoadAsync(string workspaceRoot)
+        {
+            Loads++;
+            if (Loads > 1 && FailLaterLoads)
+                return Result<IReadOnlyList<StoryIdea>>.Fail("ideas.json is locked");
+            var result = await inner.LoadAsync(workspaceRoot);
+            if (Loads == 1)
+            {
+                var save = await inner.SaveAsync(workspaceRoot, [.. result.Value!, added]);
+                Assert.True(save.IsSuccess, save.Error);
+            }
+            return result;
+        }
+
+        public Task<Result<Unit>> SaveAsync(string workspaceRoot, IReadOnlyList<StoryIdea> ideas) =>
+            inner.SaveAsync(workspaceRoot, ideas);
+    }
+
     private sealed class ThrowingNotesService : INotesService
     {
         public Task<string> LoadAsync(string absoluteNotesPath) => Task.FromResult("");
@@ -85,6 +111,7 @@ public class StoryIdeaPromoterTests
         var result = await env.Promoter().PromoteAsync(env.Root, env.BookTxtPath, Idea(), "the-lighthouse.md", Anthology);
 
         Assert.True(result.IsSuccess, result.Error);
+        Assert.True(result.FileCreated);
         Assert.Equal("the-lighthouse.md", result.Value);
         Assert.Equal("# The Lighthouse\n\n", File.ReadAllText(Path.Combine(env.ManuscriptDir, "the-lighthouse.md")));
         var entries = await new BookTxtStructureService(env.Store, new ExclusionManifestService(env.Store))
@@ -172,6 +199,7 @@ public class StoryIdeaPromoterTests
         var result = await env.Promoter().PromoteAsync(env.Root, env.BookTxtPath, Idea(), "the-lighthouse.md", Anthology);
 
         Assert.False(result.IsSuccess);
+        Assert.False(result.FileCreated);
         Assert.Equal(bookBefore, File.ReadAllText(env.BookTxtPath));
         Assert.Equal("existing", File.ReadAllText(Path.Combine(env.ManuscriptDir, "the-lighthouse.md")));
         Assert.Equal(IdeaState.New, (await env.Ideas.LoadAsync(env.Root)).Value!.Single().State);
@@ -225,6 +253,7 @@ public class StoryIdeaPromoterTests
         var result = await promoter.PromoteAsync(env.Root, env.BookTxtPath, Idea(), "the-lighthouse.md", Anthology);
 
         Assert.False(result.IsSuccess);
+        Assert.True(result.FileCreated);
         Assert.Contains("the-lighthouse.md", result.Error);
         Assert.Contains("disk full", result.Error);
         Assert.Equal(IdeaState.New, (await env.Ideas.LoadAsync(env.Root)).Value!.Single().State);
@@ -240,6 +269,7 @@ public class StoryIdeaPromoterTests
             .PromoteAsync(env.Root, env.BookTxtPath, Idea(), "the-lighthouse.md", Anthology);
 
         Assert.False(result.IsSuccess);
+        Assert.True(result.FileCreated);
         Assert.Contains("the-lighthouse.md", result.Error);
         Assert.Contains("notes boom", result.Error);
         Assert.Equal(IdeaState.New, (await env.Ideas.LoadAsync(env.Root)).Value!.Single().State);
@@ -256,6 +286,7 @@ public class StoryIdeaPromoterTests
         var result = await env.Promoter().PromoteAsync(env.Root, env.BookTxtPath, Idea(), "the-lighthouse.md", Anthology);
 
         Assert.False(result.IsSuccess);
+        Assert.False(result.FileCreated);
         Assert.Equal(bookBefore, File.ReadAllText(env.BookTxtPath));
         Assert.False(File.Exists(Path.Combine(env.ManuscriptDir, "the-lighthouse.md")));
         Assert.Equal("{ not json", File.ReadAllText(path));
@@ -288,4 +319,67 @@ public class StoryIdeaPromoterTests
         Assert.False(File.Exists(Path.Combine(env.ManuscriptDir, "the-lighthouse.md")));
         Assert.Empty(await env.Registry.LoadAsync(env.Root));
     });
+
+    [Fact]
+    public Task Promote_keeps_ideas_added_by_another_writer_after_pre_flight() => WithEnvAsync(async env =>
+    {
+        await SeedAsync(env, Idea());
+        var ideas = new ConcurrentWriterIdeasService(env.Ideas, Idea(title: "Written meanwhile", id: "i2"));
+
+        var result = await env.Promoter(ideas).PromoteAsync(env.Root, env.BookTxtPath, Idea(), "the-lighthouse.md", Anthology);
+
+        Assert.True(result.IsSuccess, result.Error);
+        Assert.Equal(2, ideas.Loads);
+        var loaded = (await env.Ideas.LoadAsync(env.Root)).Value!;
+        Assert.Equal(IdeaState.Used, loaded.Single(i => i.Id == "i1").State);
+        Assert.NotNull(loaded.Single(i => i.Id == "i1").StoryId);
+        var meanwhile = loaded.Single(i => i.Id == "i2");
+        Assert.Equal("Written meanwhile", meanwhile.Title);
+        Assert.Equal(IdeaState.New, meanwhile.State);
+    });
+
+    [Fact]
+    public Task Promote_fails_after_creation_when_ideas_cannot_be_re_read() => WithEnvAsync(async env =>
+    {
+        await SeedAsync(env, Idea());
+        var ideas = new ConcurrentWriterIdeasService(env.Ideas, Idea(title: "Written meanwhile", id: "i2")) { FailLaterLoads = true };
+
+        var result = await env.Promoter(ideas).PromoteAsync(env.Root, env.BookTxtPath, Idea(), "the-lighthouse.md", Anthology);
+
+        Assert.False(result.IsSuccess);
+        Assert.True(result.FileCreated);
+        Assert.Contains("the-lighthouse.md", result.Error);
+        Assert.Contains("ideas.json is locked", result.Error);
+        // The pre-creation snapshot was never written back over the other writer's idea.
+        var loaded = (await env.Ideas.LoadAsync(env.Root)).Value!;
+        Assert.Equal(["i1", "i2"], loaded.Select(i => i.Id).Order().ToArray());
+        Assert.All(loaded, i => Assert.Equal(IdeaState.New, i.State));
+    });
+
+    [Fact]
+    public Task Promote_fails_after_creation_when_idea_was_deleted_meanwhile() => WithEnvAsync(async env =>
+    {
+        await SeedAsync(env, Idea());
+        var promoter = env.Promoter(notes: new DeletingNotesService(env));
+
+        var result = await promoter.PromoteAsync(env.Root, env.BookTxtPath, Idea(), "the-lighthouse.md", Anthology);
+
+        Assert.False(result.IsSuccess);
+        Assert.True(result.FileCreated);
+        Assert.Contains("no longer", result.Error);
+        Assert.Empty((await env.Ideas.LoadAsync(env.Root)).Value!);
+    });
+
+    /// <summary>Saving notes also deletes every idea, as if another writer removed the idea mid-promote.</summary>
+    private sealed class DeletingNotesService(Env env) : INotesService
+    {
+        public Task<string> LoadAsync(string absoluteNotesPath) => Task.FromResult("");
+
+        public async Task SaveAsync(string absoluteNotesPath, string content)
+        {
+            await env.Notes.SaveAsync(absoluteNotesPath, content);
+            var save = await env.Ideas.SaveAsync(env.Root, []);
+            Assert.True(save.IsSuccess, save.Error);
+        }
+    }
 }
