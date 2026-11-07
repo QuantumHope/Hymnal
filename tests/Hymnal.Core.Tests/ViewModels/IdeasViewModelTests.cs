@@ -160,8 +160,12 @@ public sealed class IdeasViewModelTests : IDisposable
                 context.Scheduler.AdvanceBy(TimeSpan.FromMilliseconds(200));
                 Assert.Equal(0, context.Ideas.SaveCount);
 
+                // The throttle itself starts the write; no explicit flush.
                 context.Scheduler.AdvanceBy(TimeSpan.FromSeconds(1));
-                await vm.FlushAsync();
+                Assert.Equal(1, context.Ideas.SaveCount);
+                Assert.Equal("Third", Assert.Single(context.Ideas.LastSaved!).Title);
+
+                await vm.FlushAsync(); // let the write finish
                 Assert.Equal(1, context.Ideas.SaveCount);
             });
 
@@ -188,8 +192,9 @@ public sealed class IdeasViewModelTests : IDisposable
 
                 one.Notes = "Pending notes";
                 vm.Selected = vm.Cards.Single(c => c.Id == "b");
-                await vm.FlushAsync();
                 Assert.Equal(1, context.Ideas.SaveCount);
+                Assert.Equal("Pending notes", context.Ideas.LastSaved!.Single(i => i.Id == "a").Notes);
+                await vm.FlushAsync(); // let the write finish
 
                 // The debounce window passing afterwards does not write again.
                 context.Scheduler.AdvanceBy(TimeSpan.FromSeconds(1));
@@ -314,6 +319,8 @@ public sealed class IdeasViewModelTests : IDisposable
 
                 Assert.Empty(context.Notifications.Errors);
                 Assert.Equal("the-lighthouse.md", context.Workspace.SelectedNode?.Node.RelativePath);
+                await PumpUntilAsync(() => context.Editor.ActiveNode?.RelativePath == "the-lighthouse.md");
+                Assert.Equal("the-lighthouse.md", context.Editor.ActiveNode?.RelativePath);
                 Assert.Empty(vm.Cards);
 
                 vm.ShowUsedAndShelved = true;
@@ -372,7 +379,7 @@ public sealed class IdeasViewModelTests : IDisposable
                 Assert.True(save.IsSuccess, save.Error);
                 var reload = await context.Workspace.ReloadProjectAsync();
                 Assert.True(reload.IsSuccess, reload.Error);
-                await vm.FlushAsync();
+                await PumpUntilAsync(() => vm.Cards.Count == 0);
 
                 Assert.Equal(ProjectKind.Novel, context.Workspace.Profile.Kind);
                 Assert.Empty(vm.Cards);
@@ -383,7 +390,112 @@ public sealed class IdeasViewModelTests : IDisposable
         finally { DeleteFolder(root); }
     }
 
+    [Fact]
+    public async Task Same_root_workspace_change_keeps_pending_edit_and_saves_it()
+    {
+        var root = CreateWorkspace(StoryJson);
+        try
+        {
+            await SeedAsync(root, Idea("a", "Draft", Day1));
+            var context = await OpenAsync(root);
+
+            await Ui(async () =>
+            {
+                var vm = await context.CreateIdeasAsync();
+                var card = vm.Cards.Single();
+                vm.Selected = card;
+                context.Ideas.SaveCount = 0;
+
+                card.Title = "Edited during reload";
+                var reorder = await context.Workspace.ReorderNodesAsync(); // raises WorkspaceChanged, same root
+                Assert.True(reorder.IsSuccess, reorder.Error);
+                // Run the posted change handler, then wait for any reload it started.
+                Avalonia.Threading.Dispatcher.UIThread.RunJobs();
+                await CurrentLoad(vm);
+                await vm.FlushAsync();
+
+                Assert.Same(card, vm.Selected);
+                Assert.Equal("Edited during reload", vm.Selected!.Title);
+                Assert.Equal(1, context.Ideas.SaveCount);
+            });
+
+            Assert.Equal("Edited during reload", Assert.Single(await LoadFromDiskAsync(root)).Title);
+        }
+        finally { DeleteFolder(root); }
+    }
+
+    [Fact]
+    public async Task Opening_another_workspace_clears_tag_filter()
+    {
+        var first = CreateWorkspace(StoryJson);
+        var second = CreateWorkspace(StoryJson);
+        try
+        {
+            await SeedAsync(first, Idea("a", "Ghost ship", Day1, IdeaState.New, "horror"));
+            await SeedAsync(second, Idea("b", "Love letter", Day1, IdeaState.New, "romance"));
+            var context = await OpenAsync(first);
+
+            await Ui(async () =>
+            {
+                var vm = await context.CreateIdeasAsync();
+                vm.TagFilter = "horror";
+                Assert.Single(vm.Cards);
+
+                context.FolderPicker.Folder = second;
+                await context.OpenWorkspaceInCurrentDispatchAsync();
+                await PumpUntilAsync(() => vm.Cards.Any(c => c.Id == "b"));
+
+                Assert.Null(vm.TagFilter);
+                Assert.Equal(["Love letter"], vm.Cards.Select(c => c.Title));
+            });
+        }
+        finally
+        {
+            DeleteFolder(first);
+            DeleteFolder(second);
+        }
+    }
+
+    [Fact]
+    public async Task Editor_states_exclude_used()
+    {
+        var root = CreateWorkspace(StoryJson);
+        try
+        {
+            await SeedAsync(root, Idea("a", "Fresh", Day1), Idea("b", "Spent", Day1, IdeaState.Used));
+            var context = await OpenAsync(root);
+
+            await Ui(async () =>
+            {
+                var vm = await context.CreateIdeasAsync();
+                vm.ShowUsedAndShelved = true;
+                Assert.DoesNotContain(IdeaState.Used, vm.States);
+
+                var fresh = vm.Cards.Single(c => c.Id == "a");
+                Assert.DoesNotContain(IdeaState.Used, fresh.StateOptions);
+                fresh.State = IdeaState.Used;
+                Assert.Equal(IdeaState.New, fresh.State);
+
+                var spent = vm.Cards.Single(c => c.Id == "b");
+                Assert.Contains(IdeaState.Used, spent.StateOptions);
+                Assert.Equal(IdeaState.Used, spent.State);
+            });
+        }
+        finally { DeleteFolder(root); }
+    }
+
     // ── Helpers ───────────────────────────────────────────────────────────────
+
+    /// <summary>Pumps the current UI dispatcher until <paramref name="predicate"/> holds (call on the UI thread).</summary>
+    private static async Task PumpUntilAsync(Func<bool> predicate)
+    {
+        var deadline = DateTime.UtcNow + TimeSpan.FromSeconds(20);
+        while (DateTime.UtcNow < deadline && !predicate())
+        {
+            Avalonia.Threading.Dispatcher.UIThread.RunJobs();
+            await Task.Delay(25);
+        }
+    }
 
     private static string CreateWorkspace(string projectJson)
     {
@@ -446,6 +558,11 @@ public sealed class IdeasViewModelTests : IDisposable
             Assert.Fail(failureMessage());
     }
 
+    private static Task CurrentLoad(IdeasViewModel vm) =>
+        (Task)typeof(IdeasViewModel)
+            .GetField("_currentLoad", BindingFlags.Instance | BindingFlags.NonPublic)!
+            .GetValue(vm)!;
+
     private static Task? HydrationTask(WorkspaceViewModel workspace) =>
         typeof(WorkspaceViewModel)
             .GetField("_hydrationTask", BindingFlags.Instance | BindingFlags.NonPublic)!
@@ -461,6 +578,8 @@ public sealed class IdeasViewModelTests : IDisposable
         public ProjectSettingsService ProjectSettings { get; }
         public CountingIdeasService Ideas { get; }
         public HistoricalScheduler Scheduler { get; } = new();
+        public MutableFolderPickerService FolderPicker { get; }
+        public EditorViewModel Editor { get; }
         public WorkspaceViewModel Workspace { get; }
 
         public TestContext(string folder)
@@ -475,7 +594,8 @@ public sealed class IdeasViewModelTests : IDisposable
             ProjectSettings = new ProjectSettingsService(store);
             Ideas = new CountingIdeasService(new StoryIdeasService(store));
             _promoter = new StoryIdeaPromoter(structure, registry, phases, targets, new NotesService(store), Ideas);
-            var editor = new EditorViewModel(store, Notifications, wordCount);
+            var editor = Editor = new EditorViewModel(store, Notifications, wordCount);
+            FolderPicker = new MutableFolderPickerService { Folder = folder };
             _manuscript = new ManuscriptService(Notifications, exclusions);
             LiveContexts.Add(this);
 
@@ -484,7 +604,7 @@ public sealed class IdeasViewModelTests : IDisposable
                 structure,
                 new StubFilePickerService(),
                 new InMemoryAppSettingsStore(),
-                new FixedFolderPickerService(folder),
+                FolderPicker,
                 Notifications,
                 editor,
                 registry,
@@ -505,19 +625,24 @@ public sealed class IdeasViewModelTests : IDisposable
             _manuscript.Dispose();
         }
 
-        public Task OpenAsync()
+        public Task OpenAsync() =>
+            RunOnUiThreadWithPumpingAsync(async () =>
+            {
+                await OpenWorkspaceInCurrentDispatchAsync();
+                return 0;
+            });
+
+        /// <summary>
+        /// Opens <see cref="FolderPicker"/>'s folder and waits for hydration inside the current Dispatch:
+        /// each Dispatch gets a fresh dispatcher, so the node rebuild it posts would be lost once the job returns.
+        /// </summary>
+        public async Task OpenWorkspaceInCurrentDispatchAsync()
         {
             var method = typeof(WorkspaceViewModel).GetMethod("OpenWorkspaceAsync", BindingFlags.Instance | BindingFlags.NonPublic)
                 ?? throw new InvalidOperationException("Unable to locate OpenWorkspaceAsync.");
-            return RunOnUiThreadWithPumpingAsync(async () =>
-            {
-                await (Task)method.Invoke(Workspace, Array.Empty<object>())!;
-                // Wait for hydration inside this Dispatch: each Dispatch gets a fresh dispatcher, so
-                // the node rebuild it posts would be lost once this job returns.
-                if (HydrationTask(Workspace) is { } hydration)
-                    await hydration;
-                return 0;
-            });
+            await (Task)method.Invoke(Workspace, Array.Empty<object>())!;
+            if (HydrationTask(Workspace) is { } hydration)
+                await hydration;
         }
 
         /// <summary>Creates and loads an ideas view model; call on the UI thread.</summary>
@@ -533,12 +658,14 @@ public sealed class IdeasViewModelTests : IDisposable
     private sealed class CountingIdeasService(IStoryIdeasService inner) : IStoryIdeasService
     {
         public int SaveCount { get; set; }
+        public IReadOnlyList<StoryIdea>? LastSaved { get; private set; }
 
         public Task<Result<IReadOnlyList<StoryIdea>>> LoadAsync(string workspaceRoot) => inner.LoadAsync(workspaceRoot);
 
         public Task<Result<Unit>> SaveAsync(string workspaceRoot, IReadOnlyList<StoryIdea> ideas)
         {
             SaveCount++;
+            LastSaved = ideas;
             return inner.SaveAsync(workspaceRoot, ideas);
         }
     }
@@ -573,9 +700,10 @@ public sealed class IdeasViewModelTests : IDisposable
         }
     }
 
-    private sealed class FixedFolderPickerService(string folder) : IFolderPickerService
+    private sealed class MutableFolderPickerService : IFolderPickerService
     {
-        public Task<string?> PickFolderAsync() => Task.FromResult<string?>(folder);
+        public string? Folder { get; set; }
+        public Task<string?> PickFolderAsync() => Task.FromResult(Folder);
     }
 
     private sealed class StubFilePickerService : IFilePickerService

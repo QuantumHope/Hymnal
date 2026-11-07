@@ -9,10 +9,12 @@ using System.Reactive.Subjects;
 using System.Threading.Tasks;
 using ReactiveUI.Avalonia;
 using DynamicData.Binding;
+using Hymnal.Core.Common;
 using Hymnal.Core.Interfaces;
 using Hymnal.Core.Models;
 using Hymnal.Core.Services;
 using ReactiveUI;
+using Unit = System.Reactive.Unit;
 
 namespace Hymnal.ViewModels;
 
@@ -42,7 +44,9 @@ public sealed class IdeasViewModel : ViewModelBase, IDisposable
     private string? _loadedRoot;
     private bool _savePending;
     private Task _saveChain = Task.CompletedTask;
+    private ProjectKind? _loadedKind;
     private int _loadGeneration;
+    private Task _currentLoad = Task.CompletedTask;
 
     public IdeasViewModel(
         WorkspaceViewModel workspace,
@@ -91,22 +95,24 @@ public sealed class IdeasViewModel : ViewModelBase, IDisposable
         Disposables.Add(
             _saveRequests
                 .Throttle(SaveDelay, saveScheduler ?? AvaloniaScheduler.Instance)
-                .Subscribe(_ => FlushAsync()));
+                .Subscribe(unit => _ = FlushAsync()));
 
         // Moving to another card writes the previous card's pending edits right away.
         Disposables.Add(
             this.WhenAnyValue(x => x.Selected)
                 .Skip(1)
-                .Subscribe(_ => FlushAsync()));
+                .Subscribe(unit => _ = FlushAsync()));
 
         Disposables.Add(
             this.WhenAnyValue(x => x.TagFilter, x => x.ShowUsedAndShelved)
                 .Skip(1)
                 .Subscribe(_ => RefreshCards()));
 
+        // Card collections are only touched on the UI thread.
         Disposables.Add(
             Observable.Merge(workspace.WorkspaceChanged.Select(_ => Unit.Default), profile.Select(_ => Unit.Default))
-                .Subscribe(_ => ReloadInBackgroundAsync()));
+                .ObserveOn(AvaloniaScheduler.Instance)
+                .Subscribe(unit => _ = ReloadIfWorkspaceChangedAsync()));
     }
 
     // ── State ─────────────────────────────────────────────────────────────────
@@ -155,7 +161,8 @@ public sealed class IdeasViewModel : ViewModelBase, IDisposable
     private readonly ObservableAsPropertyHelper<bool> _canPromote;
     public bool CanPromote => _canPromote.Value;
 
-    public IReadOnlyList<IdeaState> States { get; } = Enum.GetValues<IdeaState>();
+    /// <summary>States the editor offers. <see cref="IdeaState.Used"/> is set only by promoting.</summary>
+    public IReadOnlyList<IdeaState> States => IdeaCardViewModel.SelectableStates;
 
     /// <summary>Target presets of the current profile, for the editor's target picker.</summary>
     public IReadOnlyList<TargetPreset> TargetPresets => _workspace.Profile.TargetPresets;
@@ -176,42 +183,79 @@ public sealed class IdeasViewModel : ViewModelBase, IDisposable
     /// Writes pending edits, then (re)loads ideas for the open workspace. Clears the list when no
     /// workspace is open or the profile has no ideas; a failed load makes the view read-only.
     /// </summary>
-    public async Task LoadAsync()
+    public Task LoadAsync()
     {
-        var generation = ++_loadGeneration;
-        await FlushAsync();
-        if (generation != _loadGeneration)
-            return;
+        var load = LoadCoreAsync(++_loadGeneration);
+        _currentLoad = load;
+        return load;
+    }
 
-        var root = _workspace.WorkspaceRoot;
-        var profile = _workspace.Profile;
-        this.RaisePropertyChanged(nameof(TargetPresets));
-
-        if (!_workspace.HasWorkspace || string.IsNullOrEmpty(root) || !profile.ShowsIdeas)
+    private async Task LoadCoreAsync(int generation)
+    {
+        Result<IReadOnlyList<StoryIdea>> result;
+        string root;
+        ProjectProfile profile;
+        do
         {
-            ReplaceIdeas(null, [], profile.TargetPresets);
-            IsReadOnly = false;
-            return;
-        }
+            await FlushAsync();
+            if (generation != _loadGeneration)
+            {
+                await _currentLoad;
+                return;
+            }
 
-        var result = await _ideas.LoadAsync(root);
-        if (generation != _loadGeneration)
-            return;
+            root = _workspace.WorkspaceRoot;
+            profile = _workspace.Profile;
+            this.RaisePropertyChanged(nameof(TargetPresets));
+
+            if (!_workspace.HasWorkspace || string.IsNullOrEmpty(root) || !profile.ShowsIdeas)
+            {
+                ReplaceIdeas(null, null, [], profile.TargetPresets);
+                IsReadOnly = false;
+                return;
+            }
+
+            result = await _ideas.LoadAsync(root);
+            if (generation != _loadGeneration)
+            {
+                await _currentLoad;
+                return;
+            }
+
+            // Edits made while the file was being read must be written (and re-read) first.
+        } while (_savePending && root == _loadedRoot);
+
+        // Edits still pending belong to the previously loaded workspace; write them there.
+        if (_savePending)
+        {
+            await FlushAsync();
+            if (generation != _loadGeneration)
+            {
+                await _currentLoad;
+                return;
+            }
+        }
 
         if (!result.IsSuccess)
         {
-            ReplaceIdeas(null, [], profile.TargetPresets);
+            ReplaceIdeas(null, null, [], profile.TargetPresets);
             IsReadOnly = true;
             _notifications.ShowInfo(ReadOnlyNotice);
             return;
         }
 
         IsReadOnly = false;
-        ReplaceIdeas(root, result.Value!, profile.TargetPresets);
+        ReplaceIdeas(root, profile.Kind, result.Value!, profile.TargetPresets);
     }
 
-    private async Task ReloadInBackgroundAsync()
+    /// <summary>Reloads unless the same workspace and project kind are already loaded.</summary>
+    private async Task ReloadIfWorkspaceChangedAsync()
     {
+        if (_loadedRoot != null
+            && _loadedRoot == _workspace.WorkspaceRoot
+            && _loadedKind == _workspace.Profile.Kind)
+            return;
+
         try
         {
             await LoadAsync();
@@ -222,13 +266,18 @@ public sealed class IdeasViewModel : ViewModelBase, IDisposable
         }
     }
 
-    private void ReplaceIdeas(string? root, IReadOnlyList<StoryIdea> ideas, IReadOnlyList<TargetPreset> presets)
+    private void ReplaceIdeas(
+        string? root, ProjectKind? kind, IReadOnlyList<StoryIdea> ideas, IReadOnlyList<TargetPreset> presets)
     {
-        var selectedId = root != null && root == _loadedRoot ? Selected?.Id : null;
+        var sameRoot = root != null && root == _loadedRoot;
+        var selectedId = sameRoot ? Selected?.Id : null;
 
         _savePending = false;
         _loadedRoot = root;
+        _loadedKind = kind;
         Selected = null;
+        if (!sameRoot)
+            TagFilter = null;
         foreach (var card in _allCards)
             RemoveCardSubscriptions(card);
         _allCards.Clear();
@@ -300,8 +349,9 @@ public sealed class IdeasViewModel : ViewModelBase, IDisposable
         if (string.IsNullOrWhiteSpace(fileName))
             return;
 
-        using (_workspace.SuppressFileWatcher())
+        try
         {
+            using var suppressFileWatcher = _workspace.SuppressFileWatcher();
             var result = await _promoter.PromoteAsync(
                 _workspace.WorkspaceRoot, _workspace.BookTxtPath, card.ToIdea(), fileName.Trim(), _workspace.Profile);
 
@@ -318,8 +368,10 @@ public sealed class IdeasViewModel : ViewModelBase, IDisposable
                 _notifications.ShowError(result.Error!);
             }
         }
-
-        await LoadAsync();
+        finally
+        {
+            await LoadAsync();
+        }
     }
 
     // ── Saving ────────────────────────────────────────────────────────────────

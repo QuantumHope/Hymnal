@@ -100,11 +100,28 @@ public sealed class IdeaCardViewModel : ViewModelBase, IDisposable
     public string TargetLabel =>
         _presets.FirstOrDefault(p => p.Key == _targetPreset)?.Label ?? "";
 
+    /// <summary>States an author can pick; <see cref="IdeaState.Used"/> is set only by promoting.</summary>
+    public static IReadOnlyList<IdeaState> SelectableStates { get; } =
+        [IdeaState.New, IdeaState.Developing, IdeaState.Shelved];
+
+    private static readonly IReadOnlyList<IdeaState> UsedStateOptions =
+        [IdeaState.New, IdeaState.Developing, IdeaState.Used, IdeaState.Shelved];
+
+    /// <summary>States for this card's editor picker: a used idea also lists Used so it can be shown.</summary>
+    public IReadOnlyList<IdeaState> StateOptions => _state == IdeaState.Used ? UsedStateOptions : SelectableStates;
+
     private IdeaState _state;
     public IdeaState State
     {
         get => _state;
-        set => SetEdited(ref _state, value, nameof(State));
+        set
+        {
+            // Used is set only by promoting, never picked in the editor.
+            if (value == IdeaState.Used && _state != IdeaState.Used)
+                return;
+            if (SetEdited(ref _state, value, nameof(State)))
+                this.RaisePropertyChanged(nameof(StateOptions));
+        }
     }
 
     public StoryIdea ToIdea() =>
