@@ -263,3 +263,49 @@ All in `tests/Hymnal.Core.Tests`; file-system tests use temp dirs with `try/fina
 - ViewModels: project-type dialog selection/Create; Corkboard board selection per kind and anthology drill-in/back; Settings kind/storage change triggers migration + reload; Project settings smoke test.
 
 Existing baseline must stay green: `dotnet test Hymnal.sln`.
+
+## 8. Story ideas (addendum, approved 2026-11-07)
+
+A place to capture ideas for stories that are not yet in the manuscript. Short Story and Anthology only; Novel is unchanged.
+
+### 8.1 Model
+
+```json
+{ "id": "…", "title": "The Lighthouse", "premise": "A keeper's widow hears ships that sank decades ago.",
+  "notes": "…markdown…", "tags": ["horror"], "targetPreset": "flash",
+  "state": "new", "createdAt": "2026-11-07", "storyId": null }
+```
+
+- `state`: `new` | `developing` | `used` | `shelved`.
+- `targetPreset`: optional; one of the §3.2 preset keys (no custom range).
+- `storyId`: registry UUID (or embedded `id`, §4.5) of the story it was promoted to; set only when `state` is `used`.
+- `tags`: trimmed, case-insensitive unique, stored as entered.
+
+### 8.2 Storage
+
+- One project-level file: `.hymnal-data/ideas.json` = `{ schemaVersion: 1, ideas: [...] }`, written via `IMetadataStore.WriteTextAtomicAsync`, accessed only through `IStoryIdeasService` (Core).
+- Ideas are project-level, not per-story, so they stay in this file under embedded storage too (§4.5 "everything in one file" covers a story's own data, not the idea backlog). Storage migration (§4.6) does not touch it.
+- Missing file → empty list. Unreadable/malformed or unsupported `schemaVersion` → `Result.Fail`; the UI shows a warning, the view is read-only for the session, and the file is never overwritten.
+- Switching the project to Novel keeps the file; the view is hidden.
+
+### 8.3 UI
+
+- **Ideas** view, alongside Corkboard and Gantt, shown only when `ProjectProfile.ShowsIdeas` (story/anthology).
+- Card grid: title, premise (truncated), tags, target label. Filter by tag and state; `used` and `shelved` hidden by default (toggle to show). Newest first.
+- Selecting a card opens a side editor for every field; edits save with the same debounced auto-save pattern as notes. Delete requires confirmation.
+- **+ New idea** button and a global quick-capture shortcut open a small dialog (title required, premise optional) that creates a `new` idea without leaving the current view. The plan picks a shortcut that does not collide with existing bindings.
+
+### 8.4 Promote to story (Anthology only)
+
+1. Prompt for a file name, prefilled with a slug of the title (`the-lighthouse.md`), placed beside existing story files (root or `manuscript/`, matching `Book.txt` location). Name collision → error, nothing written.
+2. Create the file containing `# <Title>` and a blank line, and append it to `Book.txt` via `IBookTxtStructureService`.
+3. Set the new story's status to Idea (`Planned`), its target to the idea's preset (if any), and its notes to the premise followed by the idea's notes — through the normal per-story stores (sidecar or embedded, whichever is active).
+4. Mark the idea `used` with `storyId`, save, and open the story in the editor.
+
+If any step after file creation fails, report it via `ShowError`; the idea stays unchanged (not `used`) so the author can retry or fix manually. Short Story projects have one story, so there is no Promote action; ideas act as a "what's next" list.
+
+### 8.5 Components and tests
+
+- **Core (new):** `StoryIdea`, `IdeaState`, `IStoryIdeasService` / `StoryIdeasService`, `StoryIdeaPromoter`; `ProjectProfile.ShowsIdeas`.
+- **App (new):** Ideas view + VM, idea editor, quick-capture dialog, DI registration.
+- **Tests:** `StoryIdeasService` round-trip, missing → empty, malformed → Fail with no overwrite, tag normalization, ordering; `StoryIdeaPromoter` slug, collision, Book.txt append, status/target/notes applied, idea marked used, failure after file creation leaves the idea unchanged; `ShowsIdeas` per kind; Ideas VM filtering (state/tag defaults) and promote hidden for Short Story.
