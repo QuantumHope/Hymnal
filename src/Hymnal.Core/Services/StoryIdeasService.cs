@@ -32,9 +32,15 @@ public sealed class StoryIdeasService(IMetadataStore store) : IStoryIdeasService
             if (doc.SchemaVersion != CurrentSchemaVersion)
                 return Result<IReadOnlyList<StoryIdea>>.Fail(
                     $"ideas.json has unsupported schemaVersion {doc.SchemaVersion}. Expected {CurrentSchemaVersion}.");
-            IReadOnlyList<StoryIdea> ideas = (doc.Ideas ?? [])
-                .Select(i => i with { Tags = i.Tags ?? [] })
-                .ToList();
+            var ideas = new List<StoryIdea>();
+            foreach (var i in doc.Ideas ?? [])
+            {
+                if (i is null)
+                    return Result<IReadOnlyList<StoryIdea>>.Fail("ideas.json contains an empty idea entry.");
+                if (string.IsNullOrWhiteSpace(i.Id) || i.Title is null)
+                    return Result<IReadOnlyList<StoryIdea>>.Fail("ideas.json contains an idea without an id or title.");
+                ideas.Add(i with { Premise = i.Premise ?? "", Notes = i.Notes ?? "", Tags = i.Tags ?? [] });
+            }
             return Result<IReadOnlyList<StoryIdea>>.Ok(ideas);
         }
         catch (JsonException ex)

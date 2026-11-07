@@ -92,8 +92,10 @@ public class StoryIdeasServiceTests
     public Task Load_unsupported_schema_fails() => WithTempDirAsync(async (dir, svc) =>
     {
         WriteRaw(dir, "{\"schemaVersion\":2,\"ideas\":[]}");
+        var before = File.ReadAllBytes(StoryIdeasService.IdeasFilePath(dir));
         var result = await svc.LoadAsync(dir);
         Assert.False(result.IsSuccess);
+        Assert.Equal(before, File.ReadAllBytes(StoryIdeasService.IdeasFilePath(dir)));
     });
 
     [Fact]
@@ -101,8 +103,10 @@ public class StoryIdeasServiceTests
     {
         WriteRaw(dir, "{\"schemaVersion\":1,\"ideas\":[{\"id\":\"a\",\"title\":\"T\",\"premise\":\"\",\"notes\":\"\"," +
                       "\"tags\":[],\"state\":\"archived\",\"createdAt\":\"2026-11-07\"}]}");
+        var before = File.ReadAllBytes(StoryIdeasService.IdeasFilePath(dir));
         var result = await svc.LoadAsync(dir);
         Assert.False(result.IsSuccess);
+        Assert.Equal(before, File.ReadAllBytes(StoryIdeasService.IdeasFilePath(dir)));
     });
 
     [Fact]
@@ -129,5 +133,38 @@ public class StoryIdeasServiceTests
         await svc.SaveAsync(dir, [idea]);
         var loaded = await svc.LoadAsync(dir);
         Assert.Equal(["Horror", "SF"], loaded.Value![0].Tags);
+    });
+
+    [Theory]
+    [InlineData("{\"schemaVersion\":1,\"ideas\":[null]}")]
+    [InlineData("{\"schemaVersion\":1,\"ideas\":[{\"title\":\"T\",\"state\":\"new\",\"createdAt\":\"2026-11-07\"}]}")]
+    [InlineData("{\"schemaVersion\":1,\"ideas\":[{\"id\":\"a\",\"state\":\"new\",\"createdAt\":\"2026-11-07\"}]}")]
+    public Task Load_null_entry_or_missing_id_or_title_fails_and_leaves_file(string raw) => WithTempDirAsync(async (dir, svc) =>
+    {
+        WriteRaw(dir, raw);
+        var before = File.ReadAllBytes(StoryIdeasService.IdeasFilePath(dir));
+        var result = await svc.LoadAsync(dir);
+        Assert.False(result.IsSuccess);
+        Assert.Equal(before, File.ReadAllBytes(StoryIdeasService.IdeasFilePath(dir)));
+    });
+
+    [Fact]
+    public Task Load_missing_premise_and_notes_become_empty() => WithTempDirAsync(async (dir, svc) =>
+    {
+        WriteRaw(dir, "{\"schemaVersion\":1,\"ideas\":[{\"id\":\"a\",\"title\":\"T\"," +
+                      "\"state\":\"new\",\"createdAt\":\"2026-11-07\"}]}");
+        var result = await svc.LoadAsync(dir);
+        Assert.True(result.IsSuccess);
+        Assert.Equal("", result.Value![0].Premise);
+        Assert.Equal("", result.Value[0].Notes);
+    });
+
+    [Fact]
+    public Task Load_missing_ideas_array_is_empty() => WithTempDirAsync(async (dir, svc) =>
+    {
+        WriteRaw(dir, "{\"schemaVersion\":1}");
+        var result = await svc.LoadAsync(dir);
+        Assert.True(result.IsSuccess);
+        Assert.Empty(result.Value!);
     });
 }
