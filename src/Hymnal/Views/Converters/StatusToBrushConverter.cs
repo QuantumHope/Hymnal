@@ -116,12 +116,7 @@ public sealed class StatusDotTooltipConverter : IMultiValueConverter
         if (values[0] is bool isMissing && isMissing)
             return "File not found";
 
-        if (values[1] is not ChapterStatus status)
-            return null;
-
-        // Optional third value: the profile-specific label for the status.
-        var label = values.Count > 2 && values[2] is string s && s.Length > 0 ? s : status.ToString();
-        return $"Change status: {label}";
+        return values[1] is ChapterStatus status ? $"Change status: {status}" : null;
     }
 }
 

@@ -77,6 +77,12 @@ public sealed class GanttViewModel : ViewModelBase
     /// <summary>Statuses visible in the workspace profile.</summary>
     public IReadOnlyList<StatusOption> AvailableStatuses => _workspace.Profile.VisibleStatuses;
 
+    /// <summary>Legend entries: one per Gantt phase of the workspace profile.</summary>
+    public IReadOnlyList<GanttLegendItem> LegendItems => _workspace.Profile.GanttPhases
+        .Select(name => Enum.Parse<ChapterStatus>(name))
+        .Select(s => new GanttLegendItem(_workspace.Profile.LabelFor(s), GanttRowViewModel.StatusToColorHex(s)))
+        .ToList();
+
     private string _editingPhaseName = string.Empty;
     public string EditingPhaseName
     {
@@ -167,7 +173,11 @@ public sealed class GanttViewModel : ViewModelBase
         Disposables.Add(_rowEditRequested.Subscribe(OpenEditForRow));
         Disposables.Add(workspace.WhenAnyValue(x => x.Profile)
             .Skip(1)
-            .Subscribe(_ => this.RaisePropertyChanged(nameof(AvailableStatuses))));
+            .Subscribe(_ =>
+            {
+                this.RaisePropertyChanged(nameof(AvailableStatuses));
+                this.RaisePropertyChanged(nameof(LegendItems));
+            }));
 
         CommitEditCommand = ReactiveCommand.CreateFromTask(CommitEditAsync);
         CancelEditCommand = ReactiveCommand.Create(CancelEdit);
@@ -500,7 +510,8 @@ public sealed class GanttViewModel : ViewModelBase
             ? DateOnly.FromDateTime(row.EditableEndDate.Value)
             : (DateOnly?)null;
         var status = row.EditableStatus;
-        var phaseName = status.ToString();
+        // Mapped statuses (e.g. a story's stored Polishing) edit the segment they display as.
+        var phaseName = _workspace.Profile.DisplayStatus(status).ToString();
         var startStr = start?.ToString("yyyy-MM-dd");
         var endStr = end?.ToString("yyyy-MM-dd");
         var progress = Math.Clamp(row.EditableProgressPercent ?? 0.0, 0.0, 100.0);
@@ -585,7 +596,7 @@ public sealed class GanttViewModel : ViewModelBase
 
     private void LoadEditorValuesForStatus(GanttRowViewModel row, ChapterStatus status)
     {
-        var phaseName = status.ToString();
+        var phaseName = _workspace.Profile.DisplayStatus(status).ToString();
         var seg = row.PhaseSegments.FirstOrDefault(s =>
             string.Equals(s.PhaseName, phaseName, StringComparison.Ordinal));
 
@@ -647,7 +658,7 @@ public sealed class GanttViewModel : ViewModelBase
         var progress = Math.Clamp(EditProgressPercent ?? 0.0, 0.0, 100.0);
 
         var editingStatus = EditingStatus;
-        var phaseName = editingStatus.ToString();
+        var phaseName = _workspace.Profile.DisplayStatus(editingStatus).ToString();
 
         PhaseData? updated = null;
         await _phaseDataService.UpsertAsync(_workspace.WorkspaceRoot, chapterVm.Uuid, current =>
@@ -697,14 +708,16 @@ public sealed class GanttViewModel : ViewModelBase
             await Avalonia.Threading.Dispatcher.UIThread.InvokeAsync(CancelEdit);
     }
 
-    private bool IsPhaseStatus(ChapterStatus status) => _workspace.Profile.IsTrackablePhase(status);
+    /// <summary>True when <paramref name="status"/> displays as one of the profile's Gantt phases.</summary>
+    private bool IsPhaseStatus(ChapterStatus status) =>
+        _workspace.Profile.IsTrackablePhase(_workspace.Profile.DisplayStatus(status));
 
     private (ChapterStatus Status, string? Start, string? End, double Progress) GetPersistedInlineValues(
         ChapterViewModel chapterVm,
         ChapterStatus status)
     {
         var phaseData = chapterVm.PhaseData ?? PhaseDataService.DefaultPhaseDataFor(_workspace.Profile);
-        var phaseName = status.ToString();
+        var phaseName = _workspace.Profile.DisplayStatus(status).ToString();
 
         if (IsPhaseStatus(status)
             && phaseData.Schedule?.TryGetValue(phaseName, out var existing) == true)
@@ -853,3 +866,6 @@ public sealed class GanttViewModel : ViewModelBase
             IsBook: true);
     }
 }
+
+/// <summary>One Gantt legend swatch: phase label and its colour.</summary>
+public sealed record GanttLegendItem(string Label, string ColorHex);

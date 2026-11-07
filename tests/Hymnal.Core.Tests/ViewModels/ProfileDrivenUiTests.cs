@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Reactive.Linq;
 using System.Reflection;
 using System.Threading.Tasks;
 using Hymnal.Core.Infrastructure;
@@ -117,6 +118,236 @@ public sealed class ProfileDrivenUiTests
     }
 
     [Fact]
+    public async Task Story_sidebar_status_repick_of_displayed_bucket_keeps_stored_status()
+    {
+        var root = CreateFolder(("Book.txt", "scene.md\n"), ("scene.md", "# Scene\n"));
+        try
+        {
+            var store = new MetadataStore();
+            var phaseService = new PhaseDataService(store);
+            var stored = new PhaseData { Status = ChapterStatus.Polishing, PhaseStartDate = "2026-01-01" };
+            var vm = CreateStoryChapter(root, store, phaseService, stored);
+
+            await RunOnUiThreadWithPumpingAsync(async () =>
+            {
+                await vm.ChangeStatusCommand.Execute(ChapterStatus.Editing);
+                return 0;
+            });
+
+            Assert.Equal(ChapterStatus.Polishing, vm.Status);
+            Assert.Same(stored, vm.PhaseData);
+            Assert.Empty(await phaseService.LoadAsync(root));
+
+            await RunOnUiThreadWithPumpingAsync(async () =>
+            {
+                await vm.ChangeStatusCommand.Execute(ChapterStatus.Done);
+                return 0;
+            });
+
+            Assert.Equal(ChapterStatus.Done, vm.Status);
+            Assert.Equal(ChapterStatus.Done, (await phaseService.LoadAsync(root))["uuid-1"].Status);
+        }
+        finally { DeleteFolder(root); }
+    }
+
+    [Fact]
+    public async Task Story_chapter_info_advance_from_polishing_closes_editing_segment()
+    {
+        var root = CreateStoryFolder();
+        try
+        {
+            var context = await OpenAsync(root, expectedNodes: 2);
+            var node = await SeedFirstNodeAsync(context, new PhaseData
+            {
+                Status = ChapterStatus.Polishing,
+                Schedule = new() { ["Editing"] = new PhaseScheduleEntry { StartDate = "2026-01-01", Progress = 40 } }
+            });
+            var info = await context.CreateChapterInfoForAsync(node);
+
+            await RunOnUiThreadWithPumpingAsync(async () =>
+            {
+                await info.SetStatusCommand.Execute(ChapterStatus.Done);
+                return 0;
+            });
+
+            var saved = (await context.PhaseService.LoadAsync(root))[node.Uuid];
+            Assert.Equal(ChapterStatus.Done, saved.Status);
+            var editing = saved.Schedule!["Editing"];
+            Assert.Equal("2026-01-01", editing.StartDate);
+            Assert.Equal(DateTime.UtcNow.ToString("yyyy-MM-dd"), editing.EndDate);
+            Assert.Equal(100.0, editing.Progress);
+            Assert.False(saved.Schedule.ContainsKey("Polishing"));
+        }
+        finally { DeleteFolder(root); }
+    }
+
+    [Fact]
+    public async Task Story_chapter_detail_advance_from_polishing_closes_editing_segment()
+    {
+        var root = CreateFolder(("Book.txt", "scene.md\n"), ("scene.md", "# Scene\n"));
+        try
+        {
+            var store = new MetadataStore();
+            var phaseService = new PhaseDataService(store);
+            var stored = new PhaseData
+            {
+                Status = ChapterStatus.Polishing,
+                Schedule = new() { ["Editing"] = new PhaseScheduleEntry { StartDate = "2026-01-01" } }
+            };
+            await phaseService.UpsertAsync(root, "uuid-1", _ => stored);
+            var detail = new ChapterDetailViewModel(
+                CreateStoryChapter(root, store, phaseService, stored), phaseService, root, new RecordingNotificationService());
+
+            await RunOnUiThreadWithPumpingAsync(async () =>
+            {
+                await detail.SetStatusCommand.Execute(ChapterStatus.Done);
+                return 0;
+            });
+
+            var saved = (await phaseService.LoadAsync(root))["uuid-1"];
+            Assert.Equal(DateTime.UtcNow.ToString("yyyy-MM-dd"), saved.Schedule!["Editing"].EndDate);
+            Assert.Equal(100.0, saved.Schedule["Editing"].Progress);
+            Assert.False(saved.Schedule.ContainsKey("Polishing"));
+        }
+        finally { DeleteFolder(root); }
+    }
+
+    [Fact]
+    public async Task Story_gantt_inline_date_edit_on_polishing_row_lands_on_editing_segment()
+    {
+        var root = CreateStoryFolder();
+        try
+        {
+            var context = await OpenAsync(root, expectedNodes: 2);
+            var node = await SeedFirstNodeAsync(context, new PhaseData { Status = ChapterStatus.Polishing });
+            var gantt = new GanttViewModel(context.Workspace, context.PhaseService, context.Notifications);
+            var row = gantt.Rows.First(r => r.IsChapter && r.RelativePath == node.Node.RelativePath);
+
+            row.EditableStartDate = new DateTime(2026, 3, 1);
+            await gantt.SaveInlineCellAsync(row, GanttEditableColumn.StartDate);
+
+            var saved = (await context.PhaseService.LoadAsync(root))[node.Uuid];
+            Assert.Equal(ChapterStatus.Polishing, saved.Status);
+            Assert.Equal("2026-03-01", saved.Schedule!["Editing"].StartDate);
+            Assert.False(saved.Schedule.ContainsKey("Polishing"));
+        }
+        finally { DeleteFolder(root); }
+    }
+
+    [Fact]
+    public async Task Novel_gantt_inline_date_edit_on_polishing_row_lands_on_polishing_segment()
+    {
+        var root = CreateFolder(("Book.txt", "chapter-one.md\n"), ("chapter-one.md", "# One\n"));
+        try
+        {
+            var context = await OpenAsync(root, expectedNodes: 1);
+            var node = await SeedFirstNodeAsync(context, new PhaseData { Status = ChapterStatus.Polishing });
+            var gantt = new GanttViewModel(context.Workspace, context.PhaseService, context.Notifications);
+            var row = gantt.Rows.First(r => r.IsChapter);
+
+            row.EditableStartDate = new DateTime(2026, 3, 1);
+            await gantt.SaveInlineCellAsync(row, GanttEditableColumn.StartDate);
+
+            var saved = (await context.PhaseService.LoadAsync(root))[node.Uuid];
+            Assert.Equal("2026-03-01", saved.Schedule!["Polishing"].StartDate);
+            Assert.False(saved.Schedule.ContainsKey("Editing"));
+        }
+        finally { DeleteFolder(root); }
+    }
+
+    [Fact]
+    public async Task Gantt_legend_follows_profile_phases()
+    {
+        var storyRoot = CreateStoryFolder();
+        var novelRoot = CreateFolder(("Book.txt", "chapter-one.md\n"), ("chapter-one.md", "# One\n"));
+        try
+        {
+            var story = await OpenAsync(storyRoot, expectedNodes: 2);
+            var storyGantt = new GanttViewModel(story.Workspace, story.PhaseService, story.Notifications);
+            Assert.Equal(["Drafting", "Revising"], storyGantt.LegendItems.Select(i => i.Label));
+            Assert.Equal(["#38BDF8", "#9D4EDD"], storyGantt.LegendItems.Select(i => i.ColorHex));
+
+            var novel = await OpenAsync(novelRoot, expectedNodes: 1);
+            var novelGantt = new GanttViewModel(novel.Workspace, novel.PhaseService, novel.Notifications);
+            Assert.Equal(GanttProjection.PhaseNames, novelGantt.LegendItems.Select(i => i.Label));
+            Assert.Equal(
+                ["#9589B0", "#38BDF8", "#9D4EDD", "#F5C842", "#E91E8C"],
+                novelGantt.LegendItems.Select(i => i.ColorHex));
+        }
+        finally
+        {
+            DeleteFolder(storyRoot);
+            DeleteFolder(novelRoot);
+        }
+    }
+
+    [Fact]
+    public async Task Story_chapter_info_schedule_save_keeps_hidden_phase_entries()
+    {
+        var root = CreateStoryFolder();
+        try
+        {
+            var context = await OpenAsync(root, expectedNodes: 2);
+            var node = await SeedFirstNodeAsync(context, new PhaseData
+            {
+                Status = ChapterStatus.Drafting,
+                Schedule = new() { ["Polishing"] = new PhaseScheduleEntry { StartDate = "2025-05-01", EndDate = "2025-05-09" } }
+            });
+            var info = await context.CreateChapterInfoForAsync(node);
+
+            await RunOnUiThreadWithPumpingAsync(async () =>
+            {
+                info.PhaseScheduleRows.Single(r => r.PhaseName == "Drafting").StartDate = "2026-02-01";
+                await info.SaveScheduleCommand.Execute();
+                return 0;
+            });
+
+            var saved = (await context.PhaseService.LoadAsync(root))[node.Uuid];
+            Assert.Equal("2026-02-01", saved.Schedule!["Drafting"].StartDate);
+            Assert.Equal("2025-05-01", saved.Schedule["Polishing"].StartDate);
+            Assert.Equal("2025-05-09", saved.Schedule["Polishing"].EndDate);
+        }
+        finally { DeleteFolder(root); }
+    }
+
+    [Fact]
+    public async Task Story_chapter_detail_schedule_save_keeps_hidden_phase_entries()
+    {
+        var root = CreateFolder(("Book.txt", "scene.md\n"), ("scene.md", "# Scene\n"));
+        try
+        {
+            var store = new MetadataStore();
+            var phaseService = new PhaseDataService(store);
+            var stored = new PhaseData
+            {
+                Status = ChapterStatus.Drafting,
+                Schedule = new() { ["Polishing"] = new PhaseScheduleEntry { StartDate = "2025-05-01" } }
+            };
+            await phaseService.UpsertAsync(root, "uuid-1", _ => stored);
+            var detail = new ChapterDetailViewModel(
+                CreateStoryChapter(root, store, phaseService, stored), phaseService, root, new RecordingNotificationService());
+
+            await RunOnUiThreadWithPumpingAsync(() =>
+            {
+                detail.PhaseScheduleRows.Single(r => r.PhaseName == "Drafting").StartDate = "2026-02-01";
+                detail.RequestImmediateScheduleSave();
+                return Task.FromResult(0);
+            });
+
+            PhaseData? saved = null;
+            await WaitUntilAsync(
+                () =>
+                {
+                    saved = phaseService.LoadAsync(root).GetAwaiter().GetResult()["uuid-1"];
+                    return saved.Schedule?.GetValueOrDefault("Drafting")?.StartDate == "2026-02-01";
+                },
+                () => "Drafting row edit was not saved.");
+            Assert.Equal("2025-05-01", saved!.Schedule!["Polishing"].StartDate);
+        }
+        finally { DeleteFolder(root); }
+    }
+
+    [Fact]
     public void Story_card_status_display_maps_polishing_to_revising()
     {
         var root = CreateFolder(("Book.txt", "scene.md\n"), ("scene.md", "# Scene\n"));
@@ -175,6 +406,34 @@ public sealed class ProfileDrivenUiTests
     }
 
     // ── Helpers ───────────────────────────────────────────────────────────────
+
+    private static ChapterViewModel CreateStoryChapter(
+        string root, MetadataStore store, PhaseDataService phaseService, PhaseData phaseData) =>
+        new(
+            new ChapterNode("scene.md", "scene.md", "Scene", NodeKind.Chapter, IsMissing: false, Index: 0),
+            "uuid-1",
+            phaseData,
+            phaseService,
+            new TargetsService(store),
+            new InMemoryAppSettingsStore(),
+            new RecordingNotificationService(),
+            root,
+            target: null,
+            profile: ProjectProfile.For(new ProjectSettings(ProjectKind.Story)));
+
+    /// <summary>Persists <paramref name="phaseData"/> for the first chapter node and applies it to the VM.</summary>
+    private static async Task<ChapterViewModel> SeedFirstNodeAsync(TestContext context, PhaseData phaseData)
+    {
+        var node = context.Workspace.Nodes.First(n => n.Node.Kind == NodeKind.Chapter);
+        await WaitUntilAsync(() => !string.IsNullOrEmpty(node.Uuid), () => "Chapter UUID was not assigned.");
+        await context.PhaseService.UpsertAsync(context.Workspace.WorkspaceRoot, node.Uuid, _ => phaseData);
+        await RunOnUiThreadWithPumpingAsync(() =>
+        {
+            node.ApplyPhaseData(phaseData);
+            return Task.FromResult(0);
+        });
+        return node;
+    }
 
     private static string CreateStoryFolder() => CreateFolder(
         ("Book.txt", "scene-one.md\nscene-two.md\n"),
@@ -282,6 +541,20 @@ public sealed class ProfileDrivenUiTests
                 projectSettings,
                 new ProjectInitializer(_store, projectSettings),
                 new DecliningProjectInitPrompt());
+        }
+
+        /// <summary>Creates a ChapterInfoViewModel with <paramref name="node"/> open in the editor.</summary>
+        public async Task<ChapterInfoViewModel> CreateChapterInfoForAsync(ChapterViewModel node)
+        {
+            var info = CreateChapterInfo();
+            var path = Path.Combine(Workspace.ManuscriptRoot, node.Node.RelativePath);
+            await RunOnUiThreadWithPumpingAsync(async () =>
+            {
+                await _editor.OpenChapterAsync(node.Node, path);
+                return 0;
+            });
+            await WaitUntilAsync(() => info.ChapterTitle == node.Node.Title, () => "Chapter info did not load the chapter.");
+            return info;
         }
 
         public ChapterInfoViewModel CreateChapterInfo() => new(

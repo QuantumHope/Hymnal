@@ -577,7 +577,8 @@ public sealed class ChapterInfoViewModel : ViewModelBase, IDisposable
         var chapterVm = _activeChapterVm;
         var uuid = _loadedUuid;
         var workspaceRoot = _workspaceViewModel.WorkspaceRoot;
-        var phases = Profile.GanttPhases;
+        var profile = Profile;
+        var phases = profile.GanttPhases;
 
         if (chapterVm == null || string.IsNullOrEmpty(uuid) || string.IsNullOrEmpty(workspaceRoot))
             return;
@@ -600,7 +601,8 @@ public sealed class ChapterInfoViewModel : ViewModelBase, IDisposable
                 // Close out the previous phase when advancing forward.
                 if (isAdvancing)
                 {
-                    var oldPhaseName = current?.Status.ToString();
+                    // Close the segment the old status displays as (story Polishing → Editing).
+                    var oldPhaseName = current is null ? null : profile.DisplayStatus(current.Status).ToString();
                     if (oldPhaseName != null && phases.Contains(oldPhaseName))
                     {
                         schedule.TryGetValue(oldPhaseName, out var old);

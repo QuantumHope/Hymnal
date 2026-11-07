@@ -448,6 +448,10 @@ public sealed class ChapterViewModel : ViewModelBase, IDisposable
 
     private async Task ChangeStatusAsync(ChapterStatus newStatus)
     {
+        // Re-picking the bucket already shown is not a change; keep the stored status and dates.
+        if (Profile.DisplayStatus(Status) == newStatus)
+            return;
+
         PhaseData? updated = null;
         await _phaseDataService.UpsertAsync(_workspaceRoot, Uuid, current =>
         {

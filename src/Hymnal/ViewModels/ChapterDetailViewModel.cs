@@ -306,7 +306,8 @@ public sealed class ChapterDetailViewModel : ViewModelBase, IDisposable
 
                 if (isAdvancing)
                 {
-                    var oldPhaseName = current?.Status.ToString();
+                    // Close the segment the old status displays as (story Polishing → Editing).
+                    var oldPhaseName = current is null ? null : Profile.DisplayStatus(current.Status).ToString();
                     if (oldPhaseName != null && Profile.GanttPhases.Contains(oldPhaseName))
                     {
                         schedule.TryGetValue(oldPhaseName, out var old);

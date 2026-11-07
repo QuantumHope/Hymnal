@@ -69,32 +69,24 @@
                                VerticalAlignment="Center" />
                 </StackPanel>
 
-                <StackPanel Grid.Column="1"
-                            Orientation="Horizontal"
-                            VerticalAlignment="Center"
-                            Margin="16,0"
-                            Spacing="12">
-                    <StackPanel Orientation="Horizontal" Spacing="5" VerticalAlignment="Center">
-                        <Border Width="10" Height="10" CornerRadius="2" Background="#9589B0" />
-                        <TextBlock Text="Outlining" FontSize="10" Foreground="#94A3B8" VerticalAlignment="Center" />
-                    </StackPanel>
-                    <StackPanel Orientation="Horizontal" Spacing="5" VerticalAlignment="Center">
-                        <Border Width="10" Height="10" CornerRadius="2" Background="#38BDF8" />
-                        <TextBlock Text="Drafting" FontSize="10" Foreground="#94A3B8" VerticalAlignment="Center" />
-                    </StackPanel>
-                    <StackPanel Orientation="Horizontal" Spacing="5" VerticalAlignment="Center">
-                        <Border Width="10" Height="10" CornerRadius="2" Background="#9D4EDD" />
-                        <TextBlock Text="Editing" FontSize="10" Foreground="#94A3B8" VerticalAlignment="Center" />
-                    </StackPanel>
-                    <StackPanel Orientation="Horizontal" Spacing="5" VerticalAlignment="Center">
-                        <Border Width="10" Height="10" CornerRadius="2" Background="#F5C842" />
-                        <TextBlock Text="Polishing" FontSize="10" Foreground="#94A3B8" VerticalAlignment="Center" />
-                    </StackPanel>
-                    <StackPanel Orientation="Horizontal" Spacing="5" VerticalAlignment="Center">
-                        <Border Width="10" Height="10" CornerRadius="2" Background="#E91E8C" />
-                        <TextBlock Text="Reviewing" FontSize="10" Foreground="#94A3B8" VerticalAlignment="Center" />
-                    </StackPanel>
-                </StackPanel>
+                <ItemsControl Grid.Column="1"
+                              ItemsSource="{Binding LegendItems}"
+                              VerticalAlignment="Center"
+                              Margin="16,0">
+                    <ItemsControl.ItemsPanel>
+                        <ItemsPanelTemplate>
+                            <StackPanel Orientation="Horizontal" Spacing="12" />
+                        </ItemsPanelTemplate>
+                    </ItemsControl.ItemsPanel>
+                    <ItemsControl.ItemTemplate>
+                        <DataTemplate x:DataType="vm:GanttLegendItem">
+                            <StackPanel Orientation="Horizontal" Spacing="5" VerticalAlignment="Center">
+                                <Border Width="10" Height="10" CornerRadius="2" Background="{Binding ColorHex}" />
+                                <TextBlock Text="{Binding Label}" FontSize="10" Foreground="#94A3B8" VerticalAlignment="Center" />
+                            </StackPanel>
+                        </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                </ItemsControl>
             </Grid>
         </Border>
 

@@ -215,10 +215,10 @@ public sealed class GanttRowViewModel : ViewModelBase
     private PhaseSegment? GetCurrentStatusSegment(ChapterStatus status)
     {
         return PhaseSegments.FirstOrDefault(s =>
-            string.Equals(s.PhaseName, status.ToString(), StringComparison.Ordinal));
+            string.Equals(s.PhaseName, Profile.DisplayStatus(status).ToString(), StringComparison.Ordinal));
     }
 
-    private static string StatusToColorHex(ChapterStatus status)
+    internal static string StatusToColorHex(ChapterStatus status)
     {
         return status switch
         {
