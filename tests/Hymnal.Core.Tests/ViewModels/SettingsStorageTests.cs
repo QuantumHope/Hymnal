@@ -444,6 +444,43 @@ public sealed class SettingsStorageTests
     }
 
     [Fact]
+    public async Task Sidebar_status_and_target_edits_after_a_failed_reload_never_reach_project_data()
+    {
+        var root = CreateWorkspace(StoryJson, (StoryFile, StoryText));
+        try
+        {
+            await Ui(root, 1, async context =>
+            {
+                var chapter = context.Node(StoryFile);
+                var settings = context.CreateSettings();
+                settings.KeepInStoryFile = true;
+                File.Delete(Path.Combine(root, "Book.txt"));
+                await ApplyAsync(context, settings);
+                Assert.Contains("\"embedded\"", await File.ReadAllTextAsync(ProjectJsonPath(root)));
+                var errorsBefore = context.Errors.Count();
+
+                await RunIgnoringErrorAsync(chapter.ChangeStatusCommand.Execute(ChapterStatus.Polishing).ToTask());
+                await RunIgnoringErrorAsync(chapter.SetTargetCommand
+                    .Execute(new WordCountTarget { MinWords = 100, MaxWords = 200 }).ToTask());
+                await context.SettleAsync();
+
+                Assert.True(context.Errors.Count() >= errorsBefore + 2);
+                Assert.DoesNotContain(chapter.Uuid, ReadIfExists(Path.Combine(root, ".hymnal-data", "phases.json")));
+                Assert.DoesNotContain(chapter.Uuid, ReadIfExists(Path.Combine(root, ".hymnal-data", "targets.json")));
+            });
+        }
+        finally { DeleteFolder(root); }
+
+        static string ReadIfExists(string path) => File.Exists(path) ? File.ReadAllText(path) : "";
+
+        static async Task RunIgnoringErrorAsync(Task run)
+        {
+            try { await run; }
+            catch (IOException) { }
+        }
+    }
+
+    [Fact]
     public async Task After_a_failed_reload_nothing_can_be_applied_until_reopened_and_the_block_keeps_its_data()
     {
         var root = CreateWorkspace(StoryJson, (StoryFile, StoryText));

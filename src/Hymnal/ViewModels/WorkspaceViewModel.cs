@@ -945,7 +945,7 @@ public class WorkspaceViewModel : ViewModelBase
                         node,
                         uuid,
                         phaseData,
-                        store,
+                        () => MetadataStore,
                         _settingsStore,
                         _notificationService,
                         model.WorkspaceRoot,
