@@ -481,6 +481,176 @@ public class StoryFileWriterTests
         Assert.Equal(original, split.Value.Prose);
     });
 
+    /// <summary>A fact that only runs on Linux (symbolic links need no special privileges there).</summary>
+    private sealed class LinuxOnlyFactAttribute : FactAttribute
+    {
+        public LinuxOnlyFactAttribute()
+        {
+            if (!OperatingSystem.IsLinux())
+                Skip = "Linux only";
+        }
+    }
+
+    private sealed class RecordingBuffer : IOpenStoryBuffer
+    {
+        public List<string> Asked { get; } = [];
+
+        public EmbeddedStoryMetadata? CurrentMetadata => null;
+
+        public bool HoldsFile(string absolutePath)
+        {
+            Asked.Add(absolutePath);
+            return false;
+        }
+
+        public Task<Result<Unit>> ApplyMetadataAsync(EmbeddedStoryMetadata? metadata) =>
+            Task.FromResult(Result<Unit>.Ok(Unit.Default));
+    }
+
+    private static Func<EmbeddedStoryMetadata?, EmbeddedStoryMetadata> Increment =>
+        current => Metadata(((current?.Notes is { } n ? int.Parse(n) : 0) + 1).ToString());
+
+    [LinuxOnlyFact]
+    public Task Update_through_symlink_updates_real_file_and_keeps_link() => WithTempDirAsync(async dir =>
+    {
+        var real = WriteText(dir, "Real prose.\n");
+        var link = Path.Combine(dir, "link.md");
+        File.CreateSymbolicLink(link, real);
+        var writer = new StoryFileWriter(new MetadataStore());
+
+        var result = await writer.UpdateMetadataAsync(link, _ => Metadata("via link"));
+
+        Assert.True(result.IsSuccess, result.Error);
+        Assert.NotNull(new FileInfo(link).LinkTarget);
+        var split = StoryFileFormat.Split(ReadText(real));
+        Assert.Equal("Real prose.\n", split.Prose);
+        Assert.Equal("via link", split.Metadata?.Notes);
+        Assert.Equal("via link", (await writer.ReadMetadataAsync(link)).Value?.Notes);
+    });
+
+    [LinuxOnlyFact]
+    public Task Updates_through_link_and_real_path_share_one_lock() => WithTempDirAsync(async dir =>
+    {
+        var real = WriteText(dir, "Prose.\n");
+        var link = Path.Combine(dir, "link.md");
+        File.CreateSymbolicLink(link, real);
+        var writer = new StoryFileWriter(new CountingStore(TimeSpan.FromMilliseconds(10)));
+        const int count = 10;
+
+        var results = await Task.WhenAll(Enumerable.Range(0, count).Select(i => Task.Run(() =>
+            writer.UpdateMetadataAsync(i % 2 == 0 ? link : real, Increment))));
+
+        Assert.All(results, r => Assert.True(r.IsSuccess, r.Error));
+        Assert.NotNull(new FileInfo(link).LinkTarget);
+        Assert.Equal(count.ToString(), StoryFileFormat.Split(ReadText(real)).Metadata?.Notes);
+    });
+
+    [Fact]
+    public Task Update_read_only_file_fails_without_writing() => WithTempDirAsync(async dir =>
+    {
+        const string original = "Locked prose.\n";
+        var path = WriteText(dir, original);
+        File.SetAttributes(path, FileAttributes.ReadOnly);
+        var store = new CountingStore();
+        var writer = new StoryFileWriter(store);
+        try
+        {
+            var update = await writer.UpdateMetadataAsync(path, _ => Metadata());
+            var write = await writer.WriteFileAsync(path, "Other.", Metadata(), "\n");
+
+            Assert.False(update.IsSuccess);
+            Assert.False(write.IsSuccess);
+            Assert.Equal(0, store.Writes);
+            Assert.Equal(original, ReadText(path));
+        }
+        finally
+        {
+            File.SetAttributes(path, FileAttributes.Normal);
+        }
+    });
+
+    [LinuxOnlyFact]
+    public Task Update_file_without_user_write_permission_fails_without_writing() => WithTempDirAsync(async dir =>
+    {
+        const string original = "Locked prose.\n";
+        var path = WriteText(dir, original);
+        if (OperatingSystem.IsWindows())
+            return;
+        File.SetUnixFileMode(path, UnixFileMode.UserRead | UnixFileMode.GroupRead);
+        var store = new CountingStore();
+        var writer = new StoryFileWriter(store);
+
+        var result = await writer.UpdateMetadataAsync(path, _ => Metadata());
+
+        Assert.False(result.IsSuccess);
+        Assert.Equal(0, store.Writes);
+        Assert.Equal(original, ReadText(path));
+    });
+
+    [Theory]
+    [InlineData("")]
+    [InlineData("   ")]
+    [InlineData("bad\0name.md")]
+    public async Task Invalid_paths_fail_from_every_method(string path)
+    {
+        var store = new CountingStore();
+        var writer = new StoryFileWriter(store);
+
+        Assert.False((await writer.ReadMetadataAsync(path)).IsSuccess);
+        Assert.False((await writer.ReadFileAsync(path)).IsSuccess);
+        Assert.False((await writer.UpdateMetadataAsync(path, _ => Metadata())).IsSuccess);
+        Assert.False((await writer.WriteFileAsync(path, "x", null, "\n")).IsSuccess);
+        Assert.False((await writer.RemoveMetadataAsync(path)).IsSuccess);
+        Assert.Equal(0, store.Writes);
+    }
+
+    [Fact]
+    public Task Update_that_changes_nothing_does_not_write() => WithTempDirAsync(async dir =>
+    {
+        var path = WriteText(dir, StoryFileFormat.Merge("Prose.\r\n", Metadata("same"), "\r\n"));
+        var stamp = new DateTime(2020, 1, 2, 3, 4, 5, DateTimeKind.Utc);
+        File.SetLastWriteTimeUtc(path, stamp);
+        var store = new CountingStore();
+        var writer = new StoryFileWriter(store);
+
+        var result = await writer.UpdateMetadataAsync(path, current => current! with { });
+
+        Assert.True(result.IsSuccess, result.Error);
+        Assert.Equal(0, store.Writes);
+        Assert.Equal(stamp, File.GetLastWriteTimeUtc(path));
+    });
+
+    [Fact]
+    public Task Non_normalized_and_relative_paths_reach_buffer_as_full_path() => WithTempDirAsync(async dir =>
+    {
+        var path = WriteText(dir, "Prose.");
+        var writer = new StoryFileWriter(new MetadataStore());
+        var buffer = new RecordingBuffer();
+        writer.AttachBuffer(buffer);
+        var dotted = Path.Combine(dir, "sub", "..", ".", "story.md");
+        var relative = Path.GetRelativePath(Directory.GetCurrentDirectory(), path);
+
+        Assert.True((await writer.UpdateMetadataAsync(dotted, _ => Metadata())).IsSuccess);
+        Assert.True((await writer.ReadMetadataAsync(relative)).IsSuccess);
+
+        Assert.Equal([path, path], buffer.Asked);
+    });
+
+    [Fact]
+    public Task Updates_through_different_spellings_of_one_path_serialize() => WithTempDirAsync(async dir =>
+    {
+        var path = WriteText(dir, "Prose.\n");
+        var dotted = Path.Combine(dir, "sub", "..", "story.md");
+        var writer = new StoryFileWriter(new CountingStore(TimeSpan.FromMilliseconds(10)));
+        const int count = 10;
+
+        var results = await Task.WhenAll(Enumerable.Range(0, count).Select(i => Task.Run(() =>
+            writer.UpdateMetadataAsync(i % 2 == 0 ? path : dotted, Increment))));
+
+        Assert.All(results, r => Assert.True(r.IsSuccess, r.Error));
+        Assert.Equal(count.ToString(), StoryFileFormat.Split(ReadText(path)).Metadata?.Notes);
+    });
+
     [Fact]
     public Task Read_file_keeps_byte_order_mark_in_prose() => WithTempDirAsync(async dir =>
     {

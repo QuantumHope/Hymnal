@@ -1,4 +1,5 @@
 using System.Collections.Concurrent;
+using System.Security;
 using System.Text;
 using Hymnal.Core.Common;
 using Hymnal.Core.Interfaces;
@@ -13,11 +14,15 @@ namespace Hymnal.Core.Services;
 /// When the file is held by the attached <see cref="IOpenStoryBuffer"/> (open in the editor), metadata changes
 /// go to the buffer, which saves through the editor so unsaved prose is kept; the disk is not touched here.
 /// Otherwise the file is read, split, given the new metadata, merged and written atomically, leaving the prose
-/// bytes, a UTF-8 byte order mark and the line ending exactly as they were.
+/// bytes, a UTF-8 byte order mark and the line ending exactly as they were. A write that would not change the
+/// file is skipped.
 /// </para>
 /// <para>
-/// Metadata changes to the same file are serialized, so concurrent <see cref="UpdateMetadataAsync"/> calls
-/// never lose an update. Files must be valid UTF-8; any other file fails rather than being rewritten.
+/// Paths are made absolute and symbolic links are resolved to their final target, which is the file read and
+/// written (the link stays a link). Metadata changes to the same real file are serialized whatever spelling of
+/// the path is used, so concurrent <see cref="UpdateMetadataAsync"/> calls never lose an update. Invalid paths,
+/// missing or read-only files and files that are not valid UTF-8 fail without writing; no public method throws
+/// for them.
 /// </para>
 /// </summary>
 public sealed class StoryFileWriter(IMetadataStore store)
@@ -27,12 +32,16 @@ public sealed class StoryFileWriter(IMetadataStore store)
     private static readonly StringComparer PathComparer =
         OperatingSystem.IsWindows() ? StringComparer.OrdinalIgnoreCase : StringComparer.Ordinal;
 
-    // Two per-path locks: the metadata lock covers a whole read-modify-write (including a buffer apply, which
-    // re-enters through WriteFileAsync); the file lock covers each disk read/write of the file.
+    // Two per-path locks keyed by the real (link-resolved) full path: the metadata lock covers a whole
+    // read-modify-write (including a buffer apply, which re-enters through WriteFileAsync); the file lock covers
+    // each disk read/write of the file.
     private readonly ConcurrentDictionary<string, SemaphoreSlim> _metadataLocks = new(PathComparer);
     private readonly ConcurrentDictionary<string, SemaphoreSlim> _fileLocks = new(PathComparer);
 
     private volatile IOpenStoryBuffer? _buffer;
+
+    /// <summary>A story path made absolute (<see cref="Full"/>) and with symbolic links resolved (<see cref="Real"/>).</summary>
+    private readonly record struct StoryPath(string Full, string Real);
 
     /// <summary>Sets (or, with null, clears) the editor buffer that receives metadata changes for its file.</summary>
     public void AttachBuffer(IOpenStoryBuffer? buffer) => _buffer = buffer;
@@ -43,14 +52,16 @@ public sealed class StoryFileWriter(IMetadataStore store)
     /// </summary>
     public async Task<Result<EmbeddedStoryMetadata?>> ReadMetadataAsync(string absolutePath)
     {
-        var path = Path.GetFullPath(absolutePath);
+        if (!TryResolve(absolutePath, out var path, out var error))
+            return Result<EmbeddedStoryMetadata?>.Fail(error);
+
         if (HeldBuffer(path) is { } buffer)
             return Result<EmbeddedStoryMetadata?>.Ok(buffer.CurrentMetadata);
 
-        var split = await ReadFileAsync(path).ConfigureAwait(false);
-        return split.IsSuccess
-            ? Result<EmbeddedStoryMetadata?>.Ok(split.Value!.Metadata)
-            : Result<EmbeddedStoryMetadata?>.Fail(split.Error!);
+        var read = await ReadLockedAsync(path).ConfigureAwait(false);
+        return read.IsSuccess
+            ? Result<EmbeddedStoryMetadata?>.Ok(read.Value.Split.Metadata)
+            : Result<EmbeddedStoryMetadata?>.Fail(read.Error!);
     }
 
     /// <summary>
@@ -59,27 +70,25 @@ public sealed class StoryFileWriter(IMetadataStore store)
     /// </summary>
     public async Task<Result<StorySplit>> ReadFileAsync(string absolutePath)
     {
-        var path = Path.GetFullPath(absolutePath);
-        var gate = Lock(_fileLocks, path);
-        await gate.WaitAsync().ConfigureAwait(false);
-        try
-        {
-            return await ReadSplitAsync(path).ConfigureAwait(false);
-        }
-        finally
-        {
-            gate.Release();
-        }
+        if (!TryResolve(absolutePath, out var path, out var error))
+            return Result<StorySplit>.Fail(error);
+
+        var read = await ReadLockedAsync(path).ConfigureAwait(false);
+        return read.IsSuccess ? Result<StorySplit>.Ok(read.Value.Split) : Result<StorySplit>.Fail(read.Error!);
     }
 
     /// <summary>
     /// Applies <paramref name="update"/> to the file's current metadata (null when it has none or its block is
     /// malformed) and stores the result. A malformed block is kept as prose and the new block is appended after it.
+    /// <paramref name="update"/> runs while this file's locks are held: it must be pure (no I/O) and must not call
+    /// back into this writer, or it deadlocks.
     /// </summary>
     public async Task<Result<Unit>> UpdateMetadataAsync(
         string absolutePath, Func<EmbeddedStoryMetadata?, EmbeddedStoryMetadata> update)
     {
-        var path = Path.GetFullPath(absolutePath);
+        if (!TryResolve(absolutePath, out var path, out var error))
+            return Result<Unit>.Fail(error);
+
         var gate = Lock(_metadataLocks, path);
         await gate.WaitAsync().ConfigureAwait(false);
         try
@@ -102,12 +111,14 @@ public sealed class StoryFileWriter(IMetadataStore store)
     public async Task<Result<Unit>> WriteFileAsync(
         string absolutePath, string prose, EmbeddedStoryMetadata? metadata, string lineEnding)
     {
-        var path = Path.GetFullPath(absolutePath);
+        if (!TryResolve(absolutePath, out var path, out var error))
+            return Result<Unit>.Fail(error);
+
         var gate = Lock(_fileLocks, path);
         await gate.WaitAsync().ConfigureAwait(false);
         try
         {
-            return await WriteAsync(path, StoryFileFormat.Merge(prose, metadata, lineEnding)).ConfigureAwait(false);
+            return await WriteAsync(path.Real, StoryFileFormat.Merge(prose, metadata, lineEnding)).ConfigureAwait(false);
         }
         finally
         {
@@ -121,7 +132,9 @@ public sealed class StoryFileWriter(IMetadataStore store)
     /// </summary>
     public async Task<Result<Unit>> RemoveMetadataAsync(string absolutePath)
     {
-        var path = Path.GetFullPath(absolutePath);
+        if (!TryResolve(absolutePath, out var path, out var error))
+            return Result<Unit>.Fail(error);
+
         var gate = Lock(_metadataLocks, path);
         await gate.WaitAsync().ConfigureAwait(false);
         try
@@ -143,26 +156,25 @@ public sealed class StoryFileWriter(IMetadataStore store)
 
     /// <summary>
     /// Reads, splits and re-merges a file that is not open, with the metadata <paramref name="newMetadata"/>
-    /// returns. Skips the write when the file has no recognized block and the new metadata is null.
+    /// returns. Skips the write when the merged text equals the file's current text.
     /// </summary>
     private async Task<Result<Unit>> RewriteClosedFileAsync(
-        string path, Func<StorySplit, EmbeddedStoryMetadata?> newMetadata)
+        StoryPath path, Func<StorySplit, EmbeddedStoryMetadata?> newMetadata)
     {
         var gate = Lock(_fileLocks, path);
         await gate.WaitAsync().ConfigureAwait(false);
         try
         {
-            var read = await ReadSplitAsync(path).ConfigureAwait(false);
+            var read = await ReadAsync(path.Real).ConfigureAwait(false);
             if (!read.IsSuccess)
                 return Result<Unit>.Fail(read.Error!);
 
-            var split = read.Value!;
-            var metadata = newMetadata(split);
-            if (metadata is null && split.Metadata is null)
+            var (original, split) = read.Value;
+            var merged = StoryFileFormat.Merge(split.Prose, newMetadata(split), split.LineEnding);
+            if (string.Equals(merged, original, StringComparison.Ordinal))
                 return Result<Unit>.Ok(Unit.Default);
 
-            return await WriteAsync(path, StoryFileFormat.Merge(split.Prose, metadata, split.LineEnding))
-                .ConfigureAwait(false);
+            return await WriteAsync(path.Real, merged).ConfigureAwait(false);
         }
         finally
         {
@@ -170,25 +182,40 @@ public sealed class StoryFileWriter(IMetadataStore store)
         }
     }
 
-    private static async Task<Result<StorySplit>> ReadSplitAsync(string path)
+    private async Task<Result<(string Text, StorySplit Split)>> ReadLockedAsync(StoryPath path)
+    {
+        var gate = Lock(_fileLocks, path);
+        await gate.WaitAsync().ConfigureAwait(false);
+        try
+        {
+            return await ReadAsync(path.Real).ConfigureAwait(false);
+        }
+        finally
+        {
+            gate.Release();
+        }
+    }
+
+    private static async Task<Result<(string Text, StorySplit Split)>> ReadAsync(string path)
     {
         if (!File.Exists(path))
-            return Result<StorySplit>.Fail($"Story file not found: {path}");
+            return Result<(string, StorySplit)>.Fail($"Story file not found: {path}");
 
         try
         {
             // Decoding the bytes directly (not via a StreamReader) keeps a leading byte order mark as U+FEFF,
             // which the store writes back as the same three bytes.
             var bytes = await File.ReadAllBytesAsync(path).ConfigureAwait(false);
-            return Result<StorySplit>.Ok(StoryFileFormat.Split(StrictUtf8.GetString(bytes)));
+            var text = StrictUtf8.GetString(bytes);
+            return Result<(string, StorySplit)>.Ok((text, StoryFileFormat.Split(text)));
         }
         catch (DecoderFallbackException)
         {
-            return Result<StorySplit>.Fail($"Story file is not valid UTF-8 and was left unchanged: {path}");
+            return Result<(string, StorySplit)>.Fail($"Story file is not valid UTF-8 and was left unchanged: {path}");
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
-            return Result<StorySplit>.Fail($"Could not read story file {path}: {ex.Message}");
+            return Result<(string, StorySplit)>.Fail($"Could not read story file {path}: {ex.Message}");
         }
     }
 
@@ -196,6 +223,10 @@ public sealed class StoryFileWriter(IMetadataStore store)
     {
         try
         {
+            // The atomic write replaces the file by rename, which would silently bypass a read-only file.
+            if (IsReadOnly(path))
+                return Result<Unit>.Fail($"Story file is read-only and was left unchanged: {path}");
+
             await store.WriteTextAtomicAsync(path, content).ConfigureAwait(false);
             return Result<Unit>.Ok(Unit.Default);
         }
@@ -205,9 +236,54 @@ public sealed class StoryFileWriter(IMetadataStore store)
         }
     }
 
-    private IOpenStoryBuffer? HeldBuffer(string path) =>
-        _buffer is { } buffer && buffer.HoldsFile(path) ? buffer : null;
+    private static bool IsReadOnly(string path)
+    {
+        if (!File.Exists(path))
+            return false;
 
-    private static SemaphoreSlim Lock(ConcurrentDictionary<string, SemaphoreSlim> locks, string path) =>
-        locks.GetOrAdd(path, _ => new SemaphoreSlim(1, 1));
+        if (File.GetAttributes(path).HasFlag(FileAttributes.ReadOnly))
+            return true;
+
+        return !OperatingSystem.IsWindows() && !File.GetUnixFileMode(path).HasFlag(UnixFileMode.UserWrite);
+    }
+
+    /// <summary>
+    /// Makes <paramref name="absolutePath"/> absolute and resolves a symbolic link to its final target.
+    /// Returns false with an error for invalid paths or unresolvable links.
+    /// </summary>
+    private static bool TryResolve(string absolutePath, out StoryPath path, out string error)
+    {
+        path = default;
+        error = "";
+        if (string.IsNullOrWhiteSpace(absolutePath))
+        {
+            error = "Story file path is empty.";
+            return false;
+        }
+
+        try
+        {
+            var full = Path.GetFullPath(absolutePath);
+            var file = new FileInfo(full);
+            var real = file.LinkTarget is null ? full : file.ResolveLinkTarget(returnFinalTarget: true)?.FullName ?? full;
+            path = new StoryPath(full, real);
+            return true;
+        }
+        catch (Exception ex) when (ex is ArgumentException or NotSupportedException or IOException
+                                       or UnauthorizedAccessException or SecurityException)
+        {
+            error = $"Invalid story file path '{absolutePath}': {ex.Message}";
+            return false;
+        }
+    }
+
+    /// <summary>The buffer when it holds the file under either its given full path or its real path.</summary>
+    private IOpenStoryBuffer? HeldBuffer(StoryPath path) =>
+        _buffer is { } buffer
+        && (buffer.HoldsFile(path.Full) || (!PathComparer.Equals(path.Full, path.Real) && buffer.HoldsFile(path.Real)))
+            ? buffer
+            : null;
+
+    private static SemaphoreSlim Lock(ConcurrentDictionary<string, SemaphoreSlim> locks, StoryPath path) =>
+        locks.GetOrAdd(path.Real, _ => new SemaphoreSlim(1, 1));
 }
