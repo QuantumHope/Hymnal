@@ -40,14 +40,25 @@ public static class StoryFileFormat
 
     public static StorySplit Split(string text)
     {
-        var lineEnding = DetectLineEnding(text);
         var blockStart = FindLastOpeningLine(text, out var bodyStart);
         if (blockStart < 0)
-            return new StorySplit(text, null, false, lineEnding);
+            return new StorySplit(text, null, false, DetectLineEnding(text));
+
+        // Merge writes the file's line ending after the opening marker, so the block itself says which line
+        // ending (and therefore which separator) was used — prose line breaks are never consulted.
+        var lineEnding = bodyStart >= 2 && text[bodyStart - 2] == '\r' ? "\r\n" : "\n";
 
         var closing = text.IndexOf(ClosingMarker, bodyStart, StringComparison.Ordinal);
-        if (closing < 0 || !IsWhitespaceToEnd(text, closing + ClosingMarker.Length))
+        if (closing < 0)
             return new StorySplit(text, null, false, lineEnding);
+
+        if (!IsWhitespaceToEnd(text, closing + ClosingMarker.Length))
+        {
+            // A raw "-->" inside the block (e.g. hand-edited JSON) when the file still ends with "-->":
+            // the block is damaged, not absent. Text after the block that is prose stays unflagged.
+            var damaged = text.AsSpan().TrimEnd().EndsWith(ClosingMarker, StringComparison.Ordinal);
+            return new StorySplit(text, null, damaged, lineEnding);
+        }
 
         var metadata = TryDeserialize(text[bodyStart..closing]);
         if (metadata is null)
@@ -138,26 +149,14 @@ public static class StoryFileFormat
         prose.Length == 0 || (prose.Length == 1 && prose[0] == ByteOrderMark);
 
     /// <summary>
-    /// Removes the blank-line separator <see cref="Merge"/> writes before the block. Text that was not written
-    /// by Merge loses at most two trailing line breaks.
+    /// Removes the blank-line separator <see cref="Merge"/> writes before the block, only when it is exactly
+    /// present; otherwise the text before the block is returned unchanged so no prose character is ever lost.
     /// </summary>
     private static string RemoveSeparator(string beforeBlock, string lineEnding)
     {
-        if (IsEmptyProse(beforeBlock))
-            return beforeBlock;
-
         var separator = lineEnding + lineEnding;
-        if (beforeBlock.EndsWith(separator, StringComparison.Ordinal))
-            return beforeBlock[..^separator.Length];
-
-        var prose = beforeBlock;
-        for (var i = 0; i < 2; i++)
-        {
-            if (prose.EndsWith("\r\n", StringComparison.Ordinal))
-                prose = prose[..^2];
-            else if (prose.EndsWith('\n'))
-                prose = prose[..^1];
-        }
-        return prose;
+        return !IsEmptyProse(beforeBlock) && beforeBlock.EndsWith(separator, StringComparison.Ordinal)
+            ? beforeBlock[..^separator.Length]
+            : beforeBlock;
     }
 }

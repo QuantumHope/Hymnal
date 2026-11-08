@@ -54,6 +54,26 @@ public class StoryFileFormatTests
         AssertSameMetadata(metadata, split.Metadata);
     }
 
+    [Theory]
+    [InlineData("a\r", "\n")]
+    [InlineData("a\r", "\r\n")]
+    [InlineData("p\r\r", "\n")]
+    [InlineData("p\r\r", "\r\n")]
+    [InlineData("\r", "\n")]
+    [InlineData("line one\rline two\r", "\n")]
+    [InlineData("crlf\r\nthen lf\n", "\r\n")]
+    [InlineData("lf\nthen crlf\r\n", "\n")]
+    [InlineData("mixed\r\n\r", "\n")]
+    [InlineData("\uFEFF\r", "\n")]
+    public void SplitOfMerge_LoneCrAndMixedLineBreaks_PreserveProseBytesAndLineEnding(string prose, string lineEnding)
+    {
+        var split = StoryFileFormat.Split(StoryFileFormat.Merge(prose, MinimalMetadata(), lineEnding));
+
+        Assert.Equal(prose, split.Prose);
+        Assert.Equal(lineEnding, split.LineEnding);
+        AssertSameMetadata(MinimalMetadata(), split.Metadata);
+    }
+
     [Fact]
     public void Merge_ProseWithoutTrailingNewline_SeparatesWithExactlyOneBlankLine()
     {
@@ -327,15 +347,27 @@ public class StoryFileFormatTests
     }
 
     [Fact]
-    public void Split_RawTerminatorInsideHandEditedJson_IsNotRecognized()
+    public void Split_RawTerminatorInsideHandEditedJson_IsKeptAsProseAndFlaggedMalformed()
     {
-        // A literal "-->" ends the HTML comment, so the rest would be published; treat it all as prose.
+        // A literal "-->" ends the HTML comment, so the rest would be published; keep it all as prose and warn.
         const string text = "Prose.\n\n<!-- hymnal:v1\n{ \"notes\": \"a --> b\" }\n-->\n";
 
         var split = StoryFileFormat.Split(text);
 
         Assert.Equal(text, split.Prose);
         Assert.Null(split.Metadata);
+        Assert.True(split.HadMalformedBlock);
+    }
+
+    [Fact]
+    public void Split_SingleLineBreakBeforeBlock_StaysInProse()
+    {
+        const string text = "Prose.\n<!-- hymnal:v1\n{ \"id\": \"x\" }\n-->\n";
+
+        var split = StoryFileFormat.Split(text);
+
+        Assert.Equal("Prose.\n", split.Prose);
+        Assert.Equal("x", split.Metadata!.Id);
     }
 
     // ── Line endings ────────────────────────────────────────────────────────
