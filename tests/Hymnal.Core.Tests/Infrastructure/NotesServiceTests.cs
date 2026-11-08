@@ -92,4 +92,26 @@ public class NotesServiceTests
             Directory.Delete(dir, recursive: true);
         }
     }
+
+    [Fact]
+    public async Task DeleteAsync_RemovesTheFile_AndIgnoresAMissingOneOrFolder()
+    {
+        var dir = MakeTempDir();
+        try
+        {
+            var sut = new NotesService(new MetadataStore());
+            var notesPath = Path.Combine(dir, ".hymnal-data", "notes", "chapter_01.md");
+            await sut.SaveAsync(notesPath, "Notes.");
+
+            await sut.DeleteAsync(notesPath);
+            Assert.False(File.Exists(notesPath));
+
+            await sut.DeleteAsync(notesPath);
+            await sut.DeleteAsync(Path.Combine(dir, "no-such-folder", "x.md"));
+        }
+        finally
+        {
+            Directory.Delete(dir, recursive: true);
+        }
+    }
 }

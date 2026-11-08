@@ -1,3 +1,4 @@
+using Hymnal.Core.Common;
 using System.Text;
 using Hymnal.Core.Infrastructure;
 using Hymnal.Core.Interfaces;
@@ -47,7 +48,7 @@ public class StorageMigratorTests
         await env.Notes.SaveAsync(INotesService.DeriveNotesPath(env.Root, "other.md"), "Other notes");
         Assert.True((await env.Boards.SaveAsync(env.Root, "other", [new Beat("o", "Other", "", null)])).IsSuccess);
 
-        var result = await env.Migrator.MigrateAsync(env.Root, story, StorageMode.Sidecar, StorageMode.Embedded);
+        var result = await env.MigrateAsync(story, StorageMode.Sidecar, StorageMode.Embedded);
 
         Assert.True(result.IsSuccess, result.Error);
         var split = StoryFileFormat.Split(await File.ReadAllTextAsync(story.AbsolutePath));
@@ -79,9 +80,9 @@ public class StorageMigratorTests
         using var env = new Env();
         var story = env.WriteStory(Prose);
         await env.SeedSidecarAsync(story);
-        Assert.True((await env.Migrator.MigrateAsync(env.Root, story, StorageMode.Sidecar, StorageMode.Embedded)).IsSuccess);
+        Assert.True((await env.MigrateAsync(story, StorageMode.Sidecar, StorageMode.Embedded)).IsSuccess);
 
-        var result = await env.Migrator.MigrateAsync(env.Root, story, StorageMode.Embedded, StorageMode.Sidecar);
+        var result = await env.MigrateAsync(story, StorageMode.Embedded, StorageMode.Sidecar);
 
         Assert.True(result.IsSuccess, result.Error);
         Assert.Equal(Prose, await File.ReadAllTextAsync(story.AbsolutePath));
@@ -99,7 +100,7 @@ public class StorageMigratorTests
         await env.Targets.UpsertAsync(env.Root, story.Uuid, SampleTarget);
         await env.Notes.SaveAsync(env.NotesPath(story), "Stale notes");
 
-        var result = await env.Migrator.MigrateAsync(env.Root, story, StorageMode.Embedded, StorageMode.Sidecar);
+        var result = await env.MigrateAsync(story, StorageMode.Embedded, StorageMode.Sidecar);
 
         Assert.True(result.IsSuccess, result.Error);
         Assert.Equal(ChapterStatus.Drafting, (await env.Phases.LoadAsync(env.Root))[story.Uuid].Status);
@@ -113,7 +114,7 @@ public class StorageMigratorTests
         using var env = new Env();
         var story = env.WriteStory("Prose.\n");
 
-        var result = await env.Migrator.MigrateAsync(env.Root, story, StorageMode.Sidecar, StorageMode.Embedded);
+        var result = await env.MigrateAsync(story, StorageMode.Sidecar, StorageMode.Embedded);
 
         Assert.True(result.IsSuccess, result.Error);
         var block = StoryFileFormat.Split(await File.ReadAllTextAsync(story.AbsolutePath)).Metadata!;
@@ -127,7 +128,7 @@ public class StorageMigratorTests
         var story = env.WriteStory(Prose);
         await env.SeedSidecarAsync(story);
 
-        var result = await env.Migrator.MigrateAsync(env.Root, story, StorageMode.Sidecar, StorageMode.Sidecar);
+        var result = await env.MigrateAsync(story, StorageMode.Sidecar, StorageMode.Sidecar);
 
         Assert.True(result.IsSuccess, result.Error);
         Assert.Equal(Prose, await File.ReadAllTextAsync(story.AbsolutePath));
@@ -145,7 +146,7 @@ public class StorageMigratorTests
         var before = env.Snapshot();
         env.Store.FailWhen = path => path == story.AbsolutePath;
 
-        var result = await env.Migrator.MigrateAsync(env.Root, story, StorageMode.Sidecar, StorageMode.Embedded);
+        var result = await env.MigrateAsync(story, StorageMode.Sidecar, StorageMode.Embedded);
 
         Assert.False(result.IsSuccess);
         Assert.Contains("Nothing was removed", result.Error);
@@ -153,23 +154,81 @@ public class StorageMigratorTests
     }
 
     [Fact]
-    public async Task Sidecar_to_embedded_failing_to_remove_the_sidecar_keeps_both_copies()
+    public async Task Sidecar_to_embedded_cleanup_failing_after_the_phase_entry_leaves_all_data_visible_in_the_new_mode()
     {
         using var env = new Env();
         var story = env.WriteStory(Prose);
         await env.SeedSidecarAsync(story);
-        env.Store.FailWhen = path => path.EndsWith("phases.json", StringComparison.Ordinal);
+        Assert.True((await env.Migrator.WriteDestinationAsync(env.Root, story, StorageMode.Sidecar, StorageMode.Embedded)).IsSuccess);
+        // project.json now says embedded (the caller's commit point); then the target can't be removed.
+        env.Store.FailWhen = path => path.EndsWith("targets.json", StringComparison.Ordinal);
 
-        var result = await env.Migrator.MigrateAsync(env.Root, story, StorageMode.Sidecar, StorageMode.Embedded);
+        var cleanup = await env.Migrator.CleanupSourceAsync(env.Root, story, StorageMode.Sidecar, StorageMode.Embedded);
+
+        Assert.False(cleanup.IsSuccess);
+        Assert.Contains("target", cleanup.Error);
+        // The rest was still removed; only the target is left behind.
+        Assert.False((await env.Phases.LoadAsync(env.Root)).ContainsKey(story.Uuid));
+        Assert.True((await env.Targets.LoadAsync(env.Root)).ContainsKey(story.Uuid));
+        Assert.False(File.Exists(env.NotesPath(story)));
+        Assert.False(env.Boards.BoardExists(env.Root, BeatBoardService.ShortStoryBoardKey));
+        await env.AssertVisibleAsync(env.EmbeddedStore(story), story);
+    }
+
+    [Fact]
+    public async Task Toggling_back_after_a_partial_cleanup_never_erases_data()
+    {
+        using var env = new Env();
+        var story = env.WriteStory(Prose);
+        await env.SeedSidecarAsync(story);
+        Assert.True((await env.Migrator.WriteDestinationAsync(env.Root, story, StorageMode.Sidecar, StorageMode.Embedded)).IsSuccess);
+        env.Store.FailWhen = path => path.EndsWith("targets.json", StringComparison.Ordinal);
+        Assert.False((await env.Migrator.CleanupSourceAsync(env.Root, story, StorageMode.Sidecar, StorageMode.Embedded)).IsSuccess);
+        env.Store.FailWhen = null;
+
+        Assert.True((await env.MigrateAsync(story, StorageMode.Embedded, StorageMode.Sidecar)).IsSuccess);
+        Assert.Equal(Prose, await File.ReadAllTextAsync(story.AbsolutePath));
+        await env.AssertSidecarHoldsSampleAsync(story);
+
+        Assert.True((await env.MigrateAsync(story, StorageMode.Sidecar, StorageMode.Embedded)).IsSuccess);
+        await env.AssertVisibleAsync(env.EmbeddedStore(story), story);
+        Assert.False((await env.Targets.LoadAsync(env.Root)).ContainsKey(story.Uuid));
+    }
+
+    [Fact]
+    public async Task Stopping_after_any_step_leaves_all_data_visible_in_the_mode_project_json_names()
+    {
+        using var env = new Env();
+        var story = env.WriteStory(Prose);
+        await env.SeedSidecarAsync(story);
+
+        // Sidecar → embedded. Stopped after the destination write: project.json still says sidecar.
+        Assert.True((await env.Migrator.WriteDestinationAsync(env.Root, story, StorageMode.Sidecar, StorageMode.Embedded)).IsSuccess);
+        await env.AssertVisibleAsync(env.SidecarStore, story);
+        // Stopped after project.json was saved as embedded, before cleanup.
+        await env.AssertVisibleAsync(env.EmbeddedStore(story), story);
+        Assert.True((await env.Migrator.CleanupSourceAsync(env.Root, story, StorageMode.Sidecar, StorageMode.Embedded)).IsSuccess);
+
+        // Embedded → sidecar, the same two stopping points.
+        Assert.True((await env.Migrator.WriteDestinationAsync(env.Root, story, StorageMode.Embedded, StorageMode.Sidecar)).IsSuccess);
+        await env.AssertVisibleAsync(env.EmbeddedStore(story), story);
+        await env.AssertVisibleAsync(env.SidecarStore, story);
+    }
+
+    [Fact]
+    public async Task Sidecar_to_embedded_with_unreadable_project_data_writes_nothing()
+    {
+        using var env = new Env();
+        var story = env.WriteStory(Prose);
+        await env.SeedSidecarAsync(story);
+        await File.WriteAllTextAsync(Path.Combine(env.Root, ".hymnal-data", "targets.json"), "{ nope");
+        var before = env.Snapshot();
+
+        var result = await env.Migrator.WriteDestinationAsync(env.Root, story, StorageMode.Sidecar, StorageMode.Embedded);
 
         Assert.False(result.IsSuccess);
-        Assert.Contains("Both copies are kept", result.Error);
-        Assert.Contains(Path.GetFileName(story.AbsolutePath), result.Error);
-        var block = StoryFileFormat.Split(await File.ReadAllTextAsync(story.AbsolutePath)).Metadata!;
-        Assert.Equal(SampleNotes, block.Notes);
-        Assert.Equal(SampleBeats, block.Beats!);
-        await env.AssertSidecarHoldsSampleAsync(story);
-        Assert.Equal(ProjectJson, await File.ReadAllTextAsync(env.ProjectJsonPath));
+        Assert.Contains("Nothing was changed", result.Error);
+        Assert.Equal(before, env.Snapshot());
     }
 
     [Fact]
@@ -178,11 +237,11 @@ public class StorageMigratorTests
         using var env = new Env();
         var story = env.WriteStory(Prose);
         await env.SeedSidecarAsync(story);
-        Assert.True((await env.Migrator.MigrateAsync(env.Root, story, StorageMode.Sidecar, StorageMode.Embedded)).IsSuccess);
+        Assert.True((await env.MigrateAsync(story, StorageMode.Sidecar, StorageMode.Embedded)).IsSuccess);
         var file = await File.ReadAllBytesAsync(story.AbsolutePath);
         env.Store.FailWhen = path => path.Contains(Path.Combine(".hymnal-data", "notes"), StringComparison.Ordinal);
 
-        var result = await env.Migrator.MigrateAsync(env.Root, story, StorageMode.Embedded, StorageMode.Sidecar);
+        var result = await env.MigrateAsync(story, StorageMode.Embedded, StorageMode.Sidecar);
 
         Assert.False(result.IsSuccess);
         Assert.Contains("status and schedule", result.Error);
@@ -193,19 +252,20 @@ public class StorageMigratorTests
     }
 
     [Fact]
-    public async Task Embedded_to_sidecar_failing_to_strip_the_block_keeps_both_copies()
+    public async Task Embedded_to_sidecar_cleanup_failing_to_strip_the_block_leaves_all_data_visible_in_the_new_mode()
     {
         using var env = new Env();
         var story = env.WriteStory(Prose);
         await env.SeedSidecarAsync(story);
-        Assert.True((await env.Migrator.MigrateAsync(env.Root, story, StorageMode.Sidecar, StorageMode.Embedded)).IsSuccess);
+        Assert.True((await env.MigrateAsync(story, StorageMode.Sidecar, StorageMode.Embedded)).IsSuccess);
+        Assert.True((await env.Migrator.WriteDestinationAsync(env.Root, story, StorageMode.Embedded, StorageMode.Sidecar)).IsSuccess);
         var file = await File.ReadAllBytesAsync(story.AbsolutePath);
         env.Store.FailWhen = path => path == story.AbsolutePath;
 
-        var result = await env.Migrator.MigrateAsync(env.Root, story, StorageMode.Embedded, StorageMode.Sidecar);
+        var cleanup = await env.Migrator.CleanupSourceAsync(env.Root, story, StorageMode.Embedded, StorageMode.Sidecar);
 
-        Assert.False(result.IsSuccess);
-        Assert.Contains("Both copies are kept", result.Error);
+        Assert.False(cleanup.IsSuccess);
+        Assert.Contains("data block", cleanup.Error);
         Assert.Equal(file, await File.ReadAllBytesAsync(story.AbsolutePath));
         await env.AssertSidecarHoldsSampleAsync(story);
     }
@@ -219,7 +279,7 @@ public class StorageMigratorTests
         await env.SeedSidecarAsync(story);
         var before = env.Snapshot();
 
-        var result = await env.Migrator.MigrateAsync(env.Root, story, StorageMode.Sidecar, StorageMode.Embedded);
+        var result = await env.MigrateAsync(story, StorageMode.Sidecar, StorageMode.Embedded);
 
         Assert.False(result.IsSuccess);
         Assert.Contains("UTF-8", result.Error);
@@ -235,7 +295,7 @@ public class StorageMigratorTests
         await File.WriteAllTextAsync(BeatBoardService.BoardFilePath(env.Root, BeatBoardService.ShortStoryBoardKey), "{ nope");
         var before = env.Snapshot();
 
-        var result = await env.Migrator.MigrateAsync(env.Root, story, StorageMode.Sidecar, StorageMode.Embedded);
+        var result = await env.MigrateAsync(story, StorageMode.Sidecar, StorageMode.Embedded);
 
         Assert.False(result.IsSuccess);
         Assert.Equal(before, env.Snapshot());
@@ -248,7 +308,7 @@ public class StorageMigratorTests
         var story = env.WriteStory("Prose.\n\n<!-- hymnal:v1\n{ not json\n-->\n");
         var before = env.Snapshot();
 
-        var result = await env.Migrator.MigrateAsync(env.Root, story, StorageMode.Embedded, StorageMode.Sidecar);
+        var result = await env.MigrateAsync(story, StorageMode.Embedded, StorageMode.Sidecar);
 
         Assert.False(result.IsSuccess);
         Assert.Contains("could not be read", result.Error);
@@ -313,6 +373,36 @@ public class StorageMigratorTests
             var path = Path.Combine(Root, "story.md");
             File.WriteAllText(path, content, new UTF8Encoding(false));
             return new StoryRef(Guid.NewGuid().ToString(), "story.md", path);
+        }
+
+        /// <summary>A whole migration: destination, then (after the caller's commit) cleanup.</summary>
+        public async Task<Result<Unit>> MigrateAsync(StoryRef story, StorageMode from, StorageMode to)
+        {
+            var written = await Migrator.WriteDestinationAsync(Root, story, from, to);
+            return written.IsSuccess ? await Migrator.CleanupSourceAsync(Root, story, from, to) : written;
+        }
+
+        public SidecarStoryMetadataStore SidecarStore => new(Phases, Targets, Notes, Boards);
+
+        public EmbeddedStoryMetadataStore EmbeddedStore(StoryRef story)
+        {
+            var store = new EmbeddedStoryMetadataStore(SidecarStore, Writer);
+            store.SetPrimaryStory(story);
+            return store;
+        }
+
+        /// <summary>Asserts <paramref name="store"/> shows every sample value for <paramref name="story"/>.</summary>
+        public async Task AssertVisibleAsync(IStoryMetadataStore store, StoryRef story)
+        {
+            var phase = (await store.LoadPhaseDataAsync(Root, [story]))[story.Uuid];
+            Assert.Equal(SamplePhase.Status, phase.Status);
+            Assert.Equal(SamplePhase.PhaseStartDate, phase.PhaseStartDate);
+            AssertSchedule(SamplePhase.Schedule!, phase.Schedule!);
+            AssertTarget(SampleTarget, (await store.LoadTargetsAsync(Root, [story]))[story.Uuid]);
+            Assert.Equal(SampleNotes, await store.LoadNotesAsync(Root, story));
+            var beats = await store.LoadBeatsAsync(Root, BeatBoardService.ShortStoryBoardKey);
+            Assert.True(beats.IsSuccess, beats.Error);
+            Assert.Equal(SampleBeats, beats.Value!);
         }
 
         public string NotesPath(StoryRef story) => INotesService.DeriveNotesPath(Root, story.RelativePath);

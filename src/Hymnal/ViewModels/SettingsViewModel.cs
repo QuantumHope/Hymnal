@@ -47,6 +47,10 @@ public class SettingsViewModel : ViewModelBase
     public const string MoveOutOfFileSummary =
         "The story's status, target, notes and beats will move from its file into project data.";
 
+    /// <summary>Shown when the storage switched but old copies couldn't all be removed.</summary>
+    public const string CleanupLeftoversMessage =
+        "Switched storage. Some old copies in .hymnal-data / the story file couldn't be removed; they're ignored and harmless.";
+
     /// <summary>Why "Keep everything in the story file" can't be turned on.</summary>
     public const string StorageOptionUnavailable = "Available when Book.txt lists exactly one story file.";
 
@@ -207,76 +211,96 @@ public class SettingsViewModel : ViewModelBase
         var fromStorage = IsEmbedded(previous) ? StorageMode.Embedded : StorageMode.Sidecar;
         var toStorage = TargetStorage(kind, previous);
 
-        StoryRef? migrated = null;
+        // The story whose data changes storage (null: none, or the storage stays).
+        StoryRef? story = null;
         if (fromStorage != toStorage)
         {
-            var migration = await MigrateStorageAsync(root, fromStorage, toStorage);
-            if (!migration.IsSuccess)
+            var resolved = await ResolveMigratingStoryAsync(fromStorage);
+            if (!resolved.IsSuccess)
             {
-                _notifications.ShowError(migration.Error!);
+                _notifications.ShowError(resolved.Error!);
                 return;
             }
-            migrated = migration.Value;
+            story = resolved.Value;
+
+            // Edits waiting on a debounce are saved where they belong now, so they move with the rest.
+            if (story is not null && !await FlushPendingEditsAsync())
+            {
+                _notifications.ShowError("Pending edits couldn't be saved, so the story's data was not moved.");
+                return;
+            }
+        }
+
+        // Into the story file: an Anthology story's board becomes the Short Story board first, so it is migrated
+        // into the block with the rest.
+        (string From, string To)? movedBoard = null;
+        if (toStorage == StorageMode.Embedded)
+            movedBoard = await MoveBeatBoardForKindAsync(previous.Kind, kind);
+
+        // Ruling 9: write the destination; saving project.json in the new mode commits; then clean up the source.
+        if (story is not null)
+        {
+            var written = await _storageMigrator!.WriteDestinationAsync(root, story, fromStorage, toStorage);
+            if (!written.IsSuccess)
+            {
+                await UndoBoardMoveAsync(root, movedBoard);
+                _notifications.ShowError(written.Error!);
+                return;
+            }
         }
 
         var save = await _projectSettings.SaveAsync(root, new ProjectSettings(kind, toStorage));
         if (!save.IsSuccess)
         {
-            var error = save.Error ?? "Could not save project settings.";
-            if (migrated is not null)
-            {
-                // The data already moved: move it back so it stays where the unchanged project.json says.
-                var back = await _storageMigrator!.MigrateAsync(root, migrated, toStorage, fromStorage);
-                error += back.IsSuccess
-                    ? " The story's data was moved back."
-                    : $" The story's data couldn't be moved back: {back.Error}";
-            }
-            _notifications.ShowError(error);
+            // What was written is ignored in the unchanged mode, which still has all the data.
+            await UndoBoardMoveAsync(root, movedBoard);
+            _notifications.ShowError(save.Error ?? "Could not save project settings.");
             return;
         }
 
-        await MoveBeatBoardForKindAsync(previous.Kind, kind);
+        if (story is not null
+            && !(await _storageMigrator!.CleanupSourceAsync(root, story, fromStorage, toStorage)).IsSuccess)
+            _notifications.ShowInfo(CleanupLeftoversMessage);
+
+        if (toStorage != StorageMode.Embedded)
+            await MoveBeatBoardForKindAsync(previous.Kind, kind);
 
         var reload = await _workspace.ReloadProjectAsync();
         if (!reload.IsSuccess)
-            _notifications.ShowError(reload.Error ?? "Could not reload the project.");
+        {
+            // Never keep writing to the old mode's location: use the new mode's store (refusing story data until
+            // it can be loaded) and ask for a reopen.
+            _workspace.ResetMetadataStore(new ProjectSettings(kind, toStorage));
+            _notifications.ShowError(
+                $"{reload.Error ?? "Could not reload the project."} The project settings were saved; reopen the project to continue.");
+        }
     }
 
     /// <summary>
-    /// Saves pending edits, then moves the story's data from <paramref name="from"/> to <paramref name="to"/>
-    /// storage. Returns the story migrated (null when there was none), or why nothing was migrated.
+    /// The story whose data moves out of <paramref name="from"/> storage: the embedded primary (null when Book.txt
+    /// lists no story file), or the only story file Book.txt lists.
     /// </summary>
-    private async Task<Result<StoryRef?>> MigrateStorageAsync(string root, StorageMode from, StorageMode to)
+    private async Task<Result<StoryRef?>> ResolveMigratingStoryAsync(StorageMode from)
     {
         if (_storageMigrator is null)
             return Result<StoryRef?>.Fail("The story's data can't be moved here, so the project was not changed.");
 
-        StoryRef? story;
         if (from == StorageMode.Embedded)
-        {
-            var primary = await _workspace!.GetEmbeddedPrimaryAsync();
-            if (!primary.IsSuccess)
-                return Result<StoryRef?>.Fail(primary.Error!);
-            story = primary.Value;
-        }
-        else
-        {
-            var files = StoryFiles().ToList();
-            if (files.Count != 1)
-                return Result<StoryRef?>.Fail(
-                    "Keep everything in the story file needs Book.txt to list exactly one story file.");
-            story = files[0].Story;
-        }
+            return await _workspace!.GetEmbeddedPrimaryAsync();
 
-        if (story is null)
-            return Result<StoryRef?>.Ok(null);
+        var files = StoryFiles().ToList();
+        return files.Count == 1
+            ? Result<StoryRef?>.Ok(files[0].Story)
+            : Result<StoryRef?>.Fail("Keep everything in the story file needs Book.txt to list exactly one story file.");
+    }
 
-        // Edits waiting on a debounce are saved where they belong now, so they move with the rest.
-        if (!await FlushPendingEditsAsync())
-            return Result<StoryRef?>.Fail("Pending edits couldn't be saved, so the story's data was not moved.");
-
-        var result = await _storageMigrator.MigrateAsync(root, story, from, to);
-        return result.IsSuccess ? Result<StoryRef?>.Ok(story) : Result<StoryRef?>.Fail(result.Error!);
+    private async Task UndoBoardMoveAsync(string root, (string From, string To)? moved)
+    {
+        if (moved is not { } board || _beatBoards is null)
+            return;
+        var back = await _beatBoards.MoveBoardAsync(root, board.To, board.From);
+        if (!back.IsSuccess)
+            _notifications.ShowError($"The beats couldn't be moved back: {back.Error}");
     }
 
     private async Task<bool> FlushPendingEditsAsync()
@@ -325,12 +349,12 @@ public class SettingsViewModel : ViewModelBase
     /// becomes the first story's board, and back. The first story is the first included, present node in
     /// Book.txt order — a Part (a story with scenes) or a chapter. A board is never overwritten; when the
     /// destination already has one, or the edits on the shown board can't be saved, nothing moves and the
-    /// author is told.
+    /// author is told. Returns the keys moved, or null when nothing moved.
     /// </summary>
-    private async Task MoveBeatBoardForKindAsync(ProjectKind from, ProjectKind to)
+    private async Task<(string From, string To)?> MoveBeatBoardForKindAsync(ProjectKind from, ProjectKind to)
     {
         if (_workspace is null || _beatBoards is null)
-            return;
+            return null;
 
         var root = _workspace.WorkspaceRoot;
         string fromKey;
@@ -339,7 +363,7 @@ public class SettingsViewModel : ViewModelBase
         else if (from == ProjectKind.Anthology && to == ProjectKind.Story)
             fromKey = "";
         else
-            return;
+            return null;
 
         var story = _workspace.Nodes.FirstOrDefault(n => !n.Node.IsExcluded && !n.Node.IsMissing);
         if (from == ProjectKind.Anthology)
@@ -348,13 +372,13 @@ public class SettingsViewModel : ViewModelBase
 
         if (string.IsNullOrEmpty(root) || !BeatBoardService.IsValidBoardKey(fromKey)
             || !_beatBoards.BoardExists(root, fromKey))
-            return;
+            return null;
 
         if (story is null || !BeatBoardService.IsValidBoardKey(toKey))
         {
             _notifications.ShowInfo("The beats were not moved: there is no story to carry them. "
                 + "They are kept under the Short Story project type.");
-            return;
+            return null;
         }
 
         var title = string.IsNullOrWhiteSpace(story.Node.Title) ? story.Node.RelativePath : story.Node.Title;
@@ -363,19 +387,21 @@ public class SettingsViewModel : ViewModelBase
             _notifications.ShowInfo(to == ProjectKind.Anthology
                 ? $"The story's beats were not moved: '{title}' already has a beat board."
                 : $"The beats of '{title}' were not moved: the short story already has a beat board.");
-            return;
+            return null;
         }
 
         // Pending edits on the shown board are written first, so they move with it.
         if (_beatBoard is not null && !await _beatBoard.FlushAsync())
         {
             _notifications.ShowError("Beat edits couldn't be saved; beats were not moved.");
-            return;
+            return null;
         }
 
         var moved = await _beatBoards.MoveBoardAsync(root, fromKey, toKey);
-        if (!moved.IsSuccess)
-            _notifications.ShowError($"The beats could not be moved with the story: {moved.Error}");
+        if (moved.IsSuccess)
+            return (fromKey, toKey);
+        _notifications.ShowError($"The beats could not be moved with the story: {moved.Error}");
+        return null;
     }
 
     public async Task LoadAsync()

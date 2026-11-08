@@ -107,6 +107,16 @@ public class WorkspaceViewModel : ViewModelBase
     /// Book.txt lists no story file. Fails when that story isn't known (the project's data couldn't be loaded).
     /// Waits for the store while it is being prepared.
     /// </summary>
+    /// <summary>
+    /// Points the open workspace's per-story data at <paramref name="settings"/>' storage after a reload failed,
+    /// so nothing is written to the old mode's location: the sidecar, or an embedded store that refuses story data
+    /// until the project is reopened.
+    /// </summary>
+    public void ResetMetadataStore(ProjectSettings settings)
+    {
+        _metadataStore = StoryMetadataStoreFactory.Create(settings, _sidecarStore, _editor.StoryWriter);
+    }
+
     public async Task<Result<StoryRef?>> GetEmbeddedPrimaryAsync()
     {
         var store = _metadataStore;

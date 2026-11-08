@@ -70,8 +70,10 @@ public sealed class ChapterInfoViewModel : ViewModelBase, IDisposable
 
     private readonly Subject<Unit> _scheduleSaveSubject = new();
 
-    /// <summary>True from a schedule row edit until the next schedule save starts.</summary>
+    /// <summary>True from a schedule row edit until the next schedule save starts, and again when it fails.</summary>
     private volatile bool _scheduleSavePending;
+
+    private readonly SemaphoreSlim _scheduleSaveGate = new(1, 1);
 
     /// <summary>Change subscriptions for the current <see cref="PhaseScheduleRows"/>.</summary>
     private readonly SerialDisposable _scheduleRowSubscriptions = new();
@@ -651,6 +653,9 @@ public sealed class ChapterInfoViewModel : ViewModelBase, IDisposable
     /// </summary>
     public async Task<bool> FlushScheduleAsync()
     {
+        // Let a save already writing finish first; if it fails it marks the edits pending again.
+        await _scheduleSaveGate.WaitAsync().ConfigureAwait(false);
+        _scheduleSaveGate.Release();
         if (!_scheduleSavePending)
             return true;
         try
@@ -800,10 +805,32 @@ public sealed class ChapterInfoViewModel : ViewModelBase, IDisposable
         if (chapterVm == null || string.IsNullOrEmpty(uuid) || string.IsNullOrEmpty(workspaceRoot))
             return;
 
-        // Snapshot all rows before async gap.
-        var rows = PhaseScheduleRows.ToList();
+        // Snapshot all row values before the async gaps (the rows are reused for the next chapter).
+        var rows = PhaseScheduleRows.Select(r => (r.PhaseName, r.StartDate, r.EndDate, r.Progress)).ToList();
         var currentStatus = Status;
 
+        // One schedule save at a time, so a flush waits for one already writing.
+        await _scheduleSaveGate.WaitAsync().ConfigureAwait(false);
+        try
+        {
+            await WriteScheduleAsync(chapterVm, workspaceRoot, rows, currentStatus).ConfigureAwait(false);
+        }
+        catch
+        {
+            // Still unsaved: a flush must report it.
+            _scheduleSavePending = true;
+            throw;
+        }
+        finally
+        {
+            _scheduleSaveGate.Release();
+        }
+    }
+
+    private async Task WriteScheduleAsync(
+        ChapterViewModel chapterVm, string workspaceRoot,
+        List<(string PhaseName, string? StartDate, string? EndDate, double? Progress)> rows, ChapterStatus currentStatus)
+    {
         PhaseData? updated = null;
         await _workspaceViewModel.MetadataStore.UpsertPhaseDataAsync(workspaceRoot, chapterVm.Story, current =>
         {

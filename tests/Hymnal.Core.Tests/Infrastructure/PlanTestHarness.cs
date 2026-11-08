@@ -84,10 +84,10 @@ internal static class PlanTestHarness
     /// view models are disposed before the Dispatch ends.
     /// </summary>
     public static Task Ui(string root, int nodeCount, Func<PlanTestContext, Task> body,
-        Func<IMetadataStore, IBeatBoardService>? boards = null) =>
+        Func<IMetadataStore, IBeatBoardService>? boards = null, IMetadataStore? store = null) =>
         ReactiveUiTestBootstrap.RunOnUiThreadAsync(async () =>
         {
-            using var context = new PlanTestContext(root, boards);
+            using var context = new PlanTestContext(root, boards, store);
             await Within(context.OpenWorkspaceInCurrentDispatchAsync());
             await PumpUntilAsync(() => context.Workspace.Nodes.Count == nodeCount);
             await body(context);
@@ -112,7 +112,7 @@ internal static class PlanTestHarness
 internal sealed class PlanTestContext : IDisposable
 {
     private readonly OwnedDisposables _owned = new();
-    private readonly MetadataStore _store = new();
+    private readonly IMetadataStore _store;
     private readonly InMemoryAppSettingsStore _settings = new();
     private readonly SwitchableFolderPicker _folders;
     private readonly ManuscriptService _manuscript;
@@ -135,8 +135,11 @@ internal sealed class PlanTestContext : IDisposable
     public BeatBoardViewModel Board { get; }
     public StorageMigrator Migrator { get; }
 
-    public PlanTestContext(string folder, Func<IMetadataStore, IBeatBoardService>? boards = null)
+    /// <param name="store">Every write of the context's services goes through it (default: the real store).</param>
+    public PlanTestContext(string folder, Func<IMetadataStore, IBeatBoardService>? boards = null,
+        IMetadataStore? store = null)
     {
+        _store = store ?? new MetadataStore();
         _folders = new SwitchableFolderPicker(folder);
         _notificationLog = Notifications.Notifications.Subscribe(Messages.Add);
         var exclusions = new ExclusionManifestService(_store);

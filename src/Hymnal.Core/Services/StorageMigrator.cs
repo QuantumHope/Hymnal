@@ -9,11 +9,15 @@ namespace Hymnal.Core.Services;
 /// <c>.hymnal-data</c> sidecar files and its file's trailing block, when the author turns "Keep everything in the
 /// story file" on or off. Only that story's entries move; other stories, boards and project data stay put.
 /// <para>
-/// The destination is written first and becomes exactly the source: a field the source has no value for is
-/// cleared there too, so a stale copy left by an earlier failed migration never resurfaces. Only then is the
-/// source removed. On any failure it stops and fails, saying what was already copied; a source is never removed
-/// before its destination is written, so at worst the data is in both places. The caller updates
-/// <c>project.json</c> only after success.
+/// A migration has three steps, and the caller saves <c>project.json</c> between the last two:
+/// <see cref="WriteDestinationAsync"/> makes the destination mirror the source (the storage the project is in
+/// now, which is the source of truth): a field the source has no value for is cleared there too, so a stale copy
+/// left by an earlier migration never resurfaces. Every source read happens before anything is written, and a
+/// failed read aborts, so a field is never cleared because its source couldn't be read. Saving
+/// <c>project.json</c> in the new mode is the commit point; then <see cref="CleanupSourceAsync"/> removes the old
+/// copies, best effort. Whatever step is interrupted, the mode <c>project.json</c> names has all the data: the
+/// destination is complete before the commit, and the source is only removed after it. Leftover copies are
+/// ignored in the new mode and replaced by the next migration's mirror.
 /// </para>
 /// <para>
 /// The story file is written through <see cref="StoryFileWriter"/>: when it is open in the editor, the block
@@ -31,10 +35,11 @@ public sealed class StorageMigrator(
     private const string StoryBoard = BeatBoardService.ShortStoryBoardKey;
 
     /// <summary>
-    /// Moves <paramref name="primary"/>'s data from <paramref name="from"/> storage to <paramref name="to"/>;
-    /// does nothing when they are the same.
+    /// Step 1: writes <paramref name="primary"/>'s data, read from <paramref name="from"/> storage, to
+    /// <paramref name="to"/> storage, leaving the source untouched. Does nothing when they are the same. On
+    /// failure nothing was removed and the project's current mode still shows all the data.
     /// </summary>
-    public async Task<Result<Unit>> MigrateAsync(string root, StoryRef primary, StorageMode from, StorageMode to)
+    public async Task<Result<Unit>> WriteDestinationAsync(string root, StoryRef primary, StorageMode from, StorageMode to)
     {
         if (from == to)
             return Result<Unit>.Ok(Unit.Default);
@@ -44,20 +49,51 @@ public sealed class StorageMigrator(
         try
         {
             return to == StorageMode.Embedded
-                ? await SidecarToEmbeddedAsync(root, primary).ConfigureAwait(false)
-                : await EmbeddedToSidecarAsync(root, primary).ConfigureAwait(false);
+                ? await WriteBlockAsync(root, primary).ConfigureAwait(false)
+                : await WriteSidecarAsync(root, primary).ConfigureAwait(false);
         }
-        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or InvalidDataException
-                                       or System.Text.Json.JsonException)
+        catch (Exception ex) when (IsDataException(ex))
         {
-            // Only reads can throw here: every write step reports its own failure.
+            // Only reads throw here (each write step reports its own failure), and all reads come first.
             return Result<Unit>.Fail($"The story's data couldn't be read: {ex.Message} Nothing was changed.");
         }
     }
 
+    /// <summary>
+    /// Step 2, after <c>project.json</c> names <paramref name="to"/>: removes the copies left in
+    /// <paramref name="from"/> storage. Tries every copy even when one fails; a failure lists what was left, which
+    /// is harmless (ignored in the new mode).
+    /// </summary>
+    public async Task<Result<Unit>> CleanupSourceAsync(string root, StoryRef primary, StorageMode from, StorageMode to)
+    {
+        if (from == to)
+            return Result<Unit>.Ok(Unit.Default);
+
+        var steps = from == StorageMode.Sidecar
+            ? new (string Name, Func<Task> Remove)[]
+            {
+                ("status and schedule", () => phaseDataService.RemoveAsync(root, primary.Uuid)),
+                ("target", () => targetsService.UpsertAsync(root, primary.Uuid, null)),
+                ("notes", () => notesService.DeleteAsync(NotesPath(root, primary))),
+                ("story board", () => ThrowOnFailAsync(beatBoardService.DeleteBoardAsync(root, StoryBoard)))
+            }
+            : [("data block", () => ThrowOnFailAsync(writer.RemoveMetadataAsync(primary.AbsolutePath)))];
+
+        var left = new List<string>();
+        foreach (var (name, remove) in steps)
+        {
+            if (await TryAsync(remove).ConfigureAwait(false) is { } error)
+                left.Add($"{name} ({error})");
+        }
+
+        return left.Count == 0
+            ? Result<Unit>.Ok(Unit.Default)
+            : Result<Unit>.Fail($"Old copies couldn't be removed: {string.Join("; ", left)}.");
+    }
+
     // ── Sidecar → embedded ───────────────────────────────────────────────────
 
-    private async Task<Result<Unit>> SidecarToEmbeddedAsync(string root, StoryRef primary)
+    private async Task<Result<Unit>> WriteBlockAsync(string root, StoryRef primary)
     {
         var fileName = Path.GetFileName(primary.AbsolutePath);
         var file = await writer.TryReadFileAsync(primary.AbsolutePath).ConfigureAwait(false);
@@ -67,6 +103,7 @@ public sealed class StorageMigrator(
         if (!file.Result.IsSuccess)
             return Result<Unit>.Fail($"{file.Result.Error} Nothing was changed.");
 
+        // Every read before any write: a read that throws aborts the migration with nothing written.
         (await phaseDataService.LoadAsync(root).ConfigureAwait(false)).TryGetValue(primary.Uuid, out var phase);
         (await targetsService.LoadAsync(root).ConfigureAwait(false)).TryGetValue(primary.Uuid, out var target);
         var notes = await notesService.LoadAsync(NotesPath(root, primary)).ConfigureAwait(false);
@@ -83,23 +120,15 @@ public sealed class StorageMigrator(
             block = EmbeddedStoryMetadataStore.WithPhaseData(block, phase);
 
         var written = await writer.UpdateMetadataAsync(primary.AbsolutePath, _ => block).ConfigureAwait(false);
-        if (!written.IsSuccess)
-            return Result<Unit>.Fail(
+        return written.IsSuccess
+            ? written
+            : Result<Unit>.Fail(
                 $"The story's data couldn't be written to {fileName}: {written.Error} Nothing was removed.");
-
-        return await RunCleanupAsync(
-            $"The story's data was copied to {fileName}, but",
-            "project data",
-            (phase is not null, "status and schedule", () => phaseDataService.RemoveAsync(root, primary.Uuid)),
-            (target is not null, "target", () => targetsService.UpsertAsync(root, primary.Uuid, null)),
-            (true, "notes", () => notesService.DeleteAsync(NotesPath(root, primary))),
-            (true, "story board", () => ThrowOnFailAsync(beatBoardService.DeleteBoardAsync(root, StoryBoard))))
-            .ConfigureAwait(false);
     }
 
     // ── Embedded → sidecar ───────────────────────────────────────────────────
 
-    private async Task<Result<Unit>> EmbeddedToSidecarAsync(string root, StoryRef primary)
+    private async Task<Result<Unit>> WriteSidecarAsync(string root, StoryRef primary)
     {
         var fileName = Path.GetFileName(primary.AbsolutePath);
         var file = await writer.TryReadFileAsync(primary.AbsolutePath).ConfigureAwait(false);
@@ -150,37 +179,13 @@ public sealed class StorageMigrator(
                     + $" Nothing was removed from {fileName}.");
             copied.Add(name);
         }
-
-        var stripped = await writer.RemoveMetadataAsync(primary.AbsolutePath).ConfigureAwait(false);
-        return stripped.IsSuccess
-            ? stripped
-            : Result<Unit>.Fail(
-                $"The story's data was copied to project data, but it couldn't be removed from {fileName}: "
-                + $"{stripped.Error} Both copies are kept.");
+        return Result<Unit>.Ok(Unit.Default);
     }
 
     // ── Helpers ──────────────────────────────────────────────────────────────
 
-    /// <summary>
-    /// Removes the source entries in order (skipping those that don't apply), stopping at the first failure,
-    /// which is reported with what was already removed.
-    /// </summary>
-    private static async Task<Result<Unit>> RunCleanupAsync(
-        string copiedPrefix, string sourceName, params (bool Applies, string Name, Func<Task> Remove)[] steps)
-    {
-        var removed = new List<string>();
-        foreach (var (applies, name, remove) in steps)
-        {
-            if (!applies)
-                continue;
-            if (await TryAsync(remove).ConfigureAwait(false) is { } error)
-                return Result<Unit>.Fail(
-                    $"{copiedPrefix} its {name} couldn't be removed from {sourceName}: {error} Both copies are kept"
-                    + (removed.Count > 0 ? $" (already removed: {string.Join(", ", removed)})." : "."));
-            removed.Add(name);
-        }
-        return Result<Unit>.Ok(Unit.Default);
-    }
+    private static bool IsDataException(Exception ex) =>
+        ex is IOException or UnauthorizedAccessException or InvalidDataException or System.Text.Json.JsonException;
 
     /// <summary>Runs <paramref name="step"/>; returns its error message, or null when it succeeded.</summary>
     private static async Task<string?> TryAsync(Func<Task> step)
@@ -190,8 +195,7 @@ public sealed class StorageMigrator(
             await step().ConfigureAwait(false);
             return null;
         }
-        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or InvalidDataException
-                                       or System.Text.Json.JsonException)
+        catch (Exception ex) when (IsDataException(ex))
         {
             return ex.Message;
         }

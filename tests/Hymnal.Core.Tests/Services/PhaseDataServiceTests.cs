@@ -164,4 +164,51 @@ public class PhaseDataServiceTests
             return Task.CompletedTask;
         }
     }
+
+    // -------------------------------------------------------------------------
+    // RemoveAsync
+    // -------------------------------------------------------------------------
+
+    [Fact]
+    public async Task RemoveAsync_RemovesOnlyThatEntry()
+    {
+        var tempDir = Path.Combine(Path.GetTempPath(), Path.GetRandomFileName());
+        Directory.CreateDirectory(tempDir);
+        try
+        {
+            var svc = new PhaseDataService(new RealFileMetadataStore());
+            await svc.UpsertAsync(tempDir, "a", _ => new PhaseData { Status = ChapterStatus.Drafting });
+            await svc.UpsertAsync(tempDir, "b", _ => new PhaseData { Status = ChapterStatus.Done });
+
+            await svc.RemoveAsync(tempDir, "a");
+
+            var loaded = await svc.LoadAsync(tempDir);
+            Assert.False(loaded.ContainsKey("a"));
+            Assert.Equal(ChapterStatus.Done, loaded["b"].Status);
+        }
+        finally
+        {
+            Directory.Delete(tempDir, recursive: true);
+        }
+    }
+
+    [Fact]
+    public async Task RemoveAsync_WritesNothingWhenTheEntryIsAbsent()
+    {
+        var tempDir = Path.Combine(Path.GetTempPath(), Path.GetRandomFileName());
+        Directory.CreateDirectory(tempDir);
+        try
+        {
+            var captured = new CaptureMetadataStore();
+            var svc = new PhaseDataService(captured);
+
+            await svc.RemoveAsync(tempDir, "absent");
+
+            Assert.Null(captured.LastContent);
+        }
+        finally
+        {
+            Directory.Delete(tempDir, recursive: true);
+        }
+    }
 }

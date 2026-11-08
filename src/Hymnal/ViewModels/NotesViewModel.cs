@@ -62,6 +62,9 @@ public class NotesViewModel : ViewModelBase, IDisposable
     /// <summary>Text typed but not yet saved (null when nothing is pending); taken by whichever save runs first.</summary>
     private string? _pendingText;
 
+    /// <summary>One notes save at a time, so a flush waits for one already writing.</summary>
+    private readonly SemaphoreSlim _saveGate = new(1, 1);
+
     /// <summary>Tracks which chapter node was loaded most-recently (the toggle needs one).</summary>
     private ChapterNode? _loadedNode;
 
@@ -217,6 +220,22 @@ public class NotesViewModel : ViewModelBase, IDisposable
         var storyAtSave = _loadedStory;
         var ct = _saveCts.Token;
         if (storyAtSave == null || ct.IsCancellationRequested) return true;
+
+        // A save already writing finishes first; if it fails, its text is pending again and retried here.
+        await _saveGate.WaitAsync().ConfigureAwait(false);
+        try
+        {
+            return await SavePendingLockedAsync(storyAtSave, ct).ConfigureAwait(false);
+        }
+        finally
+        {
+            _saveGate.Release();
+        }
+    }
+
+    private async Task<bool> SavePendingLockedAsync(StoryRef storyAtSave, CancellationToken ct)
+    {
+        if (ct.IsCancellationRequested) return true;
 
         var text = Interlocked.Exchange(ref _pendingText, null);
         if (text == null) return true;

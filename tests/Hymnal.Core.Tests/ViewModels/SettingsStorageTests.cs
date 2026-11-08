@@ -74,6 +74,8 @@ public sealed class SettingsStorageTests
                 Assert.Equal(SettingsViewModel.StorageOptionUnavailable, settings.StorageOptionExplanation);
 
                 settings.KeepInStoryFile = true;
+                Assert.False(settings.IsStorageOptionEnabled);
+                Assert.Equal(SettingsViewModel.StorageOptionUnavailable, settings.StorageOptionExplanation);
                 Assert.False(await settings.ApplyProjectKindCommand.CanExecute.FirstAsync());
                 Assert.Null(settings.ProjectChangeSummary);
             });
@@ -329,6 +331,240 @@ public sealed class SettingsStorageTests
             });
         }
         finally { DeleteFolder(root); }
+    }
+
+    // ── Ruling 9: commit point, best-effort cleanup ───────────────────────────
+
+    [Fact]
+    public async Task Cleanup_failing_after_the_phase_entry_still_switches_with_all_data_visible()
+    {
+        var store = new HookStore();
+        var root = CreateWorkspace(StoryJson, (StoryFile, StoryText));
+        try
+        {
+            await Ui(root, 1, async context =>
+            {
+                var uuid = context.Node(StoryFile).Uuid;
+                await SeedSidecarAsync(root, uuid);
+                // Removing the target from targets.json fails; the phase entry before it was already removed.
+                store.OnWrite = path => path.EndsWith("targets.json", StringComparison.Ordinal)
+                    ? throw new IOException("The disk is full.")
+                    : Task.CompletedTask;
+
+                var settings = context.CreateSettings();
+                settings.KeepInStoryFile = true;
+                await ApplyAsync(context, settings);
+
+                Assert.Empty(context.Errors);
+                Assert.Contains(SettingsViewModel.CleanupLeftoversMessage, context.Infos);
+                Assert.Contains("\"embedded\"", await File.ReadAllTextAsync(ProjectJsonPath(root)));
+                Assert.Equal(StorageMode.Embedded, context.Workspace.Profile.Storage);
+                await PumpUntilAsync(() => context.Node(StoryFile).Status == ChapterStatus.Editing);
+                Assert.Equal(7500, context.Node(StoryFile).Target?.MaxWords);
+                var story = context.Node(StoryFile).Story;
+                Assert.Equal("Remember the lamp.", await context.Workspace.MetadataStore.LoadNotesAsync(root, story));
+                Assert.False(File.Exists(NotesPath(root)));
+
+                // Turning it off again mirrors the block (the source of truth) over the leftover: nothing is erased.
+                store.OnWrite = null;
+                var off = context.CreateSettings();
+                off.KeepInStoryFile = false;
+                await ApplyAsync(context, off);
+
+                Assert.Empty(context.Errors);
+                Assert.Equal(StoryText, await File.ReadAllTextAsync(Path.Combine(root, StoryFile)));
+                Assert.Equal(ChapterStatus.Editing, (await new PhaseDataService(new MetadataStore()).LoadAsync(root))[uuid].Status);
+                Assert.Equal(7500, (await new TargetsService(new MetadataStore()).LoadAsync(root))[uuid].MaxWords);
+                Assert.Equal("Remember the lamp.", await File.ReadAllTextAsync(NotesPath(root)));
+                Assert.Equal("Hook", Assert.Single(await LoadFromDiskAsync(root, Story)).Title);
+            }, store: store);
+        }
+        finally { DeleteFolder(root); }
+    }
+
+    [Fact]
+    public async Task Anthology_to_story_in_the_file_carries_the_story_s_board_into_the_block_and_back()
+    {
+        var root = CreateWorkspace(AnthologyJson, (StoryFile, StoryText));
+        try
+        {
+            await Ui(root, 1, async context =>
+            {
+                var uuid = context.Node(StoryFile).Uuid;
+                await SeedAsync(root, uuid, new Beat("b1", "Anthology beat", "", null));
+
+                var settings = context.CreateSettings();
+                settings.SelectedProjectKind = ProjectKind.Story;
+                Assert.True(settings.IsStorageOptionVisible);
+                settings.KeepInStoryFile = true;
+                await ApplyAsync(context, settings);
+
+                Assert.Empty(context.Errors);
+                Assert.Equal(ProjectKind.Story, context.Workspace.Profile.Kind);
+                Assert.Equal(StorageMode.Embedded, context.Workspace.Profile.Storage);
+                Assert.Equal("Anthology beat", Assert.Single(ReadStory(root).Metadata!.Beats!).Title);
+                Assert.False(File.Exists(BeatBoardService.BoardFilePath(root, uuid)));
+                Assert.False(File.Exists(BeatBoardService.BoardFilePath(root, Story)));
+
+                var off = context.CreateSettings();
+                off.KeepInStoryFile = false;
+                await ApplyAsync(context, off);
+
+                Assert.Empty(context.Errors);
+                Assert.Equal("Anthology beat", Assert.Single(await LoadFromDiskAsync(root, Story)).Title);
+                Assert.Equal(StoryText, await File.ReadAllTextAsync(Path.Combine(root, StoryFile)));
+            });
+        }
+        finally { DeleteFolder(root); }
+    }
+
+    [Fact]
+    public async Task A_failed_reload_after_saving_never_writes_to_the_old_location()
+    {
+        var root = CreateWorkspace(StoryJson, (StoryFile, StoryText));
+        try
+        {
+            await Ui(root, 1, async context =>
+            {
+                var story = context.Node(StoryFile).Story;
+                var settings = context.CreateSettings();
+                settings.KeepInStoryFile = true;
+                // The reload can't find Book.txt.
+                File.Delete(Path.Combine(root, "Book.txt"));
+                await ApplyAsync(context, settings);
+
+                Assert.Contains(context.Errors, e => e.Contains("reopen the project"));
+                Assert.Contains("\"embedded\"", await File.ReadAllTextAsync(ProjectJsonPath(root)));
+                await Assert.ThrowsAsync<IOException>(() =>
+                    context.Workspace.MetadataStore.SaveNotesAsync(root, story, "Typed after."));
+                Assert.False(File.Exists(NotesPath(root)));
+            });
+        }
+        finally { DeleteFolder(root); }
+    }
+
+    // ── Flushes wait for a save already writing (minor 3) ─────────────────────
+
+    [Fact]
+    public async Task Notes_flush_waits_for_a_debounced_save_already_writing()
+    {
+        var store = new HookStore();
+        var started = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var release = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var root = CreateWorkspace(StoryJson, (StoryFile, StoryText));
+        try
+        {
+            await Ui(root, 1, async context =>
+            {
+                var notes = context.CreateNotes();
+                var node = context.Node(StoryFile);
+                await Within(context.Editor.OpenChapterAsync(node.Node, Path.Combine(root, StoryFile)));
+                store.OnWrite = path =>
+                {
+                    if (path != NotesPath(root)) return Task.CompletedTask;
+                    started.TrySetResult();
+                    return release.Task;
+                };
+                notes.Text = "Typed.";
+                await Within(started.Task);
+
+                var flush = notes.FlushAsync();
+                await context.SettleAsync();
+                Assert.False(flush.IsCompleted);
+
+                release.SetResult();
+                Assert.True(await Within(flush));
+                Assert.Equal("Typed.", await File.ReadAllTextAsync(NotesPath(root)));
+            }, store: store);
+        }
+        finally { DeleteFolder(root); }
+    }
+
+    [Fact]
+    public async Task Schedule_flush_waits_for_a_save_already_writing()
+    {
+        var store = new HookStore();
+        var started = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var release = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var root = CreateWorkspace(StoryJson, (StoryFile, StoryText));
+        try
+        {
+            await Ui(root, 1, async context =>
+            {
+                var info = await OpenChapterInfoAsync(context, root);
+                store.OnWrite = path =>
+                {
+                    if (!path.EndsWith("phases.json", StringComparison.Ordinal)) return Task.CompletedTask;
+                    started.TrySetResult();
+                    return release.Task;
+                };
+                info.PhaseScheduleRows.First(r => r.PhaseName == "Drafting").StartDate = "2026-11-01";
+                await Within(started.Task);
+
+                var flush = info.FlushScheduleAsync();
+                await context.SettleAsync();
+                Assert.False(flush.IsCompleted);
+
+                release.SetResult();
+                Assert.True(await Within(flush));
+                Assert.Contains("2026-11-01", await File.ReadAllTextAsync(Path.Combine(root, ".hymnal-data", "phases.json")));
+            }, store: store);
+        }
+        finally { DeleteFolder(root); }
+    }
+
+    [Fact]
+    public async Task Schedule_flush_reports_a_failed_debounced_save()
+    {
+        var store = new HookStore();
+        var root = CreateWorkspace(StoryJson, (StoryFile, StoryText));
+        try
+        {
+            await Ui(root, 1, async context =>
+            {
+                var info = await OpenChapterInfoAsync(context, root);
+                store.OnWrite = path => path.EndsWith("phases.json", StringComparison.Ordinal)
+                    ? throw new IOException("The disk is full.")
+                    : Task.CompletedTask;
+                info.PhaseScheduleRows.First(r => r.PhaseName == "Drafting").StartDate = "2026-11-01";
+                await PumpUntilAsync(() => context.Errors.Any(e => e.Contains("Schedule save failed")));
+
+                Assert.False(await Within(info.FlushScheduleAsync()));
+            }, store: store);
+        }
+        finally { DeleteFolder(root); }
+    }
+
+    private static async Task<ChapterInfoViewModel> OpenChapterInfoAsync(PlanTestContext context, string root)
+    {
+        var info = context.CreateChapterInfo();
+        var node = context.Node(StoryFile);
+        await Within(context.Editor.OpenChapterAsync(node.Node, Path.Combine(root, StoryFile)));
+        await PumpUntilAsync(() => info.ChapterTitle != null);
+        return info;
+    }
+
+    private static async Task SeedSidecarAsync(string root, string uuid)
+    {
+        var store = new MetadataStore();
+        await new PhaseDataService(store).UpsertAsync(root, uuid, _ => new PhaseData { Status = ChapterStatus.Editing });
+        await new TargetsService(store).UpsertAsync(root, uuid, new WordCountTarget { MinWords = 1000, MaxWords = 7500 });
+        await new NotesService(store).SaveAsync(NotesPath(root), "Remember the lamp.");
+        await SeedAsync(root, Story, new Beat("b1", "Hook", "", null));
+    }
+
+    /// <summary>The real store, running <see cref="OnWrite"/> (which may wait or throw) before each write.</summary>
+    private sealed class HookStore : IMetadataStore
+    {
+        private readonly MetadataStore _inner = new();
+        public Func<string, Task>? OnWrite { get; set; }
+
+        public async Task WriteTextAtomicAsync(string absolutePath, string content)
+        {
+            if (OnWrite is { } hook)
+                await hook(absolutePath);
+            await _inner.WriteTextAtomicAsync(absolutePath, content);
+        }
     }
 
     private static async Task ApplyAsync(PlanTestContext context, SettingsViewModel settings)

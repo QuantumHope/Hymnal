@@ -262,4 +262,24 @@ public class BeatBoardServiceTests
         Assert.True(BeatBoardService.IsValidBoardKey("story"));
         Assert.True(BeatBoardService.IsValidBoardKey(Guid.NewGuid().ToString()));
     }
+
+    [Fact]
+    public Task Delete_removes_the_board_and_succeeds_when_there_is_none() => WithTempDirAsync(async (dir, svc) =>
+    {
+        Assert.True((await svc.SaveAsync(dir, "story", [new Beat("a", "A", "", null)])).IsSuccess);
+
+        Assert.True((await svc.DeleteBoardAsync(dir, "story")).IsSuccess);
+        Assert.False(svc.BoardExists(dir, "story"));
+        Assert.True((await svc.DeleteBoardAsync(dir, "story")).IsSuccess);
+        Assert.True((await svc.DeleteBoardAsync(dir, "never-saved")).IsSuccess);
+    });
+
+    [Fact]
+    public Task Delete_rejects_an_invalid_key() => WithTempDirAsync(async (dir, svc) =>
+    {
+        var result = await svc.DeleteBoardAsync(dir, "../story");
+
+        Assert.False(result.IsSuccess);
+        Assert.Equal("Beat board key is not valid.", result.Error);
+    });
 }
