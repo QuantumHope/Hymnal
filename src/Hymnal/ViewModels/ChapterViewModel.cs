@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Linq;
 using System.Reactive;
 using System.Reactive.Concurrency;
@@ -16,7 +17,7 @@ namespace Hymnal.ViewModels;
 /// <summary>
 /// Wraps an immutable <see cref="ChapterNode"/> with mutable reactive status state,
 /// word count state, target management, and a <see cref="ChangeStatusCommand"/> that
-/// persists phase data to <see cref="PhaseDataService"/>.
+/// persists phase data and targets through the workspace's <see cref="IStoryMetadataStore"/>.
 /// Lives in the Avalonia project so it may reference ReactiveUI and
 /// <see cref="INotificationService"/> without creating circular deps.
 /// </summary>
@@ -24,11 +25,11 @@ public sealed class ChapterViewModel : ViewModelBase, IDisposable
 {
     // ── Injected services ─────────────────────────────────────────────────────
 
-    private readonly PhaseDataService _phaseDataService;
-    private readonly TargetsService _targetsService;
+    private readonly IStoryMetadataStore _metadataStore;
     private readonly IAppSettingsStore _settingsStore;
     private readonly INotificationService _notificationService;
     private readonly string _workspaceRoot;
+    private readonly string _manuscriptRoot;
 
     /// <summary>Raised when the sidebar should show the shared target flyout for this chapter.</summary>
     internal event Action<ChapterViewModel>? TargetFlyoutOpenRequested;
@@ -54,6 +55,9 @@ public sealed class ChapterViewModel : ViewModelBase, IDisposable
 
     /// <summary>The stable UUID that survives file renames.</summary>
     public string Uuid { get; }
+
+    /// <summary>This chapter's file as the metadata store sees it (for the current <see cref="Node"/> path).</summary>
+    public StoryRef Story => new(Uuid, Node.RelativePath, Path.Combine(_manuscriptRoot, Node.RelativePath));
 
     // ── Status ────────────────────────────────────────────────────────────────
 
@@ -298,24 +302,24 @@ public sealed class ChapterViewModel : ViewModelBase, IDisposable
         ChapterNode node,
         string uuid,
         PhaseData? phaseData,
-        PhaseDataService phaseDataService,
-        TargetsService targetsService,
+        IStoryMetadataStore metadataStore,
         IAppSettingsStore settingsStore,
         INotificationService notificationService,
         string workspaceRoot,
         WordCountTarget? target = null,
-        ProjectProfile? profile = null)
+        ProjectProfile? profile = null,
+        string? manuscriptRoot = null)
     {
         _node = node;        Uuid = uuid;
         Profile = profile ?? ProjectProfile.Novel;
         _phaseData = phaseData;
         _status = phaseData?.Status ?? Profile.DefaultStatus;
 
-        _phaseDataService = phaseDataService;
-        _targetsService = targetsService;
+        _metadataStore = metadataStore;
         _settingsStore = settingsStore;
         _notificationService = notificationService;
         _workspaceRoot = workspaceRoot;
+        _manuscriptRoot = manuscriptRoot ?? workspaceRoot;
 
         _target = target;
         _pendingMinWords = target?.MinWords;
@@ -444,7 +448,7 @@ public sealed class ChapterViewModel : ViewModelBase, IDisposable
     public async Task UpdateDatesAsync(string? startDate, string? endDate)
     {
         PhaseData? updated = null;
-        await _phaseDataService.UpsertAsync(_workspaceRoot, Uuid, current =>
+        await _metadataStore.UpsertPhaseDataAsync(_workspaceRoot, Story, current =>
         {
             var basePhaseData = current ?? _phaseData;
             updated = new PhaseData
@@ -462,7 +466,7 @@ public sealed class ChapterViewModel : ViewModelBase, IDisposable
 
     /// <summary>
     /// Re-syncs observable status and phase-data state after ChapterInfoViewModel
-    /// has persisted a change via PhaseDataService directly.
+    /// has persisted a change through the metadata store directly.
     /// Safe to call from any thread — posts to UIThread if not already on it.
     /// </summary>
     public void ApplyPhaseData(PhaseData phaseData)
@@ -497,7 +501,7 @@ public sealed class ChapterViewModel : ViewModelBase, IDisposable
             return;
 
         PhaseData? updated = null;
-        await _phaseDataService.UpsertAsync(_workspaceRoot, Uuid, current =>
+        await _metadataStore.UpsertPhaseDataAsync(_workspaceRoot, Story, current =>
         {
             var basePhaseData = current ?? _phaseData;
             updated = new PhaseData
@@ -521,7 +525,7 @@ public sealed class ChapterViewModel : ViewModelBase, IDisposable
 
     private async Task SetTargetAsync(WordCountTarget? target)
     {
-        await _targetsService.UpsertAsync(_workspaceRoot, Uuid, target).ConfigureAwait(false);
+        await _metadataStore.SetTargetAsync(_workspaceRoot, Story, target).ConfigureAwait(false);
 
         await Avalonia.Threading.Dispatcher.UIThread.InvokeAsync(() =>
         {
@@ -584,7 +588,7 @@ public sealed class ChapterViewModel : ViewModelBase, IDisposable
         PhaseData? updated = null;
         string? error = null;
 
-        await _phaseDataService.UpsertAsync(_workspaceRoot, Uuid, current =>
+        await _metadataStore.UpsertPhaseDataAsync(_workspaceRoot, Story, current =>
         {
             var basePhaseData = current ?? _phaseData ?? PhaseDataService.DefaultPhaseDataFor(Profile);
             var result = PhaseCompletion.CompleteAndAdvance(basePhaseData, today, Profile);

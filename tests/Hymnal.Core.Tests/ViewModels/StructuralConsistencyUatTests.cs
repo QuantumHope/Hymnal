@@ -577,7 +577,7 @@ public sealed class StructuralConsistencyUatTests
             NotificationService,
             ManuscriptService);
 
-        public GanttViewModel CreateGanttViewModel() => new(Workspace, PhaseDataService, NotificationService);
+        public GanttViewModel CreateGanttViewModel() => new(Workspace, NotificationService);
 
         public async Task OpenWorkspaceAsync(int expectedNodeCount)
         {
@@ -654,7 +654,7 @@ public sealed class StructuralConsistencyUatTests
                 var uuid = registry.Values.FirstOrDefault(entry => string.Equals(entry.CurrentPath, node.RelativePath, StringComparison.OrdinalIgnoreCase))?.Uuid ?? string.Empty;
                 phases.TryGetValue(uuid, out var phaseData);
                 var target = string.IsNullOrWhiteSpace(uuid) ? null : TargetsService.GetTarget(targets, uuid);
-                var vm = new ChapterViewModel(node, uuid, phaseData, PhaseDataService, TargetsService, SettingsStore, NotificationService, model.WorkspaceRoot, target);
+                var vm = new ChapterViewModel(node, uuid, phaseData, TestMetadataStores.Sidecar(PhaseDataService, TargetsService), SettingsStore, NotificationService, model.WorkspaceRoot, target);
                 workspaceNodes.Add(vm);
                 visibleNodes.Add(vm);
                 lookup[node.RelativePath] = vm;

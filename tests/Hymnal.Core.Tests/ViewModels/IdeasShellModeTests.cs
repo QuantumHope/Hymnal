@@ -627,7 +627,7 @@ public sealed class IdeasShellModeTests : IDisposable
             _structure = new BookTxtStructureService(_store, exclusions, registry);
             ProjectSettings = new ProjectSettingsService(_store);
             Ideas = new ControllableIdeasService(new StoryIdeasService(_store));
-            _promoter = new StoryIdeaPromoter(_structure, registry, _phases, _targets, new NotesService(_store), Ideas);
+            _promoter = new StoryIdeaPromoter(_structure, registry, Ideas);
             Editor = new EditorViewModel(_store, Notifications, wordCount, new StoryFileWriter(_store));
             _manuscript = new ManuscriptService(Notifications, exclusions);
             LiveContexts.Add(this);
@@ -705,10 +705,10 @@ public sealed class IdeasShellModeTests : IDisposable
             return new MainWindowViewModel(
                 Workspace,
                 Editor,
-                Track(new NotesViewModel(Editor, Workspace, new NotesService(_store), Notifications, _settings)),
-                Track(new ChapterInfoViewModel(Editor, Workspace, _phases, _targets, _settings, Notifications, history)),
-                new BookStatsViewModel(Workspace, history, _targets),
-                new GanttViewModel(Workspace, _phases, Notifications),
+                Track(new NotesViewModel(Editor, Workspace, Notifications, _settings)),
+                Track(new ChapterInfoViewModel(Editor, Workspace, _settings, Notifications, history)),
+                new BookStatsViewModel(Workspace, history),
+                new GanttViewModel(Workspace, Notifications),
                 Track(new CorkboardViewModel(Workspace, _structure, new OrphanFileDiscoveryService(), _settings, Notifications, _manuscript)),
                 new ResearchViewModel(Workspace, docs, Editor, AiTestDoubles.CreateStubAiChatViewModel(Editor, Workspace, Notifications)),
                 docs,

@@ -94,7 +94,7 @@ public sealed class ProfileDrivenUiTests : IDisposable
         try
         {
             using var context = await OpenAsync(root, expectedNodes: 2);
-            var gantt = new GanttViewModel(context.Workspace, context.PhaseService, context.Notifications);
+            var gantt = new GanttViewModel(context.Workspace, context.Notifications);
 
             var chapterRows = gantt.Rows.Where(r => r.IsChapter).ToList();
             Assert.Equal(2, chapterRows.Count);
@@ -205,7 +205,7 @@ public sealed class ProfileDrivenUiTests : IDisposable
             };
             await phaseService.UpsertAsync(root, "uuid-1", _ => stored);
             var detail = new ChapterDetailViewModel(
-                CreateStoryChapter(root, store, phaseService, stored), phaseService, root, new RecordingNotificationService());
+                CreateStoryChapter(root, store, phaseService, stored), TestMetadataStores.Sidecar(phaseService), root, new RecordingNotificationService());
 
             await RunOnUiThreadWithPumpingAsync(async () =>
             {
@@ -231,7 +231,7 @@ public sealed class ProfileDrivenUiTests : IDisposable
             var node = await SeedFirstNodeAsync(context, new PhaseData { Status = ChapterStatus.Polishing });
             await RunOnUiThreadWithPumpingAsync(async () =>
             {
-                var gantt = new GanttViewModel(context.Workspace, context.PhaseService, context.Notifications);
+                var gantt = new GanttViewModel(context.Workspace, context.Notifications);
                 var row = gantt.Rows.First(r => r.IsChapter && r.RelativePath == node.Node.RelativePath);
                 row.EditableStartDate = new DateTime(2026, 3, 1);
                 await gantt.SaveInlineCellAsync(row, GanttEditableColumn.StartDate);
@@ -256,7 +256,7 @@ public sealed class ProfileDrivenUiTests : IDisposable
             var node = await SeedFirstNodeAsync(context, new PhaseData { Status = ChapterStatus.Polishing });
             await RunOnUiThreadWithPumpingAsync(async () =>
             {
-                var gantt = new GanttViewModel(context.Workspace, context.PhaseService, context.Notifications);
+                var gantt = new GanttViewModel(context.Workspace, context.Notifications);
                 var row = gantt.Rows.First(r => r.IsChapter);
                 row.EditableStartDate = new DateTime(2026, 3, 1);
                 await gantt.SaveInlineCellAsync(row, GanttEditableColumn.StartDate);
@@ -278,12 +278,12 @@ public sealed class ProfileDrivenUiTests : IDisposable
         try
         {
             using var story = await OpenAsync(storyRoot, expectedNodes: 2);
-            var storyGantt = new GanttViewModel(story.Workspace, story.PhaseService, story.Notifications);
+            var storyGantt = new GanttViewModel(story.Workspace, story.Notifications);
             Assert.Equal(["Drafting", "Revising"], storyGantt.LegendItems.Select(i => i.Label));
             Assert.Equal(["#38BDF8", "#9D4EDD"], storyGantt.LegendItems.Select(i => i.ColorHex));
 
             using var novel = await OpenAsync(novelRoot, expectedNodes: 1);
-            var novelGantt = new GanttViewModel(novel.Workspace, novel.PhaseService, novel.Notifications);
+            var novelGantt = new GanttViewModel(novel.Workspace, novel.Notifications);
             Assert.Equal(GanttProjection.PhaseNames, novelGantt.LegendItems.Select(i => i.Label));
             Assert.Equal(
                 ["#9589B0", "#38BDF8", "#9D4EDD", "#F5C842", "#E91E8C"],
@@ -340,7 +340,7 @@ public sealed class ProfileDrivenUiTests : IDisposable
             };
             await phaseService.UpsertAsync(root, "uuid-1", _ => stored);
             var detail = new ChapterDetailViewModel(
-                CreateStoryChapter(root, store, phaseService, stored), phaseService, root, new RecordingNotificationService());
+                CreateStoryChapter(root, store, phaseService, stored), TestMetadataStores.Sidecar(phaseService), root, new RecordingNotificationService());
 
             await RunOnUiThreadWithPumpingAsync(() =>
             {
@@ -373,8 +373,7 @@ public sealed class ProfileDrivenUiTests : IDisposable
                 new ChapterNode("scene.md", "scene.md", "Scene", NodeKind.Chapter, IsMissing: false, Index: 0),
                 "uuid-1",
                 new PhaseData { Status = ChapterStatus.Polishing },
-                new PhaseDataService(store),
-                new TargetsService(store),
+                TestMetadataStores.Sidecar(new PhaseDataService(store), new TargetsService(store)),
                 new InMemoryAppSettingsStore(),
                 new RecordingNotificationService(),
                 root,
@@ -605,8 +604,7 @@ public sealed class ProfileDrivenUiTests : IDisposable
             new ChapterNode("scene.md", "scene.md", "Scene", NodeKind.Chapter, IsMissing: false, Index: 0),
             "uuid-1",
             phaseData,
-            phaseService,
-            new TargetsService(store),
+            TestMetadataStores.Sidecar(phaseService, new TargetsService(store)),
             new InMemoryAppSettingsStore(),
             new RecordingNotificationService(),
             root,
@@ -764,8 +762,6 @@ public sealed class ProfileDrivenUiTests : IDisposable
         public ChapterInfoViewModel CreateChapterInfo() => new(
             _editor,
             Workspace,
-            PhaseService,
-            new TargetsService(_store),
             _settings,
             Notifications,
             new WordCountHistoryService(_store));

@@ -156,6 +156,83 @@ public class ChapterRegistryServiceTests
     }
 
     // -------------------------------------------------------------------------
+    // AdoptUuid
+    // -------------------------------------------------------------------------
+
+    private static ChapterRegistryEntry Entry(string uuid, string path, bool orphaned = false, string? title = null) =>
+        new() { Uuid = uuid, CurrentPath = path, Orphaned = orphaned, Title = title };
+
+    [Fact]
+    public void AdoptUuid_ReplacesThePathsEntryWithTheAdoptedUuid()
+    {
+        var svc = new ChapterRegistryService(new FakeMetadataStore());
+        var registry = new Dictionary<string, ChapterRegistryEntry>
+        {
+            ["old"] = Entry("old", "story.md", title: "Story"),
+            ["other"] = Entry("other", "other.md")
+        };
+
+        var updated = svc.AdoptUuid(registry, "story.md", "block");
+
+        Assert.Equal(["block", "other"], updated.Keys.Order());
+        Assert.Equal("story.md", updated["block"].CurrentPath);
+        Assert.Equal("block", updated["block"].Uuid);
+        Assert.Equal("Story", updated["block"].Title);
+        Assert.False(updated["block"].Orphaned);
+    }
+
+    [Fact]
+    public void AdoptUuid_MovesAnOrphanedEntryUnderTheAdoptedUuidToThePath()
+    {
+        var svc = new ChapterRegistryService(new FakeMetadataStore());
+        var registry = new Dictionary<string, ChapterRegistryEntry>
+        {
+            ["block"] = Entry("block", "before-rename.md", orphaned: true, title: "Old title"),
+            ["fresh"] = Entry("fresh", "renamed.md")
+        };
+
+        var updated = svc.AdoptUuid(registry, "renamed.md", "block");
+
+        var entry = Assert.Single(updated).Value;
+        Assert.Equal("block", entry.Uuid);
+        Assert.Equal("renamed.md", entry.CurrentPath);
+        Assert.False(entry.Orphaned);
+    }
+
+    [Fact]
+    public void AdoptUuid_LeavesTheRegistryWhenThePathAlreadyHasTheUuid()
+    {
+        var svc = new ChapterRegistryService(new FakeMetadataStore());
+        var registry = new Dictionary<string, ChapterRegistryEntry> { ["block"] = Entry("block", "story.md") };
+
+        Assert.Same(registry, svc.AdoptUuid(registry, "story.md", "block"));
+    }
+
+    [Fact]
+    public void AdoptUuid_NeverTakesTheUuidOfAnotherFileInTheBook()
+    {
+        var svc = new ChapterRegistryService(new FakeMetadataStore());
+        var registry = new Dictionary<string, ChapterRegistryEntry>
+        {
+            ["mine"] = Entry("mine", "copy.md"),
+            ["block"] = Entry("block", "original.md")
+        };
+
+        Assert.Same(registry, svc.AdoptUuid(registry, "copy.md", "block"));
+    }
+
+    [Theory]
+    [InlineData("")]
+    [InlineData("  ")]
+    public void AdoptUuid_IgnoresABlankUuid(string blank)
+    {
+        var svc = new ChapterRegistryService(new FakeMetadataStore());
+        var registry = new Dictionary<string, ChapterRegistryEntry> { ["mine"] = Entry("mine", "story.md") };
+
+        Assert.Same(registry, svc.AdoptUuid(registry, "story.md", blank));
+    }
+
+    // -------------------------------------------------------------------------
     // Minimal real-filesystem IMetadataStore for round-trip tests
     // -------------------------------------------------------------------------
 

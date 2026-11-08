@@ -31,8 +31,7 @@ public class WorkspaceViewModel : ViewModelBase
     private readonly INotificationService _notificationService;
     private readonly EditorViewModel _editor;
     private readonly ChapterRegistryService _registryService;
-    private readonly PhaseDataService _phaseDataService;
-    private readonly TargetsService _targetsService;
+    private readonly SidecarStoryMetadataStore _sidecarStore;
     private readonly WordCountService _wordCountService;
     private readonly WordCountHistoryService _historyService;
     private readonly IExclusionManifestService _exclusionManifestService;
@@ -44,6 +43,8 @@ public class WorkspaceViewModel : ViewModelBase
     private int _workspaceGeneration;
     private Task? _hydrationTask;
     private bool _isSwitching;
+    private bool _multiFileNoticeShown;
+    private volatile IStoryMetadataStore _metadataStore;
     private readonly Subject<Unit> _workspaceChanged = new();
     private CompositeDisposable _partSubscriptions = new();
 
@@ -91,6 +92,24 @@ public class WorkspaceViewModel : ViewModelBase
     }
 
     public string WorkspaceRoot => _model?.WorkspaceRoot ?? string.Empty;
+
+    /// <summary>
+    /// Where the open workspace's per-story status/schedule, targets, notes and beats are read and written: the
+    /// sidecar files, or for a single-file Short Story with embedded storage its file's block. Rebuilt from the
+    /// project settings on every open and reload (calls made while it is being prepared wait for it), so read it
+    /// at call time rather than keeping it.
+    /// </summary>
+    public IStoryMetadataStore MetadataStore => _metadataStore;
+
+    /// <summary>
+    /// <paramref name="node"/>'s file as the metadata store sees it: with its chapter's UUID once the sidebar
+    /// is built (empty before), and its absolute path. Call on the UI thread.
+    /// </summary>
+    public StoryRef StoryRefFor(ChapterNode node) =>
+        _nodesByPath.TryGetValue(node.RelativePath, out var vm)
+            ? vm.Story
+            : new StoryRef(string.Empty, node.RelativePath,
+                _model is null ? node.RelativePath : ResolveAbsolutePath(node));
 
     public string BookTxtPath => _model?.BookTxtPath ?? string.Empty;
 
@@ -194,7 +213,9 @@ public class WorkspaceViewModel : ViewModelBase
         IOrphanFileDiscoveryService? orphanFileDiscoveryService = null,
         ProjectSettingsService? projectSettings = null,
         ProjectInitializer? projectInitializer = null,
-        IProjectInitPrompt? initPrompt = null)
+        IProjectInitPrompt? initPrompt = null,
+        INotesService? notesService = null,
+        IBeatBoardService? beatBoards = null)
     {
         _manuscriptService = manuscriptService;
         _structureService = structureService;
@@ -204,8 +225,12 @@ public class WorkspaceViewModel : ViewModelBase
         _notificationService = notificationService;
         _editor = editor;
         _registryService = registryService;
-        _phaseDataService = phaseDataService;
-        _targetsService = targetsService;
+        _sidecarStore = new SidecarStoryMetadataStore(
+            phaseDataService,
+            targetsService,
+            notesService ?? new NotesService(new MetadataStore()),
+            beatBoards ?? new BeatBoardService(new MetadataStore()));
+        _metadataStore = _sidecarStore;
         _wordCountService = wordCountService;
         _historyService = historyService;
         _exclusionManifestService = exclusionManifestService ?? new ExclusionManifestService(new MetadataStore());
@@ -585,6 +610,7 @@ public class WorkspaceViewModel : ViewModelBase
             await _settingsStore.SetAsync("lastWorkspacePath", path);
             await LoadProfileAsync(result.Value!.WorkspaceRoot);
             _editor.HasWorkspace = true;
+            _multiFileNoticeShown = false;
             BindModel(result.Value!);
         }
         finally
@@ -686,6 +712,8 @@ public class WorkspaceViewModel : ViewModelBase
 
         foreach (var vm in _nodes) vm.Dispose();
         _model = null;
+        _metadataStore = _sidecarStore;
+        _multiFileNoticeShown = false;
         _nodes.Clear();
         _nodesByPath.Clear();
         TargetFlyoutChapter = null;
@@ -721,6 +749,7 @@ public class WorkspaceViewModel : ViewModelBase
             if (!result.IsSuccess) return;
 
             await LoadProfileAsync(result.Value!.WorkspaceRoot);
+            _multiFileNoticeShown = false;
             BindModel(result.Value!);
             _editor.HasWorkspace = true;
 
@@ -769,6 +798,11 @@ public class WorkspaceViewModel : ViewModelBase
 
     private void BindModel(ManuscriptModel model)
     {
+        // Until hydration knows the embedded story, store calls for this workspace wait for its store.
+        var generation = ++_workspaceGeneration;
+        var preparedStore = new TaskCompletionSource<IStoryMetadataStore>(TaskCreationOptions.RunContinuationsAsynchronously);
+        _metadataStore = new DeferredStoryMetadataStore(preparedStore.Task);
+
         _model = model;
         HasWorkspace = true;
         WorkspaceName = Path.GetFileName(model.WorkspaceRoot.TrimEnd(
@@ -778,12 +812,14 @@ public class WorkspaceViewModel : ViewModelBase
         _workspaceChanged.OnNext(Unit.Default);
 
         // Track registry/phase hydration so restore waits for the active workspace.
-        var generation = ++_workspaceGeneration;
-        _hydrationTask = LoadRegistryAndPhaseDataAsync(model, generation, Profile);
+        _hydrationTask = LoadRegistryAndPhaseDataAsync(model, generation, Profile, preparedStore);
     }
 
-    private async Task LoadRegistryAndPhaseDataAsync(ManuscriptModel model, int generation, ProjectProfile profile)
+    private async Task LoadRegistryAndPhaseDataAsync(
+        ManuscriptModel model, int generation, ProjectProfile profile, TaskCompletionSource<IStoryMetadataStore> preparedStore)
     {
+        var store = StoryMetadataStoreFactory.Create(
+            new ProjectSettings(profile.Kind, profile.Storage), _sidecarStore, _editor.StoryWriter);
         try
         {
             var activeNodes = model.Nodes.Items.OrderBy(n => n.Index).ToList();
@@ -824,12 +860,23 @@ public class WorkspaceViewModel : ViewModelBase
                 _registryService.AssignUuid(registry, node.RelativePath, node.Title);
             }
 
+            if (store is EmbeddedStoryMetadataStore)
+                registry = await SetPrimaryStoryAsync(store, model, activeNodes, registry).ConfigureAwait(false);
+            preparedStore.TrySetResult(store);
+
             if (RegistryChanged(originalRegistry, registry))
                 await _registryService.SaveAsync(model.WorkspaceRoot, registry).ConfigureAwait(false);
 
-            var phases = await _phaseDataService.LoadAsync(model.WorkspaceRoot).ConfigureAwait(false);
-            var targets = await _targetsService.LoadAsync(model.WorkspaceRoot).ConfigureAwait(false);
             var projectedNodes = await ProjectSidebarNodesAsync(model, activeNodes, activePaths).ConfigureAwait(false);
+            var stories = projectedNodes
+                .Select(node => new StoryRef(
+                    TryGetRegistryUuid(registry, node.RelativePath),
+                    node.RelativePath,
+                    Path.Combine(model.ManuscriptRoot, node.RelativePath)))
+                .Where(story => !string.IsNullOrWhiteSpace(story.Uuid))
+                .ToList();
+            var phases = await store.LoadPhaseDataAsync(model.WorkspaceRoot, stories).ConfigureAwait(false);
+            var targets = await store.LoadTargetsAsync(model.WorkspaceRoot, stories).ConfigureAwait(false);
 
             if (generation != _workspaceGeneration)
                 return;
@@ -847,18 +894,18 @@ public class WorkspaceViewModel : ViewModelBase
                     phases.TryGetValue(uuid, out var phaseData);
                     var target = string.IsNullOrWhiteSpace(uuid)
                         ? null
-                        : _targetsService.GetTarget(targets, uuid);
+                        : targets.GetValueOrDefault(uuid);
                     return new ChapterViewModel(
                         node,
                         uuid,
                         phaseData,
-                        _phaseDataService,
-                        _targetsService,
+                        store,
                         _settingsStore,
                         _notificationService,
                         model.WorkspaceRoot,
                         target,
-                        profile);
+                        profile,
+                        model.ManuscriptRoot);
                 })
                 .ToList();
 
@@ -964,6 +1011,59 @@ public class WorkspaceViewModel : ViewModelBase
         {
             _notificationService.ShowError($"Failed to load chapter registry: {ex.Message}");
         }
+        finally
+        {
+            // Calls waiting for the store go ahead even when hydration failed or was superseded.
+            preparedStore.TrySetResult(store);
+        }
+    }
+
+    /// <summary>
+    /// Embedded storage: picks the file whose data is embedded (the first in Book.txt with a block, else the
+    /// first) and sets it on <paramref name="store"/>. When its block id differs from its registry UUID the
+    /// registry entry adopts the block id, so the story keeps its identity when renamed outside Hymnal. With
+    /// more than one chapter file, says once per workspace open that the others use project data.
+    /// Returns the registry, with the adoption applied.
+    /// </summary>
+    private async Task<Dictionary<string, ChapterRegistryEntry>> SetPrimaryStoryAsync(
+        IStoryMetadataStore store,
+        ManuscriptModel model,
+        IReadOnlyList<ChapterNode> activeNodes,
+        Dictionary<string, ChapterRegistryEntry> registry)
+    {
+        var files = activeNodes
+            .Where(n => n.Kind == NodeKind.Chapter && !n.IsMissing)
+            .Select(n => new StoryRef(
+                TryGetRegistryUuid(registry, n.RelativePath),
+                n.RelativePath,
+                Path.Combine(model.ManuscriptRoot, n.RelativePath)))
+            .ToList();
+
+        var blocks = new Dictionary<string, EmbeddedStoryMetadata?>(StringComparer.Ordinal);
+        foreach (var file in files)
+        {
+            // An unreadable file has no block to find here; reading its data reports the error.
+            var read = await _editor.StoryWriter.ReadMetadataAsync(file.AbsolutePath).ConfigureAwait(false);
+            blocks[file.RelativePath] = read.IsSuccess ? read.Value : null;
+        }
+
+        var primary = StoryMetadataStoreFactory.ResolvePrimary(files, file => blocks[file.RelativePath]);
+        if (primary is not null)
+        {
+            if (blocks[primary.RelativePath]?.Id is { } blockId && blockId != primary.Uuid)
+                registry = _registryService.AdoptUuid(registry, primary.RelativePath, blockId);
+            primary = primary with { Uuid = TryGetRegistryUuid(registry, primary.RelativePath) };
+        }
+        store.SetPrimaryStory(primary);
+
+        if (files.Count > 1 && !_multiFileNoticeShown)
+        {
+            _multiFileNoticeShown = true;
+            _notificationService.ShowInfo(
+                "Keep everything in the story file only covers single-file stories; other files use project data.");
+        }
+
+        return registry;
     }
 
     private async Task<IReadOnlyList<ChapterNode>> ProjectSidebarNodesAsync(

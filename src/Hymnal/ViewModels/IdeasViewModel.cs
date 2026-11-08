@@ -511,7 +511,8 @@ public sealed class IdeasViewModel : ViewModelBase, IDisposable
             using var suppressFileWatcher = _workspace.SuppressFileWatcher();
             promoterRan = true;
             var result = await _promoter.PromoteAsync(
-                root, _workspace.BookTxtPath, card.ToIdea(), fileName.Trim(), _workspace.Profile);
+                root, _workspace.BookTxtPath, card.ToIdea(), fileName.Trim(), _workspace.Profile,
+                _workspace.MetadataStore);
 
             // Disposed mid-promote (window closed): the story exists on disk; there is no view left to update.
             if (_disposed)

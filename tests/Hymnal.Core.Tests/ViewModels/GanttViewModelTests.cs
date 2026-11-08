@@ -87,8 +87,7 @@ public class GanttViewModelTests
             MakeNode(title: title, path: path),
             uuid,
             phaseData,
-            phaseDataService,
-            targetsService,
+            TestMetadataStores.Sidecar(phaseDataService, targetsService),
             settingsStore,
             notificationService,
             workspaceRoot: Path.Combine(Path.GetTempPath(), "hymnal-gantt-tests"));
@@ -246,7 +245,7 @@ public class GanttViewModelTests
     {
         var chapter = CreateChapterViewModel(phaseData: MakePhase(start: null, end: null));
         var workspace = CreateWorkspace(chapter);
-        var gantt = new GanttViewModel(workspace, new PhaseDataService(Substitute.For<IMetadataStore>()), Substitute.For<INotificationService>());
+        var gantt = new GanttViewModel(workspace, Substitute.For<INotificationService>());
 
         Assert.Equal(2, gantt.Rows.Count);
         var row = ChapterRow(gantt);
@@ -260,7 +259,7 @@ public class GanttViewModelTests
         var initialPhase = MakePhase(status: ChapterStatus.Drafting, start: null, end: null);
         var chapter = CreateChapterViewModel(phaseData: initialPhase);
         var workspace = CreateWorkspace(chapter);
-        var gantt = new GanttViewModel(workspace, new PhaseDataService(Substitute.For<IMetadataStore>()), Substitute.For<INotificationService>());
+        var gantt = new GanttViewModel(workspace, Substitute.For<INotificationService>());
 
         var row = ChapterRow(gantt);
         Assert.True(row.IsMissingDates);
@@ -298,14 +297,13 @@ public class GanttViewModelTests
             MakeNode(title: "Chapter One", path: "ch01.md"),
             "uuid-1",
             MakePhase(status: ChapterStatus.Drafting, start: "2024-03-10", end: "2024-03-01"),
-            phaseDataService,
-            targetsService,
+            TestMetadataStores.Sidecar(phaseDataService, targetsService),
             settingsStore,
             notificationService,
             workspaceRoot: Path.Combine(Path.GetTempPath(), "hymnal-gantt-tests"));
 
         var workspace = CreateWorkspace(chapter);
-        var gantt = new GanttViewModel(workspace, phaseDataService, notificationService);
+        var gantt = new GanttViewModel(workspace, notificationService);
         var row = ChapterRow(gantt);
 
         await gantt.SaveInlineCellAsync(row, GanttEditableColumn.StartDate);
@@ -339,7 +337,7 @@ public class GanttViewModelTests
         InjectNode(part, partNode);
 
         var workspace = CreateWorkspace(part, ch1, ch2);
-        var gantt = new GanttViewModel(workspace, new PhaseDataService(Substitute.For<IMetadataStore>()), Substitute.For<INotificationService>());
+        var gantt = new GanttViewModel(workspace, Substitute.For<INotificationService>());
 
         Assert.Equal(4, gantt.Rows.Count);
         var partRow = PartRow(gantt);
@@ -371,7 +369,7 @@ public class GanttViewModelTests
             title: "Ch3", path: "ch03.md", uuid: "uuid-ch3");
 
         var workspace = CreateWorkspace(part, ch1, ch2, ch3);
-        var gantt = new GanttViewModel(workspace, new PhaseDataService(Substitute.For<IMetadataStore>()), Substitute.For<INotificationService>());
+        var gantt = new GanttViewModel(workspace, Substitute.For<INotificationService>());
 
         var partRow = PartRow(gantt);
         Assert.True(partRow.IsPart);
@@ -388,7 +386,7 @@ public class GanttViewModelTests
         InjectNode(part, new ChapterNode("part-01.md", "part-01.md", "Part One", NodeKind.Part, IsMissing: false, Index: 0));
 
         var workspace = CreateWorkspace(part);
-        var gantt = new GanttViewModel(workspace, new PhaseDataService(Substitute.For<IMetadataStore>()), Substitute.For<INotificationService>());
+        var gantt = new GanttViewModel(workspace, Substitute.For<INotificationService>());
 
         var partRow = PartRow(gantt);
         Assert.True(partRow.IsPart);
@@ -412,7 +410,7 @@ public class GanttViewModelTests
         var ch3 = CreateChapterViewModel(phaseData: MakePhase(start: "2024-06-01", end: "2024-12-31"), title: "Ch3", path: "ch03.md", uuid: "ch3");
 
         var workspace = CreateWorkspace(part1, ch1, ch2, part2, ch3);
-        var gantt = new GanttViewModel(workspace, new PhaseDataService(Substitute.For<IMetadataStore>()), Substitute.For<INotificationService>());
+        var gantt = new GanttViewModel(workspace, Substitute.For<INotificationService>());
 
         Assert.Equal(6, gantt.Rows.Count);
         var row1 = PartRow(gantt, 0);
@@ -438,7 +436,7 @@ public class GanttViewModelTests
             phaseData: MakePhase(status: ChapterStatus.Drafting, start: "2024-01-01", end: "2024-06-30"),
             title: "Chapter One", path: "ch01.md");
         var workspace = CreateWorkspace(chapter);
-        var gantt = new GanttViewModel(workspace, new PhaseDataService(Substitute.For<IMetadataStore>()), Substitute.For<INotificationService>());
+        var gantt = new GanttViewModel(workspace, Substitute.For<INotificationService>());
 
         GanttRowViewModel? received = null;
         gantt.RowEditRequested.Subscribe(vm => received = vm);
@@ -461,7 +459,7 @@ public class GanttViewModelTests
             title: "Ch1", path: "ch01.md", uuid: "ch1");
 
         var workspace = CreateWorkspace(part, ch1);
-        var gantt = new GanttViewModel(workspace, new PhaseDataService(Substitute.For<IMetadataStore>()), Substitute.For<INotificationService>());
+        var gantt = new GanttViewModel(workspace, Substitute.For<INotificationService>());
 
         var editFired = false;
         gantt.RowEditRequested.Subscribe(_ => editFired = true);
@@ -505,7 +503,7 @@ public class GanttViewModelTests
             phaseData: MakePhase(status: ChapterStatus.Drafting, start: "2024-01-01", end: "2024-06-30"),
             title: "Chapter One", path: "ch01.md");
         var workspace = CreateWorkspace(chapter);
-        var gantt = new GanttViewModel(workspace, new PhaseDataService(Substitute.For<IMetadataStore>()), Substitute.For<INotificationService>());
+        var gantt = new GanttViewModel(workspace, Substitute.For<INotificationService>());
 
         Assert.False(gantt.IsEditingDates);
 
@@ -524,7 +522,7 @@ public class GanttViewModelTests
             phaseData: MakePhase(status: ChapterStatus.Drafting, start: "2024-03-10", end: "2024-09-15"),
             title: "Chapter Two", path: "ch02.md");
         var workspace = CreateWorkspace(chapter);
-        var gantt = new GanttViewModel(workspace, new PhaseDataService(Substitute.For<IMetadataStore>()), Substitute.For<INotificationService>());
+        var gantt = new GanttViewModel(workspace, Substitute.For<INotificationService>());
 
         ChapterRow(gantt).EditDatesCommand.Execute().Subscribe();
 
@@ -543,7 +541,7 @@ public class GanttViewModelTests
             phaseData: MakePhase(status: ChapterStatus.Drafting, start: null, end: null),
             title: "No Dates", path: "ch03.md");
         var workspace = CreateWorkspace(chapter);
-        var gantt = new GanttViewModel(workspace, new PhaseDataService(Substitute.For<IMetadataStore>()), Substitute.For<INotificationService>());
+        var gantt = new GanttViewModel(workspace, Substitute.For<INotificationService>());
 
         ChapterRow(gantt).EditDatesCommand.Execute().Subscribe();
 
@@ -560,7 +558,7 @@ public class GanttViewModelTests
             phaseData: MakePhase(status: ChapterStatus.Drafting, start: "2024-01-01", end: "2024-06-30"),
             title: "Chapter One", path: "ch01.md");
         var workspace = CreateWorkspace(chapter);
-        var gantt = new GanttViewModel(workspace, new PhaseDataService(Substitute.For<IMetadataStore>()), Substitute.For<INotificationService>());
+        var gantt = new GanttViewModel(workspace, Substitute.For<INotificationService>());
 
         ChapterRow(gantt).EditDatesCommand.Execute().Subscribe();
         SpinWait.SpinUntil(() => gantt.IsEditingDates, TimeSpan.FromSeconds(2));
@@ -594,7 +592,7 @@ public class GanttViewModelTests
             var initialPhase = MakePhase(status: ChapterStatus.Drafting, start: "2024-01-01", end: "2024-03-31");
             var vm = new ChapterViewModel(
                 node, "uuid-a", initialPhase,
-                phaseDataService, targetsService, settingsStore,
+                TestMetadataStores.Sidecar(phaseDataService, targetsService), settingsStore,
                 notificationService, workspaceRoot: tempRoot);
 
             await vm.UpdateDatesAsync("2025-06-01", "2025-09-30");
@@ -1027,7 +1025,7 @@ public class GanttViewModelTests
         }
 
         public GanttViewModel CreateGanttViewModel() =>
-            new(Workspace, PhaseDataService, NotificationService);
+            new(Workspace, NotificationService);
 
         public void Dispose() => _owned.Dispose();
 
@@ -1086,8 +1084,7 @@ public class GanttViewModelTests
                     node,
                     uuid,
                     phaseData,
-                    PhaseDataService,
-                    TargetsService,
+                    TestMetadataStores.Sidecar(PhaseDataService, TargetsService),
                     SettingsStore,
                     NotificationService,
                     model.WorkspaceRoot,
@@ -1295,7 +1292,7 @@ public class GanttViewModelTests
         }
 
         public GanttViewModel CreateGanttViewModel() =>
-            new(Workspace, _phaseDataService, _notificationService);
+            new(Workspace, _notificationService);
 
         private void SeedWorkspace(IReadOnlyList<ChapterNode> nodes)
         {
@@ -1320,8 +1317,7 @@ public class GanttViewModelTests
                     node,
                     $"uuid-{node.Index}",
                     MakePhase(start: "2024-01-01", end: "2024-01-31"),
-                    _phaseDataService,
-                    _targetsService,
+                    TestMetadataStores.Sidecar(_phaseDataService, _targetsService),
                     _settingsStore,
                     _notificationService,
                     _workspaceRoot);

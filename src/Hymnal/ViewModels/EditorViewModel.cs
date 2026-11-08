@@ -44,6 +44,12 @@ public class EditorViewModel : ViewModelBase, IDisposable, IOpenStoryBuffer
     private readonly StoryFileWriter _storyWriter;
 
     /// <summary>
+    /// The writer this editor saves story files through. Embedded metadata stores use the same one, so their
+    /// writes to the open file reach this buffer and are serialized with its saves.
+    /// </summary>
+    internal StoryFileWriter StoryWriter => _storyWriter;
+
+    /// <summary>
     /// The story file in the buffer: its identity (for <see cref="HoldsFile"/>) and what a save merges back
     /// around <see cref="Text"/>. Immutable and replaced whole, so other threads can read it; null when no
     /// chapter file is open.

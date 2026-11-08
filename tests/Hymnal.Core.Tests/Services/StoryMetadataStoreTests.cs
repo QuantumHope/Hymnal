@@ -228,6 +228,20 @@ public class StoryMetadataStoreTests
     });
 
     [Fact]
+    public Task Embedded_new_block_for_a_story_without_a_known_uuid_leaves_the_id_for_a_later_write() =>
+        WithTempDirAsync(async dir =>
+        {
+            var unknown = WriteStory(dir, "story.md", "Prose.\n", uuid: "");
+            var store = NewEmbedded(unknown);
+
+            await store.SaveNotesAsync(dir, unknown, "n");
+            Assert.Null(BlockOf(unknown)!.Id);
+
+            await store.SetTargetAsync(dir, unknown with { Uuid = "known" }, SampleTarget);
+            Assert.Equal("known", BlockOf(unknown)!.Id);
+        });
+
+    [Fact]
     public Task Embedded_primary_block_wins_over_a_stale_sidecar_entry() => WithTempDirAsync(async dir =>
     {
         var story = WriteStory(dir, "story.md", Prose, "uuid-1");
@@ -539,4 +553,46 @@ public class StoryMetadataStoreTests
         else
             Assert.IsType<SidecarStoryMetadataStore>(store);
     }
+
+    // ── Deferred: calls wait for the store being prepared ────────────────────
+
+    [Fact]
+    public Task Deferred_waits_for_the_prepared_store_and_then_uses_it() => WithTempDirAsync(async dir =>
+    {
+        var story = WriteStory(dir, "story.md", "Prose.\n", "uuid-1");
+        var prepared = new TaskCompletionSource<IStoryMetadataStore>(TaskCreationOptions.RunContinuationsAsynchronously);
+        var deferred = new DeferredStoryMetadataStore(prepared.Task);
+
+        var save = deferred.SaveNotesAsync(dir, story, "embedded notes");
+        await Task.Delay(50);
+        Assert.False(save.IsCompleted);
+
+        // The primary is set before the store is handed over, so the early save lands in the block.
+        var embedded = NewEmbedded(null);
+        embedded.SetPrimaryStory(story);
+        prepared.SetResult(embedded);
+        await save;
+
+        Assert.Equal("embedded notes", BlockOf(story)!.Notes);
+        Assert.Equal("embedded notes", await deferred.LoadNotesAsync(dir, story));
+        Assert.False(File.Exists(Sidecar(dir, "notes", "story.md")));
+    });
+
+    [Fact]
+    public Task Deferred_forwards_every_member_to_the_prepared_store() => WithTempDirAsync(async dir =>
+    {
+        var story = WriteStory(dir, "story.md", "Prose.\n", "uuid-1");
+        var deferred = new DeferredStoryMetadataStore(Task.FromResult<IStoryMetadataStore>(NewSidecar()));
+
+        await deferred.UpsertPhaseDataAsync(dir, story, _ => SamplePhaseData());
+        await deferred.SetTargetAsync(dir, story, SampleTarget);
+        await deferred.SaveNotesAsync(dir, story, "n");
+        Assert.True((await deferred.SaveBeatsAsync(dir, BeatBoardService.ShortStoryBoardKey, SampleBeats)).IsSuccess);
+
+        Assert.Equal(ChapterStatus.Drafting, (await deferred.LoadPhaseDataAsync(dir, [story]))["uuid-1"].Status);
+        Assert.Equal(7500, (await deferred.LoadTargetsAsync(dir, [story]))["uuid-1"].MaxWords);
+        Assert.Equal("n", await deferred.LoadNotesAsync(dir, story));
+        Assert.Equal(SampleBeats.Count, (await deferred.LoadBeatsAsync(dir, BeatBoardService.ShortStoryBoardKey)).Value!.Count);
+        Assert.Throws<NotSupportedException>(() => deferred.SetPrimaryStory(story));
+    });
 }

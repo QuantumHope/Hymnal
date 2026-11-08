@@ -945,7 +945,8 @@ public sealed class BeatBoardViewModelTests
                 new OrphanFileDiscoveryService(),
                 projectSettings,
                 new ProjectInitializer(store, projectSettings),
-                new NeverInitPrompt());
+                new NeverInitPrompt(),
+                beatBoards: Boards);
         }
 
         public void Dispose() => _owned.Dispose();
@@ -970,7 +971,7 @@ public sealed class BeatBoardViewModelTests
         /// <summary>Creates a beat board view model and opens <paramref name="key"/>; call on the UI thread.</summary>
         public async Task<BeatBoardViewModel> OpenBoardAsync(string key, IReadOnlyList<string>? scope = null)
         {
-            var vm = _owned.Track(new BeatBoardViewModel(Workspace, Boards, Notifications, Scheduler));
+            var vm = _owned.Track(new BeatBoardViewModel(Workspace, Notifications, Scheduler));
             // Run the workspace-change handler the constructor may have posted, so none runs mid-test.
             Avalonia.Threading.Dispatcher.UIThread.RunJobs();
             await Within(vm.OpenBoardAsync(key, "The Story", scope ?? Scope));

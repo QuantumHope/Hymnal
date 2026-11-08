@@ -92,14 +92,13 @@ public sealed class ScheduleAutoSaveTests
             new ChapterNode("scene.md", "scene.md", "Scene", NodeKind.Chapter, IsMissing: false, Index: 0),
             "uuid-1",
             null,
-            phases,
-            new TargetsService(store),
+            TestMetadataStores.Sidecar(phases, new TargetsService(store)),
             new InMemorySettings(),
             notes,
             root,
             target: null,
             profile: ProjectProfile.For(new ProjectSettings(ProjectKind.Story)));
-        return (chapter, new ChapterDetailViewModel(chapter, phases, root, notes));
+        return (chapter, new ChapterDetailViewModel(chapter, TestMetadataStores.Sidecar(phases), root, notes));
     }
 
     private sealed class RecordingNotificationService : INotificationService

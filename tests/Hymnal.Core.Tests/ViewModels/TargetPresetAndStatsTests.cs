@@ -380,8 +380,7 @@ public sealed class TargetPresetAndStatsTests : IDisposable
             new ChapterNode("node.md", "node.md", "Node", nodeKind, IsMissing: false, Index: 0),
             "uuid-1",
             phaseData: null,
-            new PhaseDataService(store),
-            targets,
+            TestMetadataStores.Sidecar(new PhaseDataService(store), targets),
             new InMemoryAppSettingsStore(),
             new RecordingNotificationService(),
             root,
@@ -514,7 +513,7 @@ public sealed class TargetPresetAndStatsTests : IDisposable
         }
 
         public BookStatsViewModel CreateStats() =>
-            new(Workspace, new WordCountHistoryService(_store), new TargetsService(_store));
+            new(Workspace, new WordCountHistoryService(_store));
 
         /// <summary>Creates a ChapterInfoViewModel with <paramref name="node"/> open in the editor.</summary>
         public async Task<ChapterInfoViewModel> CreateChapterInfoForAsync(ChapterViewModel node)
@@ -533,8 +532,6 @@ public sealed class TargetPresetAndStatsTests : IDisposable
         public ChapterInfoViewModel CreateChapterInfo() => new(
             _editor,
             Workspace,
-            PhaseService,
-            new TargetsService(_store),
             _settings,
             Notifications,
             new WordCountHistoryService(_store));

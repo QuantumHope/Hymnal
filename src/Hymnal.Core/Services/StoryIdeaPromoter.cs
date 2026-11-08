@@ -10,24 +10,15 @@ public sealed class StoryIdeaPromoter
 {
     private readonly IBookTxtStructureService _structure;
     private readonly ChapterRegistryService _registry;
-    private readonly PhaseDataService _phases;
-    private readonly TargetsService _targets;
-    private readonly INotesService _notes;
     private readonly IStoryIdeasService _ideas;
 
     public StoryIdeaPromoter(
         IBookTxtStructureService structure,
         ChapterRegistryService registry,
-        PhaseDataService phases,
-        TargetsService targets,
-        INotesService notes,
         IStoryIdeasService ideas)
     {
         _structure = structure;
         _registry = registry;
-        _phases = phases;
-        _targets = targets;
-        _notes = notes;
         _ideas = ideas;
     }
 
@@ -55,12 +46,13 @@ public sealed class StoryIdeaPromoter
     }
 
     /// <summary>
-    /// Creates the story file, registers it, and marks the idea used.
-    /// Returns the story's path relative to the Book.txt directory; on failure,
+    /// Creates the story file, registers it, stores its status, target and notes in <paramref name="metadata"/>
+    /// (the open workspace's store), and marks the idea used. Returns the story's path relative to the Book.txt directory; on failure,
     /// <see cref="PromoteResult.FileCreated"/> tells whether the story file was already created.
     /// </summary>
     public async Task<PromoteResult> PromoteAsync(
-        string workspaceRoot, string bookTxtPath, StoryIdea idea, string fileName, ProjectProfile profile)
+        string workspaceRoot, string bookTxtPath, StoryIdea idea, string fileName, ProjectProfile profile,
+        IStoryMetadataStore metadata)
     {
         if (profile.Kind != ProjectKind.Anthology)
             return PromoteResult.Fail("Ideas can only be promoted to stories in an Anthology project.");
@@ -93,20 +85,21 @@ public sealed class StoryIdeaPromoter
             var (uuid, _) = _registry.AssignUuid(registry, fileName, idea.Title);
             await _registry.SaveAsync(workspaceRoot, registry).ConfigureAwait(false);
 
-            await _phases.UpsertAsync(workspaceRoot, uuid, _ => PhaseDataService.DefaultPhaseDataFor(profile))
+            var story = new StoryRef(uuid, fileName, Path.Combine(Path.GetDirectoryName(bookTxtPath)!, fileName));
+            await metadata.UpsertPhaseDataAsync(workspaceRoot, story, _ => PhaseDataService.DefaultPhaseDataFor(profile))
                 .ConfigureAwait(false);
 
             var preset = profile.TargetPresets.FirstOrDefault(p => p.Key == idea.TargetPreset);
             if (preset is not null)
             {
-                await _targets.UpsertAsync(workspaceRoot, uuid,
+                await metadata.SetTargetAsync(workspaceRoot, story,
                     new WordCountTarget { MinWords = preset.MinWords, MaxWords = preset.MaxWords, Preset = preset.Key })
                     .ConfigureAwait(false);
             }
 
             var notes = string.Join("\n\n", new[] { idea.Premise, idea.Notes }.Where(s => !string.IsNullOrEmpty(s)));
             if (notes.Length > 0)
-                await _notes.SaveAsync(INotesService.DeriveNotesPath(workspaceRoot, fileName), notes).ConfigureAwait(false);
+                await metadata.SaveNotesAsync(workspaceRoot, story, notes).ConfigureAwait(false);
 
             // Re-read so ideas written since the pre-flight load survive; change only this idea.
             var current = await _ideas.LoadAsync(workspaceRoot).ConfigureAwait(false);

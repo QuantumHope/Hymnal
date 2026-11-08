@@ -24,7 +24,6 @@ namespace Hymnal.ViewModels;
 public sealed class GanttViewModel : ViewModelBase
 {
     private readonly WorkspaceViewModel _workspace;
-    private readonly PhaseDataService _phaseDataService;
     private readonly INotificationService _notificationService;
 
     private readonly ObservableCollection<GanttRowViewModel> _rows = new();
@@ -154,11 +153,9 @@ public sealed class GanttViewModel : ViewModelBase
 
     public GanttViewModel(
         WorkspaceViewModel workspace,
-        PhaseDataService phaseDataService,
         INotificationService notificationService)
     {
         _workspace = workspace;
-        _phaseDataService = phaseDataService;
         _notificationService = notificationService;
 
         Rows = new ReadOnlyObservableCollection<GanttRowViewModel>(_rows);
@@ -275,7 +272,7 @@ public sealed class GanttViewModel : ViewModelBase
 
         return new ChapterDetailViewModel(
             chapterVm,
-            _phaseDataService,
+            _workspace.MetadataStore,
             _workspace.WorkspaceRoot,
             _notificationService);
     }
@@ -532,7 +529,7 @@ public sealed class GanttViewModel : ViewModelBase
         }
 
         PhaseData? updated = null;
-        await _phaseDataService.UpsertAsync(_workspace.WorkspaceRoot, chapterVm.Uuid, current =>
+        await _workspace.MetadataStore.UpsertPhaseDataAsync(_workspace.WorkspaceRoot, chapterVm.Story, current =>
         {
             var basePhaseData = current ?? chapterVm.PhaseData ?? PhaseDataService.DefaultPhaseDataFor(_workspace.Profile);
             var schedule = new Dictionary<string, PhaseScheduleEntry>(
@@ -661,7 +658,7 @@ public sealed class GanttViewModel : ViewModelBase
         var phaseName = _workspace.Profile.DisplayStatus(editingStatus).ToString();
 
         PhaseData? updated = null;
-        await _phaseDataService.UpsertAsync(_workspace.WorkspaceRoot, chapterVm.Uuid, current =>
+        await _workspace.MetadataStore.UpsertPhaseDataAsync(_workspace.WorkspaceRoot, chapterVm.Story, current =>
         {
             var basePhaseData = current ?? chapterVm.PhaseData ?? PhaseDataService.DefaultPhaseDataFor(_workspace.Profile);
             var schedule = new Dictionary<string, PhaseScheduleEntry>(

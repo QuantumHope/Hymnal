@@ -335,8 +335,7 @@ public sealed class CorkboardViewSmokeTests
                 node,
                 uuid: Guid.NewGuid().ToString("N"),
                 phaseData: null,
-                PhaseDataService,
-                TargetsService,
+                TestMetadataStores.Sidecar(PhaseDataService, TargetsService),
                 SettingsStore,
                 NotificationService,
                 WorkspaceRoot);

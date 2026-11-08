@@ -1004,8 +1004,7 @@ public sealed class CorkboardViewModelTests
             node,
             Guid.NewGuid().ToString("N"),
             null,
-            context.PhaseDataService,
-            context.TargetsService,
+            TestMetadataStores.Sidecar(context.PhaseDataService, context.TargetsService),
             context.SettingsStore,
             context.NotificationService,
             context.WorkspaceRoot);

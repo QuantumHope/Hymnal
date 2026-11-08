@@ -62,7 +62,6 @@ public sealed class GanttViewSmokeTests
 
             var viewModel = new GanttViewModel(
                 workspace,
-                new PhaseDataService(Substitute.For<IMetadataStore>()),
                 Substitute.For<INotificationService>());
 
             var sourceRow = viewModel.Rows.Single(row => string.Equals(row.RelativePath, "part-one/chapter-two.md", StringComparison.OrdinalIgnoreCase));
@@ -95,7 +94,6 @@ public sealed class GanttViewSmokeTests
 
             var viewModel = new GanttViewModel(
                 workspace,
-                new PhaseDataService(Substitute.For<IMetadataStore>()),
                 Substitute.For<INotificationService>());
 
             var view = new GanttView { DataContext = viewModel };
@@ -128,7 +126,6 @@ public sealed class GanttViewSmokeTests
 
             var viewModel = new GanttViewModel(
                 workspace,
-                new PhaseDataService(Substitute.For<IMetadataStore>()),
                 Substitute.For<INotificationService>());
 
             var view = new GanttView { DataContext = viewModel };
@@ -177,8 +174,7 @@ public sealed class GanttViewSmokeTests
             new ChapterNode(relativePath, relativePath, title, kind, IsMissing: false, Index: 0),
             Guid.NewGuid().ToString("N"),
             new PhaseData { Status = ChapterStatus.Drafting },
-            phaseDataService,
-            targetsService,
+            TestMetadataStores.Sidecar(phaseDataService, targetsService),
             settingsStore,
             notificationService,
             workspaceRoot: Path.Combine(Path.GetTempPath(), "hymnal-gantt-view-smoke-tests"));

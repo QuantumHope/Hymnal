@@ -163,11 +163,17 @@ public sealed class EmbeddedStoryMetadataStore(SidecarStoryMetadataStore sidecar
             throw new IOException(result.Error);
     }
 
-    /// <summary>The current block, or a new one carrying the story's UUID; an existing id is kept.</summary>
-    private static EmbeddedStoryMetadata Seed(EmbeddedStoryMetadata? current, StoryRef story) =>
-        current is null
-            ? new EmbeddedStoryMetadata(story.Uuid, null, null, null, null, null, null, null)
-            : current with { Id = current.Id ?? story.Uuid };
+    /// <summary>
+    /// The current block, or a new one carrying the story's UUID; an existing id is kept. A story whose UUID
+    /// isn't known yet (empty) leaves the id unset for a later write to fill.
+    /// </summary>
+    private static EmbeddedStoryMetadata Seed(EmbeddedStoryMetadata? current, StoryRef story)
+    {
+        var uuid = string.IsNullOrWhiteSpace(story.Uuid) ? null : story.Uuid;
+        return current is null
+            ? new EmbeddedStoryMetadata(uuid, null, null, null, null, null, null, null)
+            : current with { Id = current.Id ?? uuid };
+    }
 
     private static PhaseData? ToPhaseData(EmbeddedStoryMetadata? block)
     {

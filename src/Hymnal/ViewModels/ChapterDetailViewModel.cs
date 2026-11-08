@@ -11,7 +11,6 @@ using System.Threading;
 using System.Threading.Tasks;
 using Hymnal.Core.Interfaces;
 using Hymnal.Core.Models;
-using Hymnal.Core.Services;
 using ReactiveUI;
 
 namespace Hymnal.ViewModels;
@@ -26,7 +25,7 @@ public sealed class ChapterDetailViewModel : ViewModelBase, IDisposable
     // ── Dependencies ──────────────────────────────────────────────────────────
 
     private readonly ChapterViewModel _chapterVm;
-    private readonly PhaseDataService _phaseDataService;
+    private readonly IStoryMetadataStore _metadataStore;
     private readonly string _workspaceRoot;
     private readonly INotificationService _notificationService;
 
@@ -126,12 +125,12 @@ public sealed class ChapterDetailViewModel : ViewModelBase, IDisposable
 
     public ChapterDetailViewModel(
         ChapterViewModel chapterVm,
-        PhaseDataService phaseDataService,
+        IStoryMetadataStore metadataStore,
         string workspaceRoot,
         INotificationService notificationService)
     {
         _chapterVm = chapterVm;
-        _phaseDataService = phaseDataService;
+        _metadataStore = metadataStore;
         _workspaceRoot = workspaceRoot;
         _notificationService = notificationService;
         _lifetime = _lifetimeCts.Token;
@@ -268,7 +267,7 @@ public sealed class ChapterDetailViewModel : ViewModelBase, IDisposable
         var currentStatus = Status;
 
         PhaseData? updated = null;
-        await _phaseDataService.UpsertAsync(_workspaceRoot, _chapterVm.Uuid, current =>
+        await _metadataStore.UpsertPhaseDataAsync(_workspaceRoot, _chapterVm.Story, current =>
         {
             // Keep entries for phases this profile doesn't show (e.g. novel phases in a story).
             var rowNames = rows.Select(r => r.PhaseName).ToHashSet(StringComparer.Ordinal);
@@ -311,7 +310,7 @@ public sealed class ChapterDetailViewModel : ViewModelBase, IDisposable
     private async Task SetStatusAsync(ChapterStatus newStatus)
     {
         PhaseData? updated = null;
-        await _phaseDataService.UpsertAsync(_workspaceRoot, _chapterVm.Uuid, current =>
+        await _metadataStore.UpsertPhaseDataAsync(_workspaceRoot, _chapterVm.Story, current =>
         {
             var statusChanged = current?.Status != newStatus;
             var isAdvancing = (int)newStatus > (int)(current?.Status ?? ChapterStatus.Planned);

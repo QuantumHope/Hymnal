@@ -31,7 +31,6 @@ public sealed class BookStatsViewModel : ViewModelBase
 {
     private readonly WorkspaceViewModel _workspace;
     private readonly WordCountHistoryService _historyService;
-    private readonly TargetsService _targetsService;
     private CompositeDisposable _selectionDisposables = new();
 
     // ── Visibility ────────────────────────────────────────────────────────────
@@ -119,11 +118,10 @@ public sealed class BookStatsViewModel : ViewModelBase
 
     // ── Constructor ───────────────────────────────────────────────────────────
 
-    public BookStatsViewModel(WorkspaceViewModel workspace, WordCountHistoryService historyService, TargetsService targetsService)
+    public BookStatsViewModel(WorkspaceViewModel workspace, WordCountHistoryService historyService)
     {
         _workspace = workspace;
         _historyService = historyService;
-        _targetsService = targetsService;
 
         Disposables.Add(
             workspace.WhenAnyValue(x => x.SelectedNode, x => x.HasWorkspace, x => x.Profile)
@@ -256,10 +254,15 @@ public sealed class BookStatsViewModel : ViewModelBase
             return;
         }
 
+        // Captured before the first await, on the caller's (UI) thread.
+        var metadataStore = _workspace.MetadataStore;
+        var chapterUuids = chapters.Select(c => c.Uuid).ToHashSet(StringComparer.Ordinal);
+        var stories = _workspace.Nodes.Where(n => chapterUuids.Contains(n.Uuid)).Select(n => n.Story).ToList();
+
         try
         {
             var allHistory = await _historyService.GetAllAsync(workspaceRoot).ConfigureAwait(false);
-            var allTargets = await _targetsService.LoadAsync(workspaceRoot).ConfigureAwait(false);
+            var allTargets = await metadataStore.LoadTargetsAsync(workspaceRoot, stories).ConfigureAwait(false);
 
             var uuidLookup = chapters.ToDictionary(c => c.Uuid, c => (c.Title, c.Status), StringComparer.Ordinal);
 

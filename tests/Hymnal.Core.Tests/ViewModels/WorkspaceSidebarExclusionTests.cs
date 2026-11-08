@@ -465,8 +465,7 @@ public sealed class WorkspaceSidebarExclusionTests
                     node,
                     uuid: string.Empty,
                     phaseData: null,
-                    PhaseDataService,
-                    TargetsService,
+                    TestMetadataStores.Sidecar(PhaseDataService, TargetsService),
                     SettingsStore,
                     NotificationService,
                     model.WorkspaceRoot);

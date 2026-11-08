@@ -965,7 +965,7 @@ public sealed class IdeasViewModelTests : IDisposable
         private readonly TargetsService _targets;
         private readonly List<IdeasViewModel> _ideasViewModels = new();
 
-        /// <summary>Notes service the promoter uses; set before <see cref="CreateIdeasAsync"/>.</summary>
+        /// <summary>Notes service the workspace's metadata store (and so the promoter) uses; null: the real one.</summary>
         public INotesService? PromoterNotes { get; set; }
 
         public RecordingNotificationService Notifications { get; } = new();
@@ -1009,7 +1009,17 @@ public sealed class IdeasViewModelTests : IDisposable
                 new OrphanFileDiscoveryService(),
                 ProjectSettings,
                 new ProjectInitializer(store, ProjectSettings),
-                new NeverInitPrompt());
+                new NeverInitPrompt(),
+                new SwitchableNotesService(this, new NotesService(store)));
+        }
+
+        private sealed class SwitchableNotesService(TestContext context, INotesService real) : INotesService
+        {
+            public Task<string> LoadAsync(string absoluteNotesPath) =>
+                (context.PromoterNotes ?? real).LoadAsync(absoluteNotesPath);
+
+            public Task SaveAsync(string absoluteNotesPath, string content) =>
+                (context.PromoterNotes ?? real).SaveAsync(absoluteNotesPath, content);
         }
 
         public void Dispose()
@@ -1035,8 +1045,7 @@ public sealed class IdeasViewModelTests : IDisposable
         /// <summary>Creates and loads an ideas view model; call on the UI thread.</summary>
         public async Task<IdeasViewModel> CreateIdeasAsync()
         {
-            var promoter = new StoryIdeaPromoter(
-                _structure, _registry, _phases, _targets, PromoterNotes ?? new NotesService(_store), Ideas);
+            var promoter = new StoryIdeaPromoter(_structure, _registry, Ideas);
             var vm = new IdeasViewModel(Workspace, Ideas, promoter, Notifications, Scheduler);
             _ideasViewModels.Add(vm);
             await Within(vm.LoadAsync());

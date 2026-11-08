@@ -246,8 +246,7 @@ public sealed class EditorViewModelArbitraryFileTests : IDisposable
             node,
             Guid.NewGuid().ToString("N"),
             phaseData: null,
-            new PhaseDataService(_metadataStore),
-            new TargetsService(_metadataStore),
+            TestMetadataStores.Sidecar(new PhaseDataService(_metadataStore), new TargetsService(_metadataStore)),
             _settingsStore,
             _notifications,
             _root);

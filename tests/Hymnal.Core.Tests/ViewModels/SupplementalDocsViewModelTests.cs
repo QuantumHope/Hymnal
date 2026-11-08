@@ -295,8 +295,7 @@ public sealed class SupplementalDocsViewModelTests : IDisposable
                 node,
                 Guid.NewGuid().ToString("N"),
                 phaseData: null,
-                new PhaseDataService(MetadataStore),
-                new TargetsService(MetadataStore),
+                TestMetadataStores.Sidecar(new PhaseDataService(MetadataStore), new TargetsService(MetadataStore)),
                 SettingsStore,
                 Notifications,
                 WorkspaceRoot);

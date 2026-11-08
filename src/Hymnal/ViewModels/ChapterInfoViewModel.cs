@@ -24,7 +24,7 @@ namespace Hymnal.ViewModels;
 ///   • cancels in-flight saves on chapter switch
 ///   • ToggleCommand gated on ActiveNode != null
 /// Adds status-change, date-edit, and target-edit commands that persist via
-/// PhaseDataService / TargetsService and call <see cref="ChapterViewModel.ApplyPhaseData"/>
+/// the workspace's <see cref="IStoryMetadataStore"/> and call <see cref="ChapterViewModel.ApplyPhaseData"/>
 /// to re-sync the sidebar without re-loading the whole workspace.
 /// </summary>
 public sealed class ChapterInfoViewModel : ViewModelBase, IDisposable
@@ -49,8 +49,6 @@ public sealed class ChapterInfoViewModel : ViewModelBase, IDisposable
 
     private readonly EditorViewModel _editorViewModel;
     private readonly WorkspaceViewModel _workspaceViewModel;
-    private readonly PhaseDataService _phaseDataService;
-    private readonly TargetsService _targetsService;
     private readonly IAppSettingsStore _settingsStore;
     private readonly INotificationService _notificationService;
     private readonly WordCountHistoryService _historyService;
@@ -242,18 +240,18 @@ public sealed class ChapterInfoViewModel : ViewModelBase, IDisposable
 
     /// <summary>
     /// Changes the chapter status and optionally pre-fills PhaseStartDate.
-    /// Persists via PhaseDataService and re-syncs ChapterViewModel.
+    /// Persists through the metadata store and re-syncs ChapterViewModel.
     /// </summary>
     public ReactiveCommand<ChapterStatus, Unit> SetStatusCommand { get; }
 
     /// <summary>
-    /// Persists the current PhaseStartDate/PhaseEndDate string fields to PhaseDataService
+    /// Persists the current PhaseStartDate/PhaseEndDate string fields through the metadata store
     /// and re-syncs ChapterViewModel.
     /// </summary>
     public ReactiveCommand<Unit, Unit> SaveDatesCommand { get; }
 
     /// <summary>
-    /// Persists the per-phase schedule rows to PhaseDataService and re-syncs ChapterViewModel.
+    /// Persists the per-phase schedule rows through the metadata store and re-syncs ChapterViewModel.
     /// </summary>
     public ReactiveCommand<Unit, Unit> SaveScheduleCommand { get; }
 
@@ -267,16 +265,12 @@ public sealed class ChapterInfoViewModel : ViewModelBase, IDisposable
     public ChapterInfoViewModel(
         EditorViewModel editorViewModel,
         WorkspaceViewModel workspaceViewModel,
-        PhaseDataService phaseDataService,
-        TargetsService targetsService,
         IAppSettingsStore settingsStore,
         INotificationService notificationService,
         WordCountHistoryService historyService)
     {
         _editorViewModel = editorViewModel;
         _workspaceViewModel = workspaceViewModel;
-        _phaseDataService = phaseDataService;
-        _targetsService = targetsService;
         _settingsStore = settingsStore;
         _notificationService = notificationService;
         _lifetime = _lifetimeCts.Token;
@@ -666,7 +660,7 @@ public sealed class ChapterInfoViewModel : ViewModelBase, IDisposable
             return;
 
         PhaseData? updated = null;
-        await _phaseDataService.UpsertAsync(workspaceRoot, uuid, current =>
+        await _workspaceViewModel.MetadataStore.UpsertPhaseDataAsync(workspaceRoot, chapterVm.Story, current =>
         {
             var statusChanged = current?.Status != newStatus;
             var isAdvancing = (int)newStatus > (int)(current?.Status ?? ChapterStatus.Planned);
@@ -754,7 +748,7 @@ public sealed class ChapterInfoViewModel : ViewModelBase, IDisposable
         var currentStatus = Status;
 
         PhaseData? updated = null;
-        await _phaseDataService.UpsertAsync(workspaceRoot, uuid, current =>
+        await _workspaceViewModel.MetadataStore.UpsertPhaseDataAsync(workspaceRoot, chapterVm.Story, current =>
         {
             updated = new PhaseData
             {
@@ -783,7 +777,7 @@ public sealed class ChapterInfoViewModel : ViewModelBase, IDisposable
         var currentStatus = Status;
 
         PhaseData? updated = null;
-        await _phaseDataService.UpsertAsync(workspaceRoot, uuid, current =>
+        await _workspaceViewModel.MetadataStore.UpsertPhaseDataAsync(workspaceRoot, chapterVm.Story, current =>
         {
             // Keep entries for phases this profile doesn't show (e.g. novel phases in a story).
             var rowNames = rows.Select(r => r.PhaseName).ToHashSet(StringComparer.Ordinal);

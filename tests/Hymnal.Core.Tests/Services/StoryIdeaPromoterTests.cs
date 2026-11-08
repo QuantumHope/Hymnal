@@ -63,9 +63,18 @@ public class StoryIdeaPromoterTests
         public TargetsService Targets => new(Store);
         public NotesService Notes => new(Store);
 
-        public StoryIdeaPromoter Promoter(IStoryIdeasService? ideas = null, INotesService? notes = null) =>
-            new(new BookTxtStructureService(Store, new ExclusionManifestService(Store)),
-                Registry, Phases, Targets, notes ?? Notes, ideas ?? Ideas);
+        public BoundPromoter Promoter(IStoryIdeasService? ideas = null, INotesService? notes = null) =>
+            new(new StoryIdeaPromoter(new BookTxtStructureService(Store, new ExclusionManifestService(Store)),
+                    Registry, ideas ?? Ideas),
+                new SidecarStoryMetadataStore(Phases, Targets, notes ?? Notes, new BeatBoardService(Store)));
+    }
+
+    /// <summary>A promoter with the workspace's (sidecar) metadata store it promotes into.</summary>
+    private sealed class BoundPromoter(StoryIdeaPromoter promoter, IStoryMetadataStore metadata)
+    {
+        public Task<PromoteResult> PromoteAsync(
+            string root, string bookTxtPath, StoryIdea idea, string fileName, ProjectProfile profile) =>
+            promoter.PromoteAsync(root, bookTxtPath, idea, fileName, profile, metadata);
     }
 
     private static async Task WithEnvAsync(Func<Env, Task> body, bool subfolder = false)

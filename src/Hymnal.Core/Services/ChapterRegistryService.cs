@@ -132,6 +132,44 @@ public sealed class ChapterRegistryService
         return updated;
     }
 
+    /// <summary>
+    /// Makes <paramref name="adoptedUuid"/> the UUID of the file at <paramref name="relativePath"/> (an embedded
+    /// story's block id). An entry already under <paramref name="adoptedUuid"/> (e.g. orphaned when the file was
+    /// renamed outside Hymnal) is moved to the path; the path's previous entry is dropped. The registry is
+    /// returned unchanged when the path already has that UUID, or when <paramref name="adoptedUuid"/> belongs to
+    /// another file in the book. Returns a new dictionary otherwise.
+    /// </summary>
+    public Dictionary<string, ChapterRegistryEntry> AdoptUuid(
+        Dictionary<string, ChapterRegistryEntry> registry,
+        string relativePath,
+        string adoptedUuid)
+    {
+        if (string.IsNullOrWhiteSpace(adoptedUuid))
+            return registry;
+
+        registry.TryGetValue(adoptedUuid, out var claimed);
+        if (claimed is { Orphaned: false })
+        {
+            // Already this file's UUID, or another file's: either way there is nothing to adopt.
+            return registry;
+        }
+
+        var current = registry.Values.FirstOrDefault(entry =>
+            string.Equals(entry.CurrentPath, relativePath, StringComparison.OrdinalIgnoreCase));
+        var updated = registry
+            .Where(kv => !string.Equals(kv.Value.CurrentPath, relativePath, StringComparison.OrdinalIgnoreCase)
+                         && kv.Key != adoptedUuid)
+            .ToDictionary(kv => kv.Key, kv => kv.Value);
+        updated[adoptedUuid] = new ChapterRegistryEntry
+        {
+            Uuid = adoptedUuid,
+            CurrentPath = relativePath,
+            Orphaned = false,
+            Title = current?.Title ?? claimed?.Title
+        };
+        return updated;
+    }
+
     // -------------------------------------------------------------------------
     // Helpers
     // -------------------------------------------------------------------------

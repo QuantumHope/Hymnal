@@ -146,7 +146,10 @@ internal sealed class PlanTestContext : IDisposable
         _structure = new BookTxtStructureService(_store, exclusions, registry);
         ProjectSettings = new ProjectSettingsService(_store);
         Boards = boards?.Invoke(_store) ?? new BeatBoardService(_store);
-        _editor = _owned.Track(new EditorViewModel(_store, Notifications, wordCount, new StoryFileWriter(_store)));
+        var storyWriter = new StoryFileWriter(_store);
+        _editor = _owned.Track(new EditorViewModel(_store, Notifications, wordCount, storyWriter));
+        // As in the app: metadata changes for the chapter open in the editor are saved through it.
+        storyWriter.AttachBuffer(_editor);
         _manuscript = _owned.Track(new ManuscriptService(Notifications, exclusions));
 
         Workspace = new WorkspaceViewModel(
@@ -166,11 +169,13 @@ internal sealed class PlanTestContext : IDisposable
             new OrphanFileDiscoveryService(),
             ProjectSettings,
             new ProjectInitializer(_store, ProjectSettings),
-            new NeverInitPrompt());
+            new NeverInitPrompt(),
+            new NotesService(_store),
+            Boards);
 
         Corkboard = _owned.Track(new CorkboardViewModel(
             Workspace, _structure, new OrphanFileDiscoveryService(), _settings, Notifications, _manuscript));
-        Board = _owned.Track(new BeatBoardViewModel(Workspace, Boards, Notifications, Scheduler));
+        Board = _owned.Track(new BeatBoardViewModel(Workspace, Notifications, Scheduler));
     }
 
     public void Dispose()
@@ -201,10 +206,10 @@ internal sealed class PlanTestContext : IDisposable
         return new MainWindowViewModel(
             Workspace,
             _editor,
-            _owned.Track(new NotesViewModel(_editor, Workspace, new NotesService(_store), Notifications, _settings)),
-            _owned.Track(new ChapterInfoViewModel(_editor, Workspace, _phases, _targets, _settings, Notifications, history)),
-            new BookStatsViewModel(Workspace, history, _targets),
-            new GanttViewModel(Workspace, _phases, Notifications),
+            _owned.Track(new NotesViewModel(_editor, Workspace, Notifications, _settings)),
+            _owned.Track(new ChapterInfoViewModel(_editor, Workspace, _settings, Notifications, history)),
+            new BookStatsViewModel(Workspace, history),
+            new GanttViewModel(Workspace, Notifications),
             Corkboard,
             new ResearchViewModel(Workspace, docs, _editor, AiTestDoubles.CreateStubAiChatViewModel(_editor, Workspace, Notifications)),
             docs,
@@ -216,6 +221,14 @@ internal sealed class PlanTestContext : IDisposable
             ideasViewModel: null,
             planHostViewModel: host);
     }
+
+    public NotesViewModel CreateNotes() =>
+        _owned.Track(new NotesViewModel(_editor, Workspace, Notifications, _settings));
+
+    public ChapterInfoViewModel CreateChapterInfo() =>
+        _owned.Track(new ChapterInfoViewModel(_editor, Workspace, _settings, Notifications, new WordCountHistoryService(_store)));
+
+    public GanttViewModel CreateGantt() => new(Workspace, Notifications);
 
     public ChapterViewModel Node(string relativePath) =>
         Workspace.Nodes.Single(n => n.Node.RelativePath == relativePath);

@@ -31,6 +31,8 @@ public sealed record ApplyTemplateRequest(string Key, TemplateApplyMode Mode, st
 /// reordering, deleting, and links to the story's scenes. One board is open at a time; opening
 /// another (or closing, or the workspace closing) first writes pending edits to the board they were
 /// made on. A board whose file can't be read is read-only for the session and is never written.
+/// Beats are read and written through the workspace's <see cref="IStoryMetadataStore"/> (an embedded story's
+/// board lives in its file); board moves are not done here.
 /// </summary>
 public sealed class BeatBoardViewModel : ViewModelBase, IDisposable
 {
@@ -41,11 +43,13 @@ public sealed class BeatBoardViewModel : ViewModelBase, IDisposable
 
     private static readonly TimeSpan SaveDelay = TimeSpan.FromMilliseconds(500);
 
-    /// <summary>Where a board's saves go: the workspace and key it was loaded from.</summary>
-    private sealed record BoardTarget(string Root, string Key);
+    /// <summary>
+    /// Where a board's saves go: the workspace and key it was loaded from, and the store that loaded it (used
+    /// only once that workspace is no longer open; while it is, saves use its current store).
+    /// </summary>
+    private sealed record BoardTarget(string Root, string Key, IStoryMetadataStore LoadedFrom);
 
     private readonly WorkspaceViewModel _workspace;
-    private readonly IBeatBoardService _service;
     private readonly INotificationService _notifications;
 
     private readonly ObservableCollectionExtended<BeatCardViewModel> _beats = new();
@@ -66,12 +70,10 @@ public sealed class BeatBoardViewModel : ViewModelBase, IDisposable
 
     public BeatBoardViewModel(
         WorkspaceViewModel workspace,
-        IBeatBoardService service,
         INotificationService notifications,
         IScheduler? saveScheduler = null)
     {
         _workspace = workspace;
-        _service = service;
         _notifications = notifications;
         Beats = new ReadOnlyObservableCollection<BeatCardViewModel>(_beats);
 
@@ -250,7 +252,8 @@ public sealed class BeatBoardViewModel : ViewModelBase, IDisposable
                 return;
             }
 
-            var result = await _service.LoadAsync(root, key);
+            var store = _workspace.MetadataStore;
+            var result = await store.LoadBeatsAsync(root, key);
             if (_disposed)
                 return;
             if (generation != _generation)
@@ -277,7 +280,7 @@ public sealed class BeatBoardViewModel : ViewModelBase, IDisposable
             BoardTitle = title;
             if (result.IsSuccess)
             {
-                _target = new BoardTarget(root, key);
+                _target = new BoardTarget(root, key, store);
                 foreach (var beat in result.Value!)
                     _beats.Add(CreateCard(beat));
             }
@@ -503,7 +506,8 @@ public sealed class BeatBoardViewModel : ViewModelBase, IDisposable
         await previous;
         try
         {
-            var result = await _service.SaveAsync(target.Root, target.Key, snapshot);
+            var store = target.Root == _workspace.WorkspaceRoot ? _workspace.MetadataStore : target.LoadedFrom;
+            var result = await store.SaveBeatsAsync(target.Root, target.Key, snapshot);
             RecordSave(target, result.IsSuccess);
             if (!result.IsSuccess)
                 _notifications.ShowError(result.Error!);

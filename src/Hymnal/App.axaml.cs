@@ -156,13 +156,14 @@ public partial class App : Application
                 sp.GetRequiredService<IOrphanFileDiscoveryService>(),
                 sp.GetRequiredService<ProjectSettingsService>(),
                 sp.GetRequiredService<ProjectInitializer>(),
-                sp.GetRequiredService<IProjectInitPrompt>()));
+                sp.GetRequiredService<IProjectInitPrompt>(),
+                sp.GetRequiredService<INotesService>(),
+                sp.GetRequiredService<IBeatBoardService>()));
 
         services.AddSingleton<NotesViewModel>(sp =>
             new NotesViewModel(
                 sp.GetRequiredService<EditorViewModel>(),
                 sp.GetRequiredService<WorkspaceViewModel>(),
-                sp.GetRequiredService<INotesService>(),
                 sp.GetRequiredService<INotificationService>(),
                 sp.GetRequiredService<IAppSettingsStore>()));
 
@@ -170,8 +171,6 @@ public partial class App : Application
             new ChapterInfoViewModel(
                 sp.GetRequiredService<EditorViewModel>(),
                 sp.GetRequiredService<WorkspaceViewModel>(),
-                sp.GetRequiredService<PhaseDataService>(),
-                sp.GetRequiredService<TargetsService>(),
                 sp.GetRequiredService<IAppSettingsStore>(),
                 sp.GetRequiredService<INotificationService>(),
                 sp.GetRequiredService<WordCountHistoryService>()));
@@ -179,7 +178,6 @@ public partial class App : Application
         services.AddSingleton<GanttViewModel>(sp =>
             new GanttViewModel(
                 sp.GetRequiredService<WorkspaceViewModel>(),
-                sp.GetRequiredService<PhaseDataService>(),
                 sp.GetRequiredService<INotificationService>()));
 
         services.AddSingleton<CorkboardViewModel>(sp =>
@@ -217,8 +215,7 @@ public partial class App : Application
         services.AddSingleton<BookStatsViewModel>(sp =>
             new BookStatsViewModel(
                 sp.GetRequiredService<WorkspaceViewModel>(),
-                sp.GetRequiredService<WordCountHistoryService>(),
-                sp.GetRequiredService<TargetsService>()));
+                sp.GetRequiredService<WordCountHistoryService>()));
 
         services.AddSingleton<IdeasViewModel>(sp =>
             new IdeasViewModel(
@@ -230,7 +227,6 @@ public partial class App : Application
         services.AddSingleton<BeatBoardViewModel>(sp =>
             new BeatBoardViewModel(
                 sp.GetRequiredService<WorkspaceViewModel>(),
-                sp.GetRequiredService<IBeatBoardService>(),
                 sp.GetRequiredService<INotificationService>()));
 
         services.AddSingleton<PlanHostViewModel>(sp =>

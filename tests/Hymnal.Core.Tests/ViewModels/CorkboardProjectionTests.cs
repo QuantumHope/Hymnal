@@ -7,6 +7,7 @@ using Hymnal.Core.Services;
 using Hymnal.ViewModels;
 using NSubstitute;
 using ReactiveUI.Builder;
+using Hymnal.Core.Tests.Infrastructure;
 
 namespace Hymnal.Core.Tests.ViewModels;
 
@@ -69,8 +70,7 @@ public class CorkboardProjectionTests
             MakeNode(title: title, kind: kind, path: path, missing: missing, excluded: excluded),
             uuid,
             phaseData,
-            phaseDataService,
-            targetsService,
+            TestMetadataStores.Sidecar(phaseDataService, targetsService),
             settingsStore,
             notificationService,
             workspaceRoot: Path.Combine(Path.GetTempPath(), "hymnal-corkboard-tests"),
