@@ -170,6 +170,52 @@ public sealed class EditorEmbeddedBlockTests : IDisposable
     }
 
     [Fact]
+    public async Task Non_utf8_chapter_saved_as_utf8_then_takes_metadata_through_the_editor()
+    {
+        var path = WriteBytes("story.md", [0x63, 0x61, 0x66, 0xE9, 0x0A]);
+        var editor = CreateEditor();
+        await editor.OpenChapterAsync(Node("story.md"), path);
+        Assert.False(editor.HoldsFile(path));
+
+        editor.Text = "Saved as UTF-8.\n";
+        await editor.SaveAsync();
+        Assert.True(editor.HoldsFile(path));
+        editor.Text = "Unsaved after the save.\n";
+
+        var update = await _writer.UpdateMetadataAsync(path, _ => Meta("now embedded")).WaitAsync(Step);
+
+        Assert.True(update.IsSuccess, update.Error);
+        Assert.Equal(StoryFileFormat.Merge("Unsaved after the save.\n", Meta("now embedded"), "\n"), ReadText(path));
+        Assert.Equal("now embedded", editor.CurrentMetadata?.Notes);
+        Assert.Equal("Unsaved after the save.\n", editor.Text);
+        Assert.False(editor.HasConflict);
+        Assert.False(editor.IsDirty);
+    }
+
+    [Fact]
+    public async Task Buffer_closed_during_a_save_keeps_its_own_clean_state()
+    {
+        var path = WriteFile("story.md", StoryFileFormat.Merge("Prose.", Meta("n"), "\n"));
+        var store = new SlowStore(TimeSpan.FromMilliseconds(300));
+        var writer = new StoryFileWriter(store);
+        var editor = CreateEditor(writer, store);
+        await editor.OpenChapterAsync(Node("story.md"), path);
+        editor.Text = "Edited.";
+
+        var save = editor.SaveAsync();
+        await Task.Delay(100);
+        editor.CloseChapter();
+        await save.WaitAsync(Step);
+
+        Assert.Equal(StoryFileFormat.Merge("Edited.", Meta("n"), "\n"), ReadText(path));
+        Assert.Null(editor.ActiveFilePath);
+        Assert.Equal("", editor.OriginalText);
+        Assert.False(editor.IsDirty);
+        Assert.False(editor.HoldsFile(path));
+        Assert.Null(typeof(EditorViewModel).GetField("_watcher", BindingFlags.Instance | BindingFlags.NonPublic)!.GetValue(editor));
+    }
+
+    [UnixPermissionFact]
     public async Task Failed_open_keeps_previous_chapter_and_its_watcher()
     {
         var first = WriteFile("first.md", "First.");
@@ -258,7 +304,7 @@ public sealed class EditorEmbeddedBlockTests : IDisposable
 
     // ── IOpenStoryBuffer ─────────────────────────────────────────────────────
 
-    [Fact]
+    [SymlinkFact]
     public async Task Holds_file_matches_normalized_and_linked_spellings_only_while_open()
     {
         var path = WriteFile("story.md", "Prose.");
@@ -280,7 +326,7 @@ public sealed class EditorEmbeddedBlockTests : IDisposable
         Assert.Null(editor.CurrentMetadata);
     }
 
-    [Fact]
+    [SymlinkFact]
     public async Task Saving_through_a_link_keeps_the_link()
     {
         var path = WriteFile("story.md", StoryFileFormat.Merge("Prose.", Meta("n"), "\n"));
@@ -327,7 +373,7 @@ public sealed class EditorEmbeddedBlockTests : IDisposable
         Assert.Null(editor.CurrentMetadata);
     }
 
-    [Fact]
+    [UnixPermissionFact]
     public async Task Apply_metadata_failure_keeps_previous_metadata()
     {
         var path = WriteFile("story.md", StoryFileFormat.Merge("Prose.", Meta("old"), "\n"));

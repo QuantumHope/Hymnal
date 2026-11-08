@@ -615,6 +615,7 @@ public class EditorViewModel : ViewModelBase, IDisposable, IOpenStoryBuffer
             return;
 
         var text = Text;
+        var generation = _bufferGeneration;
         StopWatcher();
 
         try
@@ -630,6 +631,17 @@ public class EditorViewModel : ViewModelBase, IDisposable, IOpenStoryBuffer
             {
                 await _metadataStore.WriteTextAtomicAsync(savePath, text);
             }
+
+            // The buffer was replaced while the write was in flight (CloseChapter / OpenMissingChapter, or a
+            // reload): the file is saved, but the new buffer's dirty, conflict and story state are not this save's.
+            if (ActiveFilePath != savePath || generation != _bufferGeneration)
+                return;
+
+            // A non-UTF-8 chapter has just been written as UTF-8: from now on it is a story file the writer can
+            // reach through this buffer, rather than one it would rewrite underneath it.
+            if (story is null && _chapterOpen && _story is null
+                && StoryFileWriter.TryResolvePath(savePath, out var full, out var real))
+                _story = new StoryBuffer(full, real, null, StoryFileFormat.Split(text).LineEnding, false);
 
             _bufferGeneration++;
             _suppressDirtyTracking = true;
@@ -690,7 +702,7 @@ public class EditorViewModel : ViewModelBase, IDisposable, IOpenStoryBuffer
     /// The writer calls this while holding the file's metadata lock; the save takes only its file lock.
     /// </summary>
     public Task<StoryResult> ApplyMetadataAsync(EmbeddedStoryMetadata? metadata) =>
-        Dispatcher.UIThread.CheckAccess() || Application.Current is null
+        RunsInline()
             ? ApplyMetadataOnUiThreadAsync(metadata)
             : Dispatcher.UIThread.InvokeAsync(() => ApplyMetadataOnUiThreadAsync(metadata));
 
@@ -768,7 +780,20 @@ public class EditorViewModel : ViewModelBase, IDisposable, IOpenStoryBuffer
         });
 
     private Task ProcessExternalFileChangeAsync() =>
-        ProcessExternalFileChangeAsync(async apply => await Dispatcher.UIThread.InvokeAsync(apply));
+        ProcessExternalFileChangeAsync(async apply =>
+        {
+            if (RunsInline())
+                apply();
+            else
+                await Dispatcher.UIThread.InvokeAsync(apply);
+        });
+
+    /// <summary>
+    /// True when work meant for the UI thread can run on the calling thread: no Avalonia application (unit
+    /// tests and other non-UI hosts, checked first so the dispatcher is never touched there) or already on
+    /// the UI thread.
+    /// </summary>
+    private static bool RunsInline() => Application.Current is null || Dispatcher.UIThread.CheckAccess();
 
     /// <summary>Re-reads the open file after an external change and applies it through <paramref name="onUiThread"/>.</summary>
     private async Task ProcessExternalFileChangeAsync(Func<Action, Task> onUiThread)

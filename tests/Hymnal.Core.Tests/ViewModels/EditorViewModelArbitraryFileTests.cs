@@ -199,7 +199,7 @@ public sealed class EditorViewModelArbitraryFileTests : IDisposable
         Assert.Null(_editor.ConflictMessage);
     }
 
-    [Fact]
+    [UnixPermissionFact]
     public async Task SwitchToUnreadableChapter_ShowsErrorAndRestoresPreviousChapter()
     {
         var one = CreateChapter("one.md", "One", "# One\n\nFirst.");

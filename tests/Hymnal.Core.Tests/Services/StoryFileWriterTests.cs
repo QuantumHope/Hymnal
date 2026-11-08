@@ -4,6 +4,7 @@ using Hymnal.Core.Infrastructure;
 using Hymnal.Core.Interfaces;
 using Hymnal.Core.Models;
 using Hymnal.Core.Services;
+using Hymnal.Core.Tests.Infrastructure;
 
 namespace Hymnal.Core.Tests.Services;
 
@@ -569,13 +570,11 @@ public class StoryFileWriterTests
         }
     });
 
-    [LinuxOnlyFact]
+    [UnixPermissionFact]
     public Task Update_file_without_user_write_permission_fails_without_writing() => WithTempDirAsync(async dir =>
     {
         const string original = "Locked prose.\n";
         var path = WriteText(dir, original);
-        if (OperatingSystem.IsWindows())
-            return;
         File.SetUnixFileMode(path, UnixFileMode.UserRead | UnixFileMode.GroupRead);
         var store = new CountingStore();
         var writer = new StoryFileWriter(store);
@@ -785,7 +784,7 @@ public class StoryFileWriterHoldTests
         Assert.False(missing.NotUtf8);
     });
 
-    [Fact]
+    [SymlinkFact]
     public Task Try_resolve_path_makes_full_and_resolves_links() => WithTempDirAsync(dir =>
     {
         var target = Path.Combine(dir, "story.md");
