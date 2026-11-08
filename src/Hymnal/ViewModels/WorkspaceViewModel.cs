@@ -103,20 +103,32 @@ public class WorkspaceViewModel : ViewModelBase
     public IStoryMetadataStore MetadataStore => _metadataStore;
 
     /// <summary>
-    /// The story whose data is kept in its own file when embedded storage applies: null when it doesn't, or when
-    /// Book.txt lists no story file. Fails when that story isn't known (the project's data couldn't be loaded).
-    /// Waits for the store while it is being prepared.
-    /// </summary>
-    /// <summary>
     /// Points the open workspace's per-story data at <paramref name="settings"/>' storage after a reload failed,
     /// so nothing is written to the old mode's location: the sidecar, or an embedded store that refuses story data
-    /// until the project is reopened.
+    /// until the project is reopened. Sets <see cref="NeedsReopen"/>.
     /// </summary>
     public void ResetMetadataStore(ProjectSettings settings)
     {
         _metadataStore = StoryMetadataStoreFactory.Create(settings, _sidecarStore, _editor.StoryWriter);
+        NeedsReopen = true;
     }
 
+    private bool _needsReopen;
+    /// <summary>
+    /// True after <see cref="ResetMetadataStore"/> until the workspace is opened or reloaded successfully: the
+    /// profile and sidebar may not match project.json, so project settings can't be changed meanwhile.
+    /// </summary>
+    public bool NeedsReopen
+    {
+        get => _needsReopen;
+        private set => this.RaiseAndSetIfChanged(ref _needsReopen, value);
+    }
+
+    /// <summary>
+    /// The story whose data is kept in its own file when embedded storage applies: null when it doesn't, or when
+    /// Book.txt lists no story file. Fails when that story isn't known (the project's data couldn't be loaded).
+    /// Waits for the store while it is being prepared.
+    /// </summary>
     public async Task<Result<StoryRef?>> GetEmbeddedPrimaryAsync()
     {
         var store = _metadataStore;
@@ -836,6 +848,7 @@ public class WorkspaceViewModel : ViewModelBase
 
         _model = model;
         HasWorkspace = true;
+        NeedsReopen = false;
         WorkspaceName = Path.GetFileName(model.WorkspaceRoot.TrimEnd(
             Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar));
         this.RaisePropertyChanged(nameof(WorkspaceRoot));

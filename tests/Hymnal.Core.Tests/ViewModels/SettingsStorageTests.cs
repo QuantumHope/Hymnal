@@ -443,6 +443,129 @@ public sealed class SettingsStorageTests
         finally { DeleteFolder(root); }
     }
 
+    [Fact]
+    public async Task After_a_failed_reload_nothing_can_be_applied_until_reopened_and_the_block_keeps_its_data()
+    {
+        var root = CreateWorkspace(StoryJson, (StoryFile, StoryText));
+        var bookTxt = Path.Combine(root, "Book.txt");
+        try
+        {
+            await Ui(root, 1, async context =>
+            {
+                await SeedSidecarAsync(root, context.Node(StoryFile).Uuid);
+                var settings = context.CreateSettings();
+                settings.KeepInStoryFile = true;
+                var book = await File.ReadAllTextAsync(bookTxt);
+                File.Delete(bookTxt);
+                await ApplyAsync(context, settings);
+                Assert.Equal("Remember the lamp.", ReadStory(root).Metadata?.Notes);
+
+                // Book.txt is back, but the session still shows the old (sidecar) profile.
+                await File.WriteAllTextAsync(bookTxt, book);
+                var again = context.CreateSettings();
+                Assert.True(context.Workspace.NeedsReopen);
+                Assert.Equal(SettingsViewModel.ReopenRequired, again.ReopenRequiredMessage);
+                Assert.False(again.IsStorageOptionEnabled);
+                again.KeepInStoryFile = true;
+                Assert.False(await again.ApplyProjectKindCommand.CanExecute.FirstAsync());
+                again.SelectedProjectKind = ProjectKind.Novel;
+                Assert.False(await again.ApplyProjectKindCommand.CanExecute.FirstAsync());
+                Assert.Equal("Remember the lamp.", ReadStory(root).Metadata?.Notes);
+
+                await context.OpenWorkspaceInCurrentDispatchAsync();
+                await PumpUntilAsync(() => context.Workspace.Nodes.Count == 1);
+                Assert.False(context.Workspace.NeedsReopen);
+                Assert.Equal(StorageMode.Embedded, context.Workspace.Profile.Storage);
+                Assert.Null(context.CreateSettings().ReopenRequiredMessage);
+                Assert.Equal("Remember the lamp.",
+                    await context.Workspace.MetadataStore.LoadNotesAsync(root, context.Node(StoryFile).Story));
+            });
+        }
+        finally { DeleteFolder(root); }
+    }
+
+    [Fact]
+    public async Task Apply_takes_the_current_storage_from_project_json_not_a_stale_profile()
+    {
+        var root = CreateWorkspace(StoryJson, (StoryFile, WithBlock(StoryText,
+            new EmbeddedStoryMetadata(null, null, null, null, null, null, "In the block.", null))));
+        try
+        {
+            await Ui(root, 1, async context =>
+            {
+                // project.json already says embedded, but the session still has the sidecar profile.
+                await File.WriteAllTextAsync(ProjectJsonPath(root), EmbeddedJson);
+                Assert.Equal(StorageMode.Sidecar, context.Workspace.Profile.Storage);
+
+                var settings = context.CreateSettings();
+                settings.KeepInStoryFile = true;
+                await ApplyAsync(context, settings);
+
+                Assert.Empty(context.Errors);
+                Assert.Equal("In the block.", ReadStory(root).Metadata?.Notes);
+                Assert.Equal(StorageMode.Embedded, context.Workspace.Profile.Storage);
+            });
+        }
+        finally { DeleteFolder(root); }
+    }
+
+    [Fact]
+    public async Task Anthology_board_move_is_undone_when_the_block_cannot_be_written()
+    {
+        var root = CreateWorkspace(AnthologyJson, (StoryFile, StoryText));
+        await File.WriteAllBytesAsync(Path.Combine(root, StoryFile), [0x43, 0x61, 0x66, 0xE9, 0x0A]); // Latin-1
+        try
+        {
+            await Ui(root, 1, async context =>
+            {
+                var uuid = context.Node(StoryFile).Uuid;
+                await SeedAsync(root, uuid, new Beat("b1", "Anthology beat", "", null));
+
+                var settings = context.CreateSettings();
+                settings.SelectedProjectKind = ProjectKind.Story;
+                settings.KeepInStoryFile = true;
+                await ApplyAsync(context, settings);
+
+                Assert.Contains(context.Errors, e => e.Contains("UTF-8"));
+                Assert.Equal("Anthology beat", Assert.Single(await LoadFromDiskAsync(root, uuid)).Title);
+                Assert.False(File.Exists(BeatBoardService.BoardFilePath(root, Story)));
+                Assert.Equal(AnthologyJson, await File.ReadAllTextAsync(ProjectJsonPath(root)));
+                Assert.Equal(ProjectKind.Anthology, context.Workspace.Profile.Kind);
+            });
+        }
+        finally { DeleteFolder(root); }
+    }
+
+    [Fact]
+    public async Task Anthology_board_move_is_undone_when_project_json_cannot_be_saved()
+    {
+        var store = new HookStore();
+        var root = CreateWorkspace(AnthologyJson, (StoryFile, StoryText));
+        try
+        {
+            await Ui(root, 1, async context =>
+            {
+                var uuid = context.Node(StoryFile).Uuid;
+                await SeedAsync(root, uuid, new Beat("b1", "Anthology beat", "", null));
+                store.OnWrite = path => path == ProjectJsonPath(root)
+                    ? throw new IOException("The disk is full.")
+                    : Task.CompletedTask;
+
+                var settings = context.CreateSettings();
+                settings.SelectedProjectKind = ProjectKind.Story;
+                settings.KeepInStoryFile = true;
+                await ApplyAsync(context, settings);
+
+                Assert.NotEmpty(context.Errors);
+                Assert.Equal("Anthology beat", Assert.Single(await LoadFromDiskAsync(root, uuid)).Title);
+                Assert.False(File.Exists(BeatBoardService.BoardFilePath(root, Story)));
+                Assert.Equal(AnthologyJson, await File.ReadAllTextAsync(ProjectJsonPath(root)));
+                Assert.Equal(ProjectKind.Anthology, context.Workspace.Profile.Kind);
+            }, store: store);
+        }
+        finally { DeleteFolder(root); }
+    }
+
     // ── Flushes wait for a save already writing (minor 3) ─────────────────────
 
     [Fact]

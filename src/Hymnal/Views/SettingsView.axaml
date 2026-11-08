@@ -112,6 +112,11 @@
                                FontSize="12"
                                TextWrapping="Wrap"
                                Foreground="{DynamicResource OnSurfaceMutedBrush}" />
+                    <TextBlock Text="{Binding ReopenRequiredMessage}"
+                               IsVisible="{Binding ReopenRequiredMessage, Converter={x:Static ObjectConverters.IsNotNull}}"
+                               FontSize="12"
+                               TextWrapping="Wrap"
+                               Foreground="{DynamicResource OnSurfaceMutedBrush}" />
                     <Button Content="Apply"
                             Command="{Binding ApplyProjectKindCommand}"
                             HorizontalAlignment="Left"

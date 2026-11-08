@@ -38,6 +38,10 @@ public class SettingsViewModel : ViewModelBase
     private readonly ObservableAsPropertyHelper<bool> _isStorageOptionVisible;
     private readonly ObservableAsPropertyHelper<bool> _isStorageOptionEnabled;
     private readonly ObservableAsPropertyHelper<string?> _storageOptionExplanation;
+    private readonly ObservableAsPropertyHelper<string?> _reopenRequiredMessage;
+
+    /// <summary>Shown while project settings can't be changed because a reload failed.</summary>
+    public const string ReopenRequired = "Reopen the project to continue.";
 
     /// <summary>Impact summary when "Keep everything in the story file" is turned on.</summary>
     public const string MoveIntoFileSummary =
@@ -104,8 +108,11 @@ public class SettingsViewModel : ViewModelBase
     /// </summary>
     public bool IsStorageOptionEnabled => _isStorageOptionEnabled.Value;
 
-    /// <summary>One line saying why the option is disabled; null when it is enabled.</summary>
+    /// <summary>One line saying why the option can't be turned on (Book.txt's files); null when it can.</summary>
     public string? StorageOptionExplanation => _storageOptionExplanation.Value;
+
+    /// <summary><see cref="ReopenRequired"/> while a failed reload blocks project changes; null otherwise.</summary>
+    public string? ReopenRequiredMessage => _reopenRequiredMessage.Value;
 
     public ReactiveCommand<ProjectTypeCardViewModel, Unit> SelectProjectKindCommand { get; }
     public ReactiveCommand<Unit, Unit> ApplyProjectKindCommand { get; }
@@ -155,9 +162,18 @@ public class SettingsViewModel : ViewModelBase
         var currentProfile = workspace is null
             ? Observable.Return<ProjectProfile?>(null)
             : workspace.WhenAnyValue(w => w.Profile).Select(p => (ProjectProfile?)p);
+        var needsReopen = workspace is null
+            ? Observable.Return(false)
+            : workspace.WhenAnyValue(w => w.NeedsReopen);
         var pending = this.WhenAnyValue(x => x.SelectedProjectKind, x => x.KeepInStoryFile, x => x.StoryFileCount)
             .CombineLatest(currentProfile, (choice, profile) => ChangeSummary(choice.Item1, profile));
-        var changed = pending.Select(summary => summary is not null);
+        // After a failed reload the profile may not match project.json: nothing can be applied until a reopen.
+        var changed = pending.CombineLatest(needsReopen, (summary, reopen) => summary is not null && !reopen);
+
+        _reopenRequiredMessage = needsReopen
+            .Select(reopen => reopen ? ReopenRequired : null)
+            .ToProperty(this, x => x.ReopenRequiredMessage);
+        Disposables.Add(_reopenRequiredMessage);
 
         _projectChangeSummary = pending.ToProperty(this, x => x.ProjectChangeSummary);
         Disposables.Add(_projectChangeSummary);
@@ -167,13 +183,16 @@ public class SettingsViewModel : ViewModelBase
             .ToProperty(this, x => x.IsStorageOptionVisible);
         Disposables.Add(_isStorageOptionVisible);
 
-        _isStorageOptionEnabled = this.WhenAnyValue(x => x.StoryFileCount)
-            .CombineLatest(currentProfile, (count, profile) => count == 1 || IsEmbedded(profile))
+        var availableForFiles = this.WhenAnyValue(x => x.StoryFileCount)
+            .CombineLatest(currentProfile, (count, profile) => count == 1 || IsEmbedded(profile));
+
+        _isStorageOptionEnabled = availableForFiles
+            .CombineLatest(needsReopen, (available, reopen) => available && !reopen)
             .ToProperty(this, x => x.IsStorageOptionEnabled);
         Disposables.Add(_isStorageOptionEnabled);
 
-        _storageOptionExplanation = this.WhenAnyValue(x => x.IsStorageOptionEnabled)
-            .Select(enabled => enabled ? null : StorageOptionUnavailable)
+        _storageOptionExplanation = availableForFiles
+            .Select(available => available ? null : StorageOptionUnavailable)
             .ToProperty(this, x => x.StorageOptionExplanation);
         Disposables.Add(_storageOptionExplanation);
 
@@ -207,9 +226,18 @@ public class SettingsViewModel : ViewModelBase
             return;
 
         var root = _workspace.WorkspaceRoot;
-        var previous = _workspace.Profile;
-        var fromStorage = IsEmbedded(previous) ? StorageMode.Embedded : StorageMode.Sidecar;
-        var toStorage = TargetStorage(kind, previous);
+        // Where the data is now comes from project.json on disk, not the in-memory profile, which can be stale
+        // (e.g. after a failed reload): migrating from the wrong mode would mirror stale data over the real one.
+        var stored = await _projectSettings.LoadAsync(root);
+        if (!stored.IsSuccess)
+        {
+            _notifications.ShowError($"Couldn't read the project settings ({stored.Error}), so nothing was changed.");
+            return;
+        }
+        var current = stored.Value!;
+        var currentlyEmbedded = current is { Kind: ProjectKind.Story, Storage: StorageMode.Embedded };
+        var fromStorage = currentlyEmbedded ? StorageMode.Embedded : StorageMode.Sidecar;
+        var toStorage = TargetStorage(kind, currentlyEmbedded);
 
         // The story whose data changes storage (null: none, or the storage stays).
         StoryRef? story = null;
@@ -235,7 +263,7 @@ public class SettingsViewModel : ViewModelBase
         // into the block with the rest.
         (string From, string To)? movedBoard = null;
         if (toStorage == StorageMode.Embedded)
-            movedBoard = await MoveBeatBoardForKindAsync(previous.Kind, kind);
+            movedBoard = await MoveBeatBoardForKindAsync(current.Kind, kind);
 
         // Ruling 9: write the destination; saving project.json in the new mode commits; then clean up the source.
         if (story is not null)
@@ -263,7 +291,7 @@ public class SettingsViewModel : ViewModelBase
             _notifications.ShowInfo(CleanupLeftoversMessage);
 
         if (toStorage != StorageMode.Embedded)
-            await MoveBeatBoardForKindAsync(previous.Kind, kind);
+            await MoveBeatBoardForKindAsync(current.Kind, kind);
 
         var reload = await _workspace.ReloadProjectAsync();
         if (!reload.IsSuccess)
@@ -318,8 +346,8 @@ public class SettingsViewModel : ViewModelBase
     /// The storage <paramref name="kind"/> gets: embedded for a Short Story with the option on, when it already
     /// is embedded or Book.txt lists exactly one story file; sidecar otherwise.
     /// </summary>
-    private StorageMode TargetStorage(ProjectKind kind, ProjectProfile current) =>
-        kind == ProjectKind.Story && KeepInStoryFile && (IsEmbedded(current) || StoryFileCount == 1)
+    private StorageMode TargetStorage(ProjectKind kind, bool currentlyEmbedded) =>
+        kind == ProjectKind.Story && KeepInStoryFile && (currentlyEmbedded || StoryFileCount == 1)
             ? StorageMode.Embedded
             : StorageMode.Sidecar;
 
@@ -332,7 +360,7 @@ public class SettingsViewModel : ViewModelBase
         var parts = new List<string>();
         if (kind != current.Kind)
             parts.Add(ProjectTypeCatalog.SwitchSummary(kind));
-        var toEmbedded = TargetStorage(kind, current) == StorageMode.Embedded;
+        var toEmbedded = TargetStorage(kind, IsEmbedded(current)) == StorageMode.Embedded;
         if (toEmbedded != IsEmbedded(current))
             parts.Add(toEmbedded ? MoveIntoFileSummary : MoveOutOfFileSummary);
         return parts.Count == 0 ? null : string.Join(" ", parts);

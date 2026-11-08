@@ -797,13 +797,15 @@ public sealed class ChapterInfoViewModel : ViewModelBase, IDisposable
 
     private async Task SaveScheduleAsync()
     {
-        _scheduleSavePending = false;
         var chapterVm = _activeChapterVm;
         var uuid = _loadedUuid;
         var workspaceRoot = _workspaceViewModel.WorkspaceRoot;
 
         if (chapterVm == null || string.IsNullOrEmpty(uuid) || string.IsNullOrEmpty(workspaceRoot))
+        {
+            _scheduleSavePending = false; // nothing to save
             return;
+        }
 
         // Snapshot all row values before the async gaps (the rows are reused for the next chapter).
         var rows = PhaseScheduleRows.Select(r => (r.PhaseName, r.StartDate, r.EndDate, r.Progress)).ToList();
@@ -813,6 +815,8 @@ public sealed class ChapterInfoViewModel : ViewModelBase, IDisposable
         await _scheduleSaveGate.WaitAsync().ConfigureAwait(false);
         try
         {
+            // Cleared only once this save holds the gate: a flush waiting meanwhile still sees the edits pending.
+            _scheduleSavePending = false;
             await WriteScheduleAsync(chapterVm, workspaceRoot, rows, currentStatus).ConfigureAwait(false);
         }
         catch
