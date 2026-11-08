@@ -447,7 +447,7 @@ public sealed class WorkspaceSidebarReorderTests
             RegistryService = new ChapterRegistryService(MetadataStore);
             PhaseDataService = new PhaseDataService(MetadataStore);
             TargetsService = new TargetsService(MetadataStore);
-            Editor = _owned.Track(new EditorViewModel(MetadataStore, NotificationService, WordCountService));
+            Editor = _owned.Track(new EditorViewModel(MetadataStore, NotificationService, WordCountService, new StoryFileWriter(MetadataStore)));
             var history = new WordCountHistoryService(MetadataStore);
             ManuscriptService = _owned.Track(new ManuscriptService(NotificationService, ExclusionManifestService));
             var effectiveStructureService = structureService ?? new RecordingStructureService();

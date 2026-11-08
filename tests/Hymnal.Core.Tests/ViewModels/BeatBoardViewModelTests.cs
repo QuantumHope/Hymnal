@@ -925,7 +925,7 @@ public sealed class BeatBoardViewModelTests
             var wordCount = new WordCountService();
             var projectSettings = new ProjectSettingsService(store);
             Boards = new CountingBeatBoardService(new BeatBoardService(store));
-            var editor = _owned.Track(new EditorViewModel(store, Notifications, wordCount));
+            var editor = _owned.Track(new EditorViewModel(store, Notifications, wordCount, new StoryFileWriter(store)));
             var manuscript = _owned.Track(new ManuscriptService(Notifications, exclusions));
 
             Workspace = new WorkspaceViewModel(

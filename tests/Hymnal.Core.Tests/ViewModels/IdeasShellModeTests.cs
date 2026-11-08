@@ -628,7 +628,7 @@ public sealed class IdeasShellModeTests : IDisposable
             ProjectSettings = new ProjectSettingsService(_store);
             Ideas = new ControllableIdeasService(new StoryIdeasService(_store));
             _promoter = new StoryIdeaPromoter(_structure, registry, _phases, _targets, new NotesService(_store), Ideas);
-            Editor = new EditorViewModel(_store, Notifications, wordCount);
+            Editor = new EditorViewModel(_store, Notifications, wordCount, new StoryFileWriter(_store));
             _manuscript = new ManuscriptService(Notifications, exclusions);
             LiveContexts.Add(this);
 

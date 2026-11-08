@@ -1079,7 +1079,7 @@ public sealed class CorkboardViewModelTests
 
         public TestContext()
         {
-            EditorViewModel = _owned.Track(new EditorViewModel(MetadataStore, NotificationService, WordCountService));
+            EditorViewModel = _owned.Track(new EditorViewModel(MetadataStore, NotificationService, WordCountService, new StoryFileWriter(MetadataStore)));
             RegistryService = new ChapterRegistryService(MetadataStore);
             PhaseDataService = new PhaseDataService(MetadataStore);
             TargetsService = new TargetsService(MetadataStore);

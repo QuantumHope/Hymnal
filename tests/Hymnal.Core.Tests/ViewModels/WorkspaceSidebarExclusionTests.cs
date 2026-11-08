@@ -402,7 +402,7 @@ public sealed class WorkspaceSidebarExclusionTests
             var effectiveStructureService = structureService ?? new BookTxtStructureService(MetadataStore, ExclusionManifestService);
             PhaseDataService = new PhaseDataService(MetadataStore);
             TargetsService = new TargetsService(MetadataStore);
-            Editor = _owned.Track(new EditorViewModel(MetadataStore, NotificationService, WordCountService));
+            Editor = _owned.Track(new EditorViewModel(MetadataStore, NotificationService, WordCountService, new StoryFileWriter(MetadataStore)));
             var registry = new ChapterRegistryService(MetadataStore);
             var history = new WordCountHistoryService(MetadataStore);
             ManuscriptService = _owned.Track(new ManuscriptService(NotificationService, ExclusionManifestService));

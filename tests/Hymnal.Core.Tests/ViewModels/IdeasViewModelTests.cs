@@ -987,7 +987,7 @@ public sealed class IdeasViewModelTests : IDisposable
             var structure = _structure = new BookTxtStructureService(store, exclusions, registry);
             ProjectSettings = new ProjectSettingsService(store);
             Ideas = new CountingIdeasService(new StoryIdeasService(store));
-            var editor = Editor = new EditorViewModel(store, Notifications, wordCount);
+            var editor = Editor = new EditorViewModel(store, Notifications, wordCount, new StoryFileWriter(store));
             FolderPicker = new MutableFolderPickerService { Folder = folder };
             _manuscript = new ManuscriptService(Notifications, exclusions);
             LiveContexts.Add(this);

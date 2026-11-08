@@ -379,7 +379,7 @@ public sealed class WorkspaceSidebarRenameTests
             var effectiveStructureService = structureService ?? new BookTxtStructureService(MetadataStore, ExclusionManifestService, RegistryService);
             PhaseDataService = new PhaseDataService(MetadataStore);
             TargetsService = new TargetsService(MetadataStore);
-            Editor = _owned.Track(new EditorViewModel(MetadataStore, NotificationService, WordCountService));
+            Editor = _owned.Track(new EditorViewModel(MetadataStore, NotificationService, WordCountService, new StoryFileWriter(MetadataStore)));
             var history = new WordCountHistoryService(MetadataStore);
             ManuscriptService = _owned.Track(new ManuscriptService(NotificationService, ExclusionManifestService));
 

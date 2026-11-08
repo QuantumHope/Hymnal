@@ -48,7 +48,7 @@ public sealed class EditorViewModelArbitraryFileTests : IDisposable
         Directory.CreateDirectory(_manuscriptRoot);
         Directory.CreateDirectory(_docsRoot);
 
-        _editor = _owned.Track(new EditorViewModel(_metadataStore, _notifications, _wordCountService)
+        _editor = _owned.Track(new EditorViewModel(_metadataStore, _notifications, _wordCountService, new StoryFileWriter(_metadataStore))
         {
             HasWorkspace = true
         });
@@ -157,7 +157,7 @@ public sealed class EditorViewModelArbitraryFileTests : IDisposable
         await _editor.OpenArbitraryFileAsync(docPath);
         await File.WriteAllTextAsync(docPath, "after external");
 
-        TriggerWatcherChanged(docPath);
+        await TriggerWatcherChangedAsync();
 
         Assert.True(SpinWait.SpinUntil(() => _editor.Text == "after external", TimeSpan.FromSeconds(2)));
         Assert.Equal("after external", _editor.OriginalText);
@@ -173,7 +173,7 @@ public sealed class EditorViewModelArbitraryFileTests : IDisposable
         _editor.Text = "local edit";
         await File.WriteAllTextAsync(docPath, "external edit");
 
-        TriggerWatcherChanged(docPath);
+        await TriggerWatcherChangedAsync();
 
         Assert.True(SpinWait.SpinUntil(() => _editor.HasConflict, TimeSpan.FromSeconds(2)));
         Assert.Equal("local edit", _editor.Text);
@@ -197,6 +197,34 @@ public sealed class EditorViewModelArbitraryFileTests : IDisposable
         Assert.Equal("external edit", _editor.OriginalText);
         Assert.False(_editor.HasConflict);
         Assert.Null(_editor.ConflictMessage);
+    }
+
+    [Fact]
+    public async Task SwitchToUnreadableChapter_ShowsErrorAndRestoresPreviousChapter()
+    {
+        var one = CreateChapter("one.md", "One", "# One\n\nFirst.");
+        var two = CreateChapter("two.md", "Two", "# Two\n\nSecond.");
+        AddWorkspaceNode(one);
+        AddWorkspaceNode(two);
+        await InvokeTrySwitchChapterAsync(one);
+        Assert.Same(one.Node, _editor.ActiveNode);
+
+        var twoPath = Path.Combine(_manuscriptRoot, "two.md");
+        File.SetUnixFileMode(twoPath, UnixFileMode.None);
+        try
+        {
+            await InvokeTrySwitchChapterAsync(two);
+        }
+        finally
+        {
+            File.SetUnixFileMode(twoPath, UnixFileMode.UserRead | UnixFileMode.UserWrite);
+        }
+
+        Assert.Contains(_notifications.Errors, e => e.Contains("Two"));
+        Assert.Same(one, _workspace.SelectedNode);
+        Assert.Same(one.Node, _editor.ActiveNode);
+        Assert.Equal("# One\n\nFirst.", _editor.Text);
+        Assert.NotNull(typeof(EditorViewModel).GetField("_watcher", BindingFlags.Instance | BindingFlags.NonPublic)!.GetValue(_editor));
     }
 
     private string CreateDoc(string relativePath, string content)
@@ -233,6 +261,10 @@ public sealed class EditorViewModelArbitraryFileTests : IDisposable
         var nodes = (IList)(field.GetValue(_workspace)
             ?? throw new InvalidOperationException("Workspace node collection was null."));
         nodes.Add(chapter);
+
+        var byPath = typeof(WorkspaceViewModel).GetField("_nodesByPath", BindingFlags.Instance | BindingFlags.NonPublic)
+            ?? throw new InvalidOperationException("Workspace node lookup field was not found.");
+        ((IDictionary<string, ChapterViewModel>)byPath.GetValue(_workspace)!)[chapter.Node.RelativePath] = chapter;
     }
 
     private async Task InvokeTrySwitchChapterAsync(ChapterViewModel chapter)
@@ -253,13 +285,7 @@ public sealed class EditorViewModelArbitraryFileTests : IDisposable
         await editor.OpenArbitraryFileAsync(docPath);
     }
 
-    private void TriggerWatcherChanged(string path)
-    {
-        var method = typeof(EditorViewModel).GetMethod("ApplyExternalFileChange", BindingFlags.Instance | BindingFlags.NonPublic)
-            ?? throw new InvalidOperationException("ApplyExternalFileChange was not found.");
-
-        method.Invoke(_editor, new object[] { File.ReadAllText(path) });
-    }
+    private Task TriggerWatcherChangedAsync() => _editor.ProcessExternalFileChangeNowAsync();
 
     private static async Task ExecuteCommandAsync(IObservable<System.Reactive.Unit> execution)
     {

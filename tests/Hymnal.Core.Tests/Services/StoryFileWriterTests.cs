@@ -725,6 +725,66 @@ public class StoryFileWriterHoldTests
         using var hold = await writer.HoldMetadataChangesAsync(null, "", "bad\0path").WaitAsync(TimeSpan.FromSeconds(5));
     });
 
+    /// <summary>Holds its file until a change arrives, then reports it closed meanwhile (editor closed it).</summary>
+    private sealed class ClosingBuffer(string path) : IOpenStoryBuffer
+    {
+        private volatile bool _held = true;
+
+        public EmbeddedStoryMetadata? CurrentMetadata => Metadata("buffer");
+
+        public bool HoldsFile(string absolutePath) => _held && absolutePath == path;
+
+        public Task<Result<Unit>> ApplyMetadataAsync(EmbeddedStoryMetadata? metadata)
+        {
+            _held = false;
+            return Task.FromResult(Result<Unit>.Fail("The story file is no longer open in the editor."));
+        }
+    }
+
+    [Fact]
+    public Task Update_falls_back_to_closed_file_when_buffer_closed_it_meanwhile() => WithTempDirAsync(async dir =>
+    {
+        var path = Path.Combine(dir, "story.md");
+        File.WriteAllText(path, StoryFileFormat.Merge("Prose.", Metadata("disk"), "\n"));
+        var writer = new StoryFileWriter(new MetadataStore());
+        writer.AttachBuffer(new ClosingBuffer(path));
+
+        var result = await writer.UpdateMetadataAsync(path, m => m! with { Notes = m.Notes + "+1" });
+
+        Assert.True(result.IsSuccess, result.Error);
+        Assert.Equal(StoryFileFormat.Merge("Prose.", Metadata("disk+1"), "\n"), File.ReadAllText(path));
+    });
+
+    [Fact]
+    public Task Remove_falls_back_to_closed_file_when_buffer_closed_it_meanwhile() => WithTempDirAsync(async dir =>
+    {
+        var path = Path.Combine(dir, "story.md");
+        File.WriteAllText(path, StoryFileFormat.Merge("Prose.", Metadata("disk"), "\n"));
+        var writer = new StoryFileWriter(new MetadataStore());
+        writer.AttachBuffer(new ClosingBuffer(path));
+
+        var result = await writer.RemoveMetadataAsync(path);
+
+        Assert.True(result.IsSuccess, result.Error);
+        Assert.Equal("Prose.", File.ReadAllText(path));
+    });
+
+    [Fact]
+    public Task Try_read_flags_files_that_are_not_utf8() => WithTempDirAsync(async dir =>
+    {
+        var bad = Path.Combine(dir, "latin1.md");
+        File.WriteAllBytes(bad, [0x63, 0x61, 0x66, 0xE9]);
+        var writer = new StoryFileWriter(new MetadataStore());
+
+        var notUtf8 = await writer.TryReadFileAsync(bad);
+        var missing = await writer.TryReadFileAsync(Path.Combine(dir, "missing.md"));
+
+        Assert.False(notUtf8.Result.IsSuccess);
+        Assert.True(notUtf8.NotUtf8);
+        Assert.False(missing.Result.IsSuccess);
+        Assert.False(missing.NotUtf8);
+    });
+
     [Fact]
     public Task Try_resolve_path_makes_full_and_resolves_links() => WithTempDirAsync(dir =>
     {

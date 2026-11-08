@@ -94,7 +94,7 @@ public sealed class StoryFileWriter(IMetadataStore store)
         if (HeldBuffer(path) is { } buffer)
             return Result<EmbeddedStoryMetadata?>.Ok(buffer.CurrentMetadata);
 
-        var read = await ReadLockedAsync(path).ConfigureAwait(false);
+        var (read, _) = await ReadLockedAsync(path).ConfigureAwait(false);
         return read.IsSuccess
             ? Result<EmbeddedStoryMetadata?>.Ok(read.Value.Split.Metadata)
             : Result<EmbeddedStoryMetadata?>.Fail(read.Error!);
@@ -104,13 +104,22 @@ public sealed class StoryFileWriter(IMetadataStore store)
     /// Reads and splits the file as it is on disk (ignoring any buffer), including
     /// <see cref="StorySplit.HadMalformedBlock"/>. A leading byte order mark stays in the prose.
     /// </summary>
-    public async Task<Result<StorySplit>> ReadFileAsync(string absolutePath)
+    public async Task<Result<StorySplit>> ReadFileAsync(string absolutePath) =>
+        (await TryReadFileAsync(absolutePath).ConfigureAwait(false)).Result;
+
+    /// <summary>
+    /// Like <see cref="ReadFileAsync"/>, and on failure also says whether it failed only because the file is not
+    /// valid UTF-8 (<see cref="StoryFileRead.NotUtf8"/>), so the editor can still open it as plain text.
+    /// </summary>
+    public async Task<StoryFileRead> TryReadFileAsync(string absolutePath)
     {
         if (!TryResolve(absolutePath, out var path, out var error))
-            return Result<StorySplit>.Fail(error);
+            return new StoryFileRead(Result<StorySplit>.Fail(error), NotUtf8: false);
 
-        var read = await ReadLockedAsync(path).ConfigureAwait(false);
-        return read.IsSuccess ? Result<StorySplit>.Ok(read.Value.Split) : Result<StorySplit>.Fail(read.Error!);
+        var (read, notUtf8) = await ReadLockedAsync(path).ConfigureAwait(false);
+        return new StoryFileRead(
+            read.IsSuccess ? Result<StorySplit>.Ok(read.Value.Split) : Result<StorySplit>.Fail(read.Error!),
+            notUtf8);
     }
 
     /// <summary>
@@ -130,7 +139,13 @@ public sealed class StoryFileWriter(IMetadataStore store)
         try
         {
             if (HeldBuffer(path) is { } buffer)
-                return await buffer.ApplyMetadataAsync(update(buffer.CurrentMetadata)).ConfigureAwait(false);
+            {
+                var applied = await buffer.ApplyMetadataAsync(update(buffer.CurrentMetadata)).ConfigureAwait(false);
+                if (applied.IsSuccess || HeldBuffer(path) is not null)
+                    return applied;
+                // The buffer let go of the file before the change reached it (closed in the editor):
+                // the file is closed now, so write it as one.
+            }
 
             return await RewriteClosedFileAsync(path, split => update(split.Metadata)).ConfigureAwait(false);
         }
@@ -177,9 +192,13 @@ public sealed class StoryFileWriter(IMetadataStore store)
         {
             if (HeldBuffer(path) is { } buffer)
             {
-                return buffer.CurrentMetadata is null
-                    ? Result<Unit>.Ok(Unit.Default)
-                    : await buffer.ApplyMetadataAsync(null).ConfigureAwait(false);
+                if (buffer.CurrentMetadata is null)
+                    return Result<Unit>.Ok(Unit.Default);
+
+                var applied = await buffer.ApplyMetadataAsync(null).ConfigureAwait(false);
+                if (applied.IsSuccess || HeldBuffer(path) is not null)
+                    return applied;
+                // As in UpdateMetadataAsync: the buffer closed the file meanwhile, so rewrite it as a closed file.
             }
 
             return await RewriteClosedFileAsync(path, _ => null).ConfigureAwait(false);
@@ -201,7 +220,7 @@ public sealed class StoryFileWriter(IMetadataStore store)
         await gate.WaitAsync().ConfigureAwait(false);
         try
         {
-            var read = await ReadAsync(path.Real).ConfigureAwait(false);
+            var (read, _) = await ReadAsync(path.Real).ConfigureAwait(false);
             if (!read.IsSuccess)
                 return Result<Unit>.Fail(read.Error!);
 
@@ -218,7 +237,7 @@ public sealed class StoryFileWriter(IMetadataStore store)
         }
     }
 
-    private async Task<Result<(string Text, StorySplit Split)>> ReadLockedAsync(StoryPath path)
+    private async Task<(Result<(string Text, StorySplit Split)> Read, bool NotUtf8)> ReadLockedAsync(StoryPath path)
     {
         var gate = Lock(_fileLocks, path);
         await gate.WaitAsync().ConfigureAwait(false);
@@ -232,10 +251,11 @@ public sealed class StoryFileWriter(IMetadataStore store)
         }
     }
 
-    private static async Task<Result<(string Text, StorySplit Split)>> ReadAsync(string path)
+    /// <summary>Reads and splits <paramref name="path"/>; <c>NotUtf8</c> is true when it failed only on decoding.</summary>
+    private static async Task<(Result<(string Text, StorySplit Split)> Read, bool NotUtf8)> ReadAsync(string path)
     {
         if (!File.Exists(path))
-            return Result<(string, StorySplit)>.Fail($"Story file not found: {path}");
+            return (Result<(string, StorySplit)>.Fail($"Story file not found: {path}"), false);
 
         try
         {
@@ -243,15 +263,15 @@ public sealed class StoryFileWriter(IMetadataStore store)
             // which the store writes back as the same three bytes.
             var bytes = await File.ReadAllBytesAsync(path).ConfigureAwait(false);
             var text = StrictUtf8.GetString(bytes);
-            return Result<(string, StorySplit)>.Ok((text, StoryFileFormat.Split(text)));
+            return (Result<(string, StorySplit)>.Ok((text, StoryFileFormat.Split(text))), false);
         }
         catch (DecoderFallbackException)
         {
-            return Result<(string, StorySplit)>.Fail($"Story file is not valid UTF-8 and was left unchanged: {path}");
+            return (Result<(string, StorySplit)>.Fail($"Story file is not valid UTF-8 and was left unchanged: {path}"), true);
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
-            return Result<(string, StorySplit)>.Fail($"Could not read story file {path}: {ex.Message}");
+            return (Result<(string, StorySplit)>.Fail($"Could not read story file {path}: {ex.Message}"), false);
         }
     }
 

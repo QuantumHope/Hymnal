@@ -237,7 +237,7 @@ public sealed class SupplementalDocsViewModelTests : IDisposable
             Directory.CreateDirectory(ManuscriptRoot);
             Directory.CreateDirectory(DocsRoot);
 
-            Editor = _owned.Track(new EditorViewModel(MetadataStore, Notifications, WordCountService));
+            Editor = _owned.Track(new EditorViewModel(MetadataStore, Notifications, WordCountService, new StoryFileWriter(MetadataStore)));
             Workspace = new WorkspaceViewModel(
                 _owned.Track(new ManuscriptService(Notifications)),
                 new FakeBookTxtStructureService(),

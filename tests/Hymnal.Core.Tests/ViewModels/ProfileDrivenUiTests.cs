@@ -723,7 +723,7 @@ public sealed class ProfileDrivenUiTests : IDisposable
             var wordCount = new WordCountService();
             var projectSettings = new ProjectSettingsService(_store);
             PhaseService = new PhaseDataService(_store);
-            _editor = _owned.Track(new EditorViewModel(_store, Notifications, wordCount));
+            _editor = _owned.Track(new EditorViewModel(_store, Notifications, wordCount, new StoryFileWriter(_store)));
             _manuscript = _owned.Track(new ManuscriptService(Notifications, exclusions));
             LiveContexts.Add(this);
 

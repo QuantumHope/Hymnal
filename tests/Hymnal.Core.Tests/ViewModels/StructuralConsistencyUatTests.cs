@@ -545,7 +545,7 @@ public sealed class StructuralConsistencyUatTests
             ExclusionManifestService = new ExclusionManifestService(MetadataStore);
             PhaseDataService = new PhaseDataService(MetadataStore);
             TargetsService = new TargetsService(MetadataStore);
-            Editor = new EditorViewModel(MetadataStore, NotificationService, WordCountService);
+            Editor = new EditorViewModel(MetadataStore, NotificationService, WordCountService, new StoryFileWriter(MetadataStore));
             RegistryService = new ChapterRegistryService(MetadataStore);
             var history = new WordCountHistoryService(MetadataStore);
             ManuscriptService = new ManuscriptService(NotificationService, ExclusionManifestService);

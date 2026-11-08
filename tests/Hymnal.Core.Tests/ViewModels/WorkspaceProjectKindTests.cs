@@ -308,7 +308,7 @@ public sealed class WorkspaceProjectKindTests : IDisposable
             var registry = new ChapterRegistryService(store);
             var wordCount = new WordCountService();
             ProjectSettings = new ProjectSettingsService(store);
-            var editor = _owned.Track(new EditorViewModel(store, Notifications, wordCount));
+            var editor = _owned.Track(new EditorViewModel(store, Notifications, wordCount, new StoryFileWriter(store)));
             _manuscript = _owned.Track(new ManuscriptService(Notifications, exclusions));
             LiveContexts.Add(this);
 

@@ -291,7 +291,7 @@ public sealed class CorkboardViewSmokeTests
             ManuscriptRoot = Path.Combine(root, "manuscript");
             Directory.CreateDirectory(ManuscriptRoot);
 
-            EditorViewModel = _owned.Track(new EditorViewModel(MetadataStore, NotificationService, WordCountService));
+            EditorViewModel = _owned.Track(new EditorViewModel(MetadataStore, NotificationService, WordCountService, new StoryFileWriter(MetadataStore)));
             RegistryService = new ChapterRegistryService(MetadataStore);
             PhaseDataService = new PhaseDataService(MetadataStore);
             TargetsService = new TargetsService(MetadataStore);

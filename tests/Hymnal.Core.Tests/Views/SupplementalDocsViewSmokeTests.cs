@@ -82,7 +82,7 @@ public sealed class SupplementalDocsViewSmokeTests
         context.EditorViewModel.Text = expected;
         await context.EditorViewModel.SaveAsync();
 
-        using var reopenedEditor = new EditorViewModel(context.MetadataStore, context.NotificationService, context.WordCountService);
+        using var reopenedEditor = new EditorViewModel(context.MetadataStore, context.NotificationService, context.WordCountService, new StoryFileWriter(context.MetadataStore));
         var reopenedDocsVm = context.CreateDocsViewModel(reopenedEditor);
         await reopenedDocsVm.RefreshAsync();
 
@@ -160,7 +160,7 @@ public sealed class SupplementalDocsViewSmokeTests
             Directory.CreateDirectory(ManuscriptRoot);
             File.WriteAllText(Path.Combine(ManuscriptRoot, "Book.txt"), string.Empty);
 
-            EditorViewModel = _owned.Track(new EditorViewModel(MetadataStore, NotificationService, WordCountService));
+            EditorViewModel = _owned.Track(new EditorViewModel(MetadataStore, NotificationService, WordCountService, new StoryFileWriter(MetadataStore)));
             RegistryService = new ChapterRegistryService(MetadataStore);
             PhaseDataService = new PhaseDataService(MetadataStore);
             TargetsService = new TargetsService(MetadataStore);

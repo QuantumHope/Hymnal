@@ -8,6 +8,10 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <InternalsVisibleTo Include="Hymnal.Core.Tests" />
+  </ItemGroup>
+
+  <ItemGroup>
     <Folder Include="Models\" />
     <AvaloniaResource Include="Assets\**" />
     <AvaloniaResource Include="Views\MarkuaHighlighting.xshd" />

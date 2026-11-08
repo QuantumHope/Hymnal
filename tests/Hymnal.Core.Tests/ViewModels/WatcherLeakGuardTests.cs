@@ -43,7 +43,7 @@ public sealed class WatcherLeakGuardTests
                 var load = await manuscript.LoadWorkspaceAsync(root);
                 Assert.True(load.IsSuccess, load.Error);
 
-                var editor = owned.Track(new EditorViewModel(store, notifications, new WordCountService()));
+                var editor = owned.Track(new EditorViewModel(store, notifications, new WordCountService(), new StoryFileWriter(store)));
                 await editor.OpenArbitraryFileAsync(Path.Combine(root, "one.md"));
 
                 var workspace = new WorkspaceViewModel(

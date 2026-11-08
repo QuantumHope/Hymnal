@@ -413,7 +413,19 @@ public class WorkspaceViewModel : ViewModelBase
         }
 
         var absolutePath = ResolveAbsolutePath(node);
-        await _editor.OpenChapterAsync(node, absolutePath);
+        try
+        {
+            await _editor.OpenChapterAsync(node, absolutePath);
+        }
+        catch (Exception ex)
+        {
+            // The editor keeps the previous chapter (and its watcher); put the sidebar back on it.
+            _notificationService.ShowError($"Could not open '{node.Title}': {ex.Message}");
+            _isSwitching = true;
+            SelectedNode = previousNode;
+            _isSwitching = false;
+            return;
+        }
 
         // Only persist as "last chapter" for regular chapters, not parts.
         if (node.Kind == NodeKind.Chapter)

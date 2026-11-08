@@ -53,10 +53,24 @@ public class EditorViewModel : ViewModelBase, IDisposable, IOpenStoryBuffer
 
     private volatile StoryBuffer? _story;
 
+    /// <summary>
+    /// A chapter file as read: <see cref="Split"/> for a UTF-8 file, or <see cref="PlainText"/> (decoded the
+    /// pre-story way, lossily) for one that is not valid UTF-8, which is then edited as plain text.
+    /// </summary>
+    private sealed record ChapterRead(StorySplit? Split, string? PlainText);
+
+    // True while a chapter file (story or non-UTF-8 plain) is open, as opposed to Book.txt or a research file.
+    private bool _chapterOpen;
+
+    // Serializes the editor's own writes (saves and metadata applies). Lock order: the writer's metadata lock,
+    // then this gate, then the writer's file lock; plain saves never take the metadata lock.
+    private readonly SemaphoreSlim _writeGate = new(1, 1);
+
     // Bumped (on the UI thread) by every load and save, so an external-change read that the buffer has
     // since moved past is dropped instead of applied.
     private int _bufferGeneration;
     private bool _damagedBlockNoticeShown;
+    private bool _notUtf8NoticeShown;
 
     private FileSystemWatcher? _watcher;
     private Timer? _watcherDebounceTimer;
@@ -209,16 +223,15 @@ public class EditorViewModel : ViewModelBase, IDisposable, IOpenStoryBuffer
     /// <summary>Keep local edits: clear HasConflict / ConflictMessage only.</summary>
     public ReactiveCommand<Unit, Unit> KeepLocalCommand { get; }
 
-    /// <param name="storyFileWriter">Saves chapter files with their metadata block; the composition root shares
-    /// one with the rest of the app and attaches this editor as its buffer. Defaults to a private writer over
-    /// <paramref name="metadataStore"/>.</param>
+    /// <param name="storyFileWriter">Saves chapter files with their metadata block. Must be the app's shared
+    /// writer (its per-file locks only work when shared); the composition root attaches this editor to it.</param>
     public EditorViewModel(IMetadataStore metadataStore, INotificationService notificationService,
-        WordCountService wordCountService, StoryFileWriter? storyFileWriter = null)
+        WordCountService wordCountService, StoryFileWriter storyFileWriter)
     {
         _metadataStore = metadataStore;
         _notificationService = notificationService;
         _wordCountService = wordCountService;
-        _storyWriter = storyFileWriter ?? new StoryFileWriter(metadataStore);
+        _storyWriter = storyFileWriter;
 
         _canSave = this.WhenAnyValue(x => x.IsDirty, x => x.ActiveFilePath, (dirty, path) => dirty && path != null)
             .ToProperty(this, x => x.CanSave);
@@ -269,10 +282,10 @@ public class EditorViewModel : ViewModelBase, IDisposable, IOpenStoryBuffer
             if (ActiveFilePath == null) return;
             try
             {
-                if (_story is { } story)
+                if (_chapterOpen)
                 {
-                    using (await _storyWriter.HoldMetadataChangesAsync(story.FullPath))
-                        LoadStoryBuffer(ActiveFilePath, await ReadStoryFileAsync(ActiveFilePath));
+                    using (await _storyWriter.HoldMetadataChangesAsync(ActiveFilePath))
+                        LoadChapterBuffer(ActiveFilePath, await ReadChapterFileAsync(ActiveFilePath));
                 }
                 else
                 {
@@ -338,22 +351,33 @@ public class EditorViewModel : ViewModelBase, IDisposable, IOpenStoryBuffer
 
     /// <summary>
     /// Opens a chapter: stops any existing watcher, reads and splits the file (Text = prose, metadata block held),
-    /// clears dirty, then starts a new FileSystemWatcher. Throws <see cref="IOException"/> when the file cannot be
-    /// read or is not valid UTF-8.
+    /// clears dirty, then starts a new FileSystemWatcher. A file that is not valid UTF-8 opens as plain text.
+    /// When the file cannot be read, the previous buffer and its watcher stay and the exception is rethrown.
     /// </summary>
     public async Task OpenChapterAsync(ChapterNode node, string absolutePath)
     {
+        var previousPath = ActiveFilePath;
         StopWatcher();
 
-        // Holding off metadata changes to the old and new file while the buffer switches means a change
-        // pending for the new file is on disk before it is read, and later ones come to this buffer.
-        using (await _storyWriter.HoldMetadataChangesAsync(_story?.FullPath, absolutePath))
+        try
         {
-            var split = await ReadStoryFileAsync(absolutePath);
-            _damagedBlockNoticeShown = false;
-            LoadStoryBuffer(absolutePath, split);
-            ActiveNode = node;
-            ActiveFilePath = absolutePath;
+            // Holding off metadata changes to the old and new file while the buffer switches means a change
+            // pending for the new file is on disk before it is read, and later ones come to this buffer.
+            using (await _storyWriter.HoldMetadataChangesAsync(_story?.FullPath, absolutePath))
+            {
+                var read = await ReadChapterFileAsync(absolutePath);
+                _damagedBlockNoticeShown = false;
+                _notUtf8NoticeShown = false;
+                LoadChapterBuffer(absolutePath, read);
+                // Path before node: observers of ActiveNode (and tests waiting on it) then see the new path.
+                ActiveFilePath = absolutePath;
+                ActiveNode = node;
+            }
+        }
+        catch
+        {
+            RestartWatcherAfterFailedOpen(previousPath);
+            throw;
         }
 
         HasConflict = false;
@@ -364,10 +388,45 @@ public class EditorViewModel : ViewModelBase, IDisposable, IOpenStoryBuffer
         StartWatcher(absolutePath);
     }
 
-    private async Task<StorySplit> ReadStoryFileAsync(string absolutePath)
+    private void RestartWatcherAfterFailedOpen(string? previousPath)
     {
-        var read = await _storyWriter.ReadFileAsync(absolutePath);
-        return read.IsSuccess ? read.Value! : throw new IOException(read.Error);
+        if (previousPath != null && ActiveFilePath == previousPath)
+            StartWatcher(previousPath);
+    }
+
+    /// <summary>
+    /// Reads a chapter file through the writer; one that is not valid UTF-8 falls back to the lossy plain-text
+    /// read. Throws <see cref="IOException"/> for any other failure. Safe off the UI thread.
+    /// </summary>
+    private async Task<ChapterRead> ReadChapterFileAsync(string absolutePath)
+    {
+        var read = await _storyWriter.TryReadFileAsync(absolutePath).ConfigureAwait(false);
+        if (read.Result.IsSuccess)
+            return new ChapterRead(read.Result.Value!, null);
+        if (read.NotUtf8)
+            return new ChapterRead(null, await File.ReadAllTextAsync(absolutePath).ConfigureAwait(false));
+        throw new IOException(read.Result.Error);
+    }
+
+    /// <summary>Loads a chapter read: a story buffer, or a plain buffer (no story data) for a non-UTF-8 file.</summary>
+    private void LoadChapterBuffer(string absolutePath, ChapterRead read)
+    {
+        _chapterOpen = true;
+        if (read.Split is { } split)
+        {
+            LoadStoryBuffer(absolutePath, split);
+            return;
+        }
+
+        _story = null;
+        SetBufferContent(read.PlainText ?? "");
+        if (!_notUtf8NoticeShown)
+        {
+            _notUtf8NoticeShown = true;
+            _notificationService.ShowInfo(
+                $"'{Path.GetFileName(absolutePath)}' is not UTF-8 text. It is shown as best it can be read, saving " +
+                "writes it as UTF-8, and Hymnal keeps no story data in it.");
+        }
     }
 
     /// <summary>Puts a split story file into the buffer: prose (without a byte order mark) and its metadata.</summary>
@@ -412,16 +471,27 @@ public class EditorViewModel : ViewModelBase, IDisposable, IOpenStoryBuffer
     /// </summary>
     public async Task OpenArbitraryFileAsync(string absolutePath)
     {
+        var previousPath = ActiveFilePath;
         StopWatcher();
 
-        await SwitchAwayFromStoryAsync(async () =>
+        try
         {
-            var content = await File.ReadAllTextAsync(absolutePath);
-            _story = null;
-            SetBufferContent(content);
-            ActiveNode = null;
-            ActiveFilePath = absolutePath;
-        });
+            await SwitchAwayFromStoryAsync(async () =>
+            {
+                var content = await File.ReadAllTextAsync(absolutePath);
+                _story = null;
+                _chapterOpen = false;
+                SetBufferContent(content);
+                ActiveNode = null;
+                ActiveFilePath = absolutePath;
+            });
+        }
+        catch
+        {
+            RestartWatcherAfterFailedOpen(previousPath);
+            throw;
+        }
+
         HasConflict = false;
         ConflictMessage = null;
         ShowMissingChapterPrompt = false;
@@ -448,6 +518,7 @@ public class EditorViewModel : ViewModelBase, IDisposable, IOpenStoryBuffer
     {
         StopWatcher();
         _story = null;
+        _chapterOpen = false;
         HasConflict = false;
         ConflictMessage = null;
         ActiveNode = node;
@@ -472,6 +543,7 @@ public class EditorViewModel : ViewModelBase, IDisposable, IOpenStoryBuffer
         await SwitchAwayFromStoryAsync(async () =>
         {
             _story = null;
+            _chapterOpen = false;
             ActiveNode = null;
 
             if (File.Exists(bookTxtPath))
@@ -505,8 +577,8 @@ public class EditorViewModel : ViewModelBase, IDisposable, IOpenStoryBuffer
 
     /// <summary>
     /// Atomically writes Text to ActiveFilePath (a chapter file with its metadata block merged back). On
-    /// success, sets OriginalText = Text (clears IsDirty). On failure, calls ShowError and re-throws so
-    /// save-before-switch callers can abort the chapter switch.
+    /// success, sets OriginalText to the saved text (clears IsDirty unless Text changed meanwhile). On failure,
+    /// calls ShowError and re-throws so save-before-switch callers can abort the chapter switch.
     /// </summary>
     public async Task SaveAsync()
     {
@@ -514,7 +586,16 @@ public class EditorViewModel : ViewModelBase, IDisposable, IOpenStoryBuffer
 
         try
         {
-            await SaveCoreAsync(_story, adoptStory: false);
+            await _writeGate.WaitAsync();
+            try
+            {
+                // Resolved inside the gate, so a save queued behind a metadata apply writes the applied metadata.
+                await WriteBufferAsync(_story);
+            }
+            finally
+            {
+                _writeGate.Release();
+            }
         }
         catch (Exception ex)
         {
@@ -524,40 +605,38 @@ public class EditorViewModel : ViewModelBase, IDisposable, IOpenStoryBuffer
     }
 
     /// <summary>
-    /// Writes the buffer to ActiveFilePath, as a story file merged with <paramref name="story"/>'s metadata when
-    /// it is not null, else as plain text. With <paramref name="adoptStory"/>, a successful write also makes
-    /// <paramref name="story"/> the held story state (a metadata apply); a plain save never replaces it, so a
-    /// save that overlaps an apply cannot restore the older metadata. Throws on failure.
+    /// Writes the buffer to ActiveFilePath: merged with <paramref name="story"/>'s metadata when it is not null,
+    /// else as plain text. Caller holds <see cref="_writeGate"/>. Throws on failure.
     /// </summary>
-    private async Task SaveCoreAsync(StoryBuffer? story, bool adoptStory)
+    private async Task WriteBufferAsync(StoryBuffer? story)
     {
         var savePath = ActiveFilePath;
+        if (savePath == null)
+            return;
+
+        var text = Text;
         StopWatcher();
 
         try
         {
             if (story is not null)
             {
-                var prose = story.HasByteOrderMark ? ByteOrderMark + Text : Text;
-                var written = await _storyWriter.WriteFileAsync(savePath!, prose, story.Metadata, story.LineEnding);
+                var prose = story.HasByteOrderMark ? ByteOrderMark + text : text;
+                var written = await _storyWriter.WriteFileAsync(savePath, prose, story.Metadata, story.LineEnding);
                 if (!written.IsSuccess)
                     throw new IOException(written.Error);
-
-                if (adoptStory && _story is { } current
-                    && StoryFileWriter.PathComparer.Equals(current.FullPath, story.FullPath))
-                    _story = story;
             }
             else
             {
-                await _metadataStore.WriteTextAtomicAsync(savePath!, Text);
+                await _metadataStore.WriteTextAtomicAsync(savePath, text);
             }
 
             _bufferGeneration++;
             _suppressDirtyTracking = true;
             try
             {
-                OriginalText = Text;
-                SetDirtyFlag(false);
+                OriginalText = text;
+                SetDirtyFlag(!string.Equals(Text, text, StringComparison.Ordinal));
             }
             finally
             {
@@ -570,7 +649,7 @@ public class EditorViewModel : ViewModelBase, IDisposable, IOpenStoryBuffer
         }
         finally
         {
-            if (savePath != null && ActiveFilePath == savePath)
+            if (ActiveFilePath == savePath)
                 StartWatcher(savePath);
         }
     }
@@ -617,17 +696,30 @@ public class EditorViewModel : ViewModelBase, IDisposable, IOpenStoryBuffer
 
     private async Task<StoryResult> ApplyMetadataOnUiThreadAsync(EmbeddedStoryMetadata? metadata)
     {
-        if (_story is not { } story || ActiveFilePath is null)
-            return StoryResult.Fail("The story file is no longer open in the editor.");
-
+        await _writeGate.WaitAsync();
         try
         {
-            await SaveCoreAsync(story with { Metadata = metadata }, adoptStory: true);
+            // Checked inside the gate: the buffer may have closed, or a conflict arisen, while waiting.
+            if (_story is not { } story || ActiveFilePath is null)
+                return StoryResult.Fail("The story file is no longer open in the editor.");
+
+            // Saving now would overwrite the external version the author has not yet chosen to keep or discard.
+            if (HasConflict)
+                return StoryResult.Fail($"Resolve the external change to '{Path.GetFileName(ActiveFilePath)}' first.");
+
+            var updated = story with { Metadata = metadata };
+            await WriteBufferAsync(updated);
+            if (_story is { } current && StoryFileWriter.PathComparer.Equals(current.FullPath, updated.FullPath))
+                _story = updated;
             return StoryResult.Ok(CoreUnit.Default);
         }
         catch (Exception ex)
         {
             return StoryResult.Fail(ex.Message);
+        }
+        finally
+        {
+            _writeGate.Release();
         }
     }
 
@@ -664,43 +756,48 @@ public class EditorViewModel : ViewModelBase, IDisposable, IOpenStoryBuffer
             Timeout.Infinite);
     }
 
-    private async Task ProcessExternalFileChangeAsync()
+    /// <summary>
+    /// Handles an external change of the open file now, as the watcher does, but applying the result on the
+    /// calling thread. Test hook for driving external changes without a dispatcher.
+    /// </summary>
+    internal Task ProcessExternalFileChangeNowAsync() =>
+        ProcessExternalFileChangeAsync(apply =>
+        {
+            apply();
+            return Task.CompletedTask;
+        });
+
+    private Task ProcessExternalFileChangeAsync() =>
+        ProcessExternalFileChangeAsync(async apply => await Dispatcher.UIThread.InvokeAsync(apply));
+
+    /// <summary>Re-reads the open file after an external change and applies it through <paramref name="onUiThread"/>.</summary>
+    private async Task ProcessExternalFileChangeAsync(Func<Action, Task> onUiThread)
     {
         var path = ActiveFilePath;
-        var isStory = _story != null;
+        var isChapter = _chapterOpen;
         var generation = Volatile.Read(ref _bufferGeneration);
         if (_watcher == null || path == null)
             return;
 
         string? content = null;
-        StorySplit? split = null;
+        ChapterRead? chapter = null;
         try
         {
-            if (isStory)
-            {
-                var read = await _storyWriter.ReadFileAsync(path).ConfigureAwait(false);
-                split = read.IsSuccess ? read.Value : throw new IOException(read.Error);
-            }
+            if (isChapter)
+                chapter = await ReadChapterFileAsync(path).ConfigureAwait(false);
             else
-            {
                 content = await File.ReadAllTextAsync(path).ConfigureAwait(false);
-            }
         }
         catch (Exception ex)
         {
-            await Avalonia.Threading.Dispatcher.UIThread.InvokeAsync(() =>
-                _notificationService.ShowError($"Auto-reload failed: {ex.Message}"));
+            await onUiThread(() => _notificationService.ShowError($"Auto-reload failed: {ex.Message}")).ConfigureAwait(false);
             return;
         }
 
-        await Avalonia.Threading.Dispatcher.UIThread.InvokeAsync(() => ApplyExternalChange(content, split, generation));
+        await onUiThread(() => ApplyExternalChange(content, chapter, generation)).ConfigureAwait(false);
     }
 
-    /// <summary>Applies an external change from the file's full text (split when a chapter file is open).</summary>
-    private void ApplyExternalFileChange(string content) =>
-        ApplyExternalChange(content, _story != null ? StoryFileFormat.Split(content) : null, _bufferGeneration);
-
-    private void ApplyExternalChange(string? content, StorySplit? split, int generation)
+    private void ApplyExternalChange(string? content, ChapterRead? chapter, int generation)
     {
         // Guard again after the async read — state may have changed, and a load or save since the
         // read means the buffer is newer than what was read.
@@ -717,8 +814,8 @@ public class EditorViewModel : ViewModelBase, IDisposable, IOpenStoryBuffer
 
         if (!IsDirty)
         {
-            if (_story != null && split != null)
-                LoadStoryBuffer(ActiveFilePath, split);
+            if (_chapterOpen && chapter != null)
+                LoadChapterBuffer(ActiveFilePath, chapter);
             else
                 SetBufferContent(content ?? "");
             _notificationService.ShowInfo(
@@ -752,6 +849,7 @@ public class EditorViewModel : ViewModelBase, IDisposable, IOpenStoryBuffer
     {
         StopWatcher();
         _story = null;
+        _chapterOpen = false;
         HasConflict = false;
         ConflictMessage = null;
         ActiveNode = null;

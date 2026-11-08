@@ -30,3 +30,7 @@ public sealed record EmbeddedStoryMetadata(
 /// is then kept in <paramref name="Prose"/>.</param>
 /// <param name="LineEnding">The file's line ending ("\n" or "\r\n"), detected from its first line break.</param>
 public sealed record StorySplit(string Prose, EmbeddedStoryMetadata? Metadata, bool HadMalformedBlock, string LineEnding);
+
+/// <summary>A story file read: the split file, or a failure with <paramref name="NotUtf8"/> set when the only
+/// problem is that the file is not valid UTF-8.</summary>
+public sealed record StoryFileRead(Hymnal.Core.Common.Result<StorySplit> Result, bool NotUtf8);

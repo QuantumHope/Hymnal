@@ -130,6 +130,7 @@ internal sealed class PlanTestContext : IDisposable
     public ProjectSettingsService ProjectSettings { get; }
     public IBeatBoardService Boards { get; }
     public WorkspaceViewModel Workspace { get; }
+    public EditorViewModel Editor => _editor;
     public CorkboardViewModel Corkboard { get; }
     public BeatBoardViewModel Board { get; }
 
@@ -145,7 +146,7 @@ internal sealed class PlanTestContext : IDisposable
         _structure = new BookTxtStructureService(_store, exclusions, registry);
         ProjectSettings = new ProjectSettingsService(_store);
         Boards = boards?.Invoke(_store) ?? new BeatBoardService(_store);
-        _editor = _owned.Track(new EditorViewModel(_store, Notifications, wordCount));
+        _editor = _owned.Track(new EditorViewModel(_store, Notifications, wordCount, new StoryFileWriter(_store)));
         _manuscript = _owned.Track(new ManuscriptService(Notifications, exclusions));
 
         Workspace = new WorkspaceViewModel(

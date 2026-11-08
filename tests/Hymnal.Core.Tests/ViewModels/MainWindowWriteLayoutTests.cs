@@ -203,7 +203,7 @@ public sealed class MainWindowWriteLayoutTests : IDisposable
             WorkspaceRoot = Path.Combine(Path.GetTempPath(), "hymnal-layout-tests", Guid.NewGuid().ToString("N"));
             Directory.CreateDirectory(Path.Combine(WorkspaceRoot, "manuscript"));
 
-            Editor = _owned.Track(new EditorViewModel(MetadataStore, NotificationService, WordCountService));
+            Editor = _owned.Track(new EditorViewModel(MetadataStore, NotificationService, WordCountService, new StoryFileWriter(MetadataStore)));
             Workspace = new WorkspaceViewModel(
                 _owned.Track(new ManuscriptService(NotificationService)),
                 new FakeBookTxtStructureService(),

@@ -1003,7 +1003,7 @@ public class GanttViewModelTests
             RegistryService = new ChapterRegistryService(MetadataStore);
             PhaseDataService = new PhaseDataService(MetadataStore);
             TargetsService = new TargetsService(MetadataStore);
-            Editor = _owned.Track(new EditorViewModel(MetadataStore, NotificationService, WordCountService));
+            Editor = _owned.Track(new EditorViewModel(MetadataStore, NotificationService, WordCountService, new StoryFileWriter(MetadataStore)));
             var history = new WordCountHistoryService(MetadataStore);
             ManuscriptService = _owned.Track(new ManuscriptService(NotificationService, ExclusionManifestService));
             StructureService = new RecordingStructureService();
@@ -1266,7 +1266,7 @@ public class GanttViewModelTests
             var manuscriptService = _owned.Track(new ManuscriptService(
                 _notificationService,
                 new ExclusionManifestService(metadataStore)));
-            var editor = _owned.Track(new EditorViewModel(metadataStore, _notificationService, new WordCountService()));
+            var editor = _owned.Track(new EditorViewModel(metadataStore, _notificationService, new WordCountService(), new StoryFileWriter(metadataStore)));
 
             Workspace = new WorkspaceViewModel(
                 manuscriptService,

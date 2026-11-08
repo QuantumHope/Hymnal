@@ -13,7 +13,9 @@ namespace Hymnal.ViewModels;
 /// <summary>
 /// The editor hides a story file's trailing <c>&lt;!-- hymnal:v1 … --&gt;</c> block (split on load, merged
 /// back on save), acts as the <see cref="StoryFileWriter"/>'s open buffer, and counts prose only.
+/// Runs in the non-parallel "AvaloniaUi" collection: some cases use the shared headless UI session.
 /// </summary>
+[Collection("AvaloniaUi")]
 public sealed class EditorEmbeddedBlockTests : IDisposable
 {
     private static readonly byte[] Utf8Bom = [0xEF, 0xBB, 0xBF];
@@ -47,12 +49,26 @@ public sealed class EditorEmbeddedBlockTests : IDisposable
     private static EmbeddedStoryMetadata Meta(string notes, ChapterStatus? status = ChapterStatus.Drafting) =>
         new("story-1", status, null, null, null, null, notes, null);
 
-    private EditorViewModel CreateEditor(OwnedDisposables? owner = null)
+    private EditorViewModel CreateEditor(OwnedDisposables? owner = null) => CreateEditor(_writer, new MetadataStore(), owner);
+
+    private EditorViewModel CreateEditor(StoryFileWriter writer, IMetadataStore store, OwnedDisposables? owner = null)
     {
         var editor = (owner ?? _owned).Track(new EditorViewModel(
-            new MetadataStore(), _notifications, new WordCountService(), _writer) { HasWorkspace = true });
-        _writer.AttachBuffer(editor);
+            store, _notifications, new WordCountService(), writer) { HasWorkspace = true });
+        writer.AttachBuffer(editor);
         return editor;
+    }
+
+    /// <summary>The real store, with every write delayed so a write can be caught in flight.</summary>
+    private sealed class SlowStore(TimeSpan delay) : IMetadataStore
+    {
+        private readonly MetadataStore _inner = new();
+
+        public async Task WriteTextAtomicAsync(string absolutePath, string content)
+        {
+            await Task.Delay(delay);
+            await _inner.WriteTextAtomicAsync(absolutePath, content);
+        }
     }
 
     private string WriteFile(string name, string text) => WriteBytes(name, Encoding.UTF8.GetBytes(text));
@@ -70,12 +86,6 @@ public sealed class EditorEmbeddedBlockTests : IDisposable
 
     private static string Json(EmbeddedStoryMetadata? m) => m is null ? "null" : StoryFileFormat.SerializeMetadata(m);
 
-    private static void ApplyExternalFileChange(EditorViewModel editor, string content)
-    {
-        var method = typeof(EditorViewModel).GetMethod("ApplyExternalFileChange", BindingFlags.Instance | BindingFlags.NonPublic)
-            ?? throw new InvalidOperationException("ApplyExternalFileChange was not found.");
-        method.Invoke(editor, [content]);
-    }
 
     private static async Task ExecuteAsync(IObservable<System.Reactive.Unit> execution)
     {
@@ -111,7 +121,7 @@ public sealed class EditorEmbeddedBlockTests : IDisposable
         var editor = CreateEditor();
 
         await editor.OpenChapterAsync(Node("story.md"), path);
-        ApplyExternalFileChange(editor, text);
+        await editor.ProcessExternalFileChangeNowAsync();
 
         Assert.Equal(text, editor.Text);
         Assert.Null(editor.CurrentMetadata);
@@ -133,16 +143,53 @@ public sealed class EditorEmbeddedBlockTests : IDisposable
         Assert.Equal([.. Utf8Bom, .. Encoding.UTF8.GetBytes("# Title\n\nBody, edited.")], File.ReadAllBytes(path));
     }
 
-    [Fact]
-    public async Task Opening_non_utf8_story_file_fails_without_changing_editor()
+    [Theory]
+    [InlineData(new byte[] { 0x63, 0x61, 0x66, 0xE9 })]       // Latin-1 "café"
+    [InlineData(new byte[] { 0xFF, 0xFE, 0x41, 0x00 })]       // UTF-16LE "A" with BOM
+    public async Task Non_utf8_chapter_opens_as_plain_text_and_saves_as_utf8(byte[] bytes)
     {
-        var path = WriteBytes("story.md", [0x48, 0xFF, 0x49]);
+        var path = WriteBytes("story.md", bytes);
+        var legacy = await File.ReadAllTextAsync(path);
         var editor = CreateEditor();
 
-        await Assert.ThrowsAsync<IOException>(() => editor.OpenChapterAsync(Node("story.md"), path));
+        await editor.OpenChapterAsync(Node("story.md"), path);
+        await editor.ProcessExternalFileChangeNowAsync();
 
-        Assert.Null(editor.ActiveFilePath);
+        Assert.Equal(legacy, editor.Text);
         Assert.False(editor.HoldsFile(path));
+        Assert.Null(editor.CurrentMetadata);
+        Assert.Single(_notifications.Infos, m => m.Contains("story.md") && m.Contains("not UTF-8"));
+
+        var update = await _writer.UpdateMetadataAsync(path, _ => Meta("n"));
+        Assert.False(update.IsSuccess);
+        Assert.Equal(bytes, File.ReadAllBytes(path));
+
+        editor.Text = legacy + " edited";
+        await editor.SaveAsync();
+        Assert.Equal(new UTF8Encoding(false).GetBytes(legacy + " edited"), File.ReadAllBytes(path));
+    }
+
+    [Fact]
+    public async Task Failed_open_keeps_previous_chapter_and_its_watcher()
+    {
+        var first = WriteFile("first.md", "First.");
+        var second = WriteFile("second.md", "Second.");
+        var editor = CreateEditor();
+        await editor.OpenChapterAsync(Node("first.md"), first);
+        File.SetUnixFileMode(second, UnixFileMode.None);
+        try
+        {
+            await Assert.ThrowsAsync<IOException>(() => editor.OpenChapterAsync(Node("second.md"), second));
+        }
+        finally
+        {
+            File.SetUnixFileMode(second, UnixFileMode.UserRead | UnixFileMode.UserWrite);
+        }
+
+        Assert.Equal(first, editor.ActiveFilePath);
+        Assert.Equal("First.", editor.Text);
+        Assert.True(editor.HoldsFile(first));
+        Assert.NotNull(typeof(EditorViewModel).GetField("_watcher", BindingFlags.Instance | BindingFlags.NonPublic)!.GetValue(editor));
     }
 
     // ── Save ─────────────────────────────────────────────────────────────────
@@ -326,7 +373,7 @@ public sealed class EditorEmbeddedBlockTests : IDisposable
         {
             using var owner = new OwnedDisposables();
             var editor = CreateEditor(owner);
-            await editor.OpenChapterAsync(Node("story.md"), path);
+            await PlanTestHarness.Within(editor.OpenChapterAsync(Node("story.md"), path));
             editor.Text = "Unsaved on UI.";
 
             var update = Task.Run(() => _writer.UpdateMetadataAsync(path, m => m! with { Notes = "ui" }));
@@ -342,23 +389,65 @@ public sealed class EditorEmbeddedBlockTests : IDisposable
     }
 
     [Fact]
-    public async Task Opening_while_writer_update_is_pending_never_keeps_stale_metadata()
+    public async Task Opening_waits_for_a_metadata_change_in_progress()
     {
         var path = WriteFile("story.md", StoryFileFormat.Merge("Prose.", Meta("old"), "\n"));
         var editor = CreateEditor();
 
+        // Stands in for an update that has decided the file is closed and is writing it.
         var hold = await _writer.HoldMetadataChangesAsync(path);
-        var update = _writer.UpdateMetadataAsync(path, m => m! with { Notes = "pending" });
         var open = editor.OpenChapterAsync(Node("story.md"), path);
-        await Task.Delay(50);
+        await Task.Delay(100);
+        Assert.False(open.IsCompleted);
+        Assert.Null(editor.ActiveFilePath);
+
+        File.WriteAllText(path, StoryFileFormat.Merge("Prose.", Meta("written meanwhile"), "\n"));
         hold.Dispose();
         await open.WaitAsync(Step);
-        var result = await update.WaitAsync(Step);
 
-        Assert.True(result.IsSuccess, result.Error);
-        Assert.Equal("pending", editor.CurrentMetadata?.Notes);
+        Assert.Equal("written meanwhile", editor.CurrentMetadata?.Notes);
         Assert.Equal("Prose.", editor.Text);
-        Assert.Equal("pending", StoryFileFormat.Split(ReadText(path)).Metadata?.Notes);
+    }
+
+    [Fact]
+    public async Task Save_started_during_an_apply_writes_the_applied_metadata()
+    {
+        var path = WriteFile("story.md", StoryFileFormat.Merge("Prose.", Meta("old"), "\n"));
+        var store = new SlowStore(TimeSpan.FromMilliseconds(200));
+        var writer = new StoryFileWriter(store);
+        var editor = CreateEditor(writer, store);
+        await editor.OpenChapterAsync(Node("story.md"), path);
+
+        var apply = editor.ApplyMetadataAsync(Meta("new"));
+        editor.Text = "Typed during the apply.";
+        var save = editor.SaveAsync();
+        var applied = await apply.WaitAsync(Step);
+        await save.WaitAsync(Step);
+
+        Assert.True(applied.IsSuccess, applied.Error);
+        Assert.Equal(StoryFileFormat.Merge("Typed during the apply.", Meta("new"), "\n"), ReadText(path));
+        Assert.Equal("new", editor.CurrentMetadata?.Notes);
+        Assert.False(editor.IsDirty);
+    }
+
+    [Fact]
+    public async Task Apply_during_unresolved_external_conflict_fails_and_keeps_external_version()
+    {
+        var path = WriteFile("story.md", StoryFileFormat.Merge("Before.", Meta("old"), "\n"));
+        var editor = CreateEditor();
+        await editor.OpenChapterAsync(Node("story.md"), path);
+        editor.Text = "Local edit.";
+        var external = StoryFileFormat.Merge("External.", Meta("external"), "\n");
+        await File.WriteAllTextAsync(path, external);
+        await editor.ProcessExternalFileChangeNowAsync();
+        Assert.True(editor.HasConflict);
+
+        var result = await editor.ApplyMetadataAsync(Meta("new"));
+
+        Assert.False(result.IsSuccess);
+        Assert.Contains("Resolve the external change to 'story.md' first.", result.Error);
+        Assert.Equal(external, ReadText(path));
+        Assert.Equal("old", editor.CurrentMetadata?.Notes);
     }
 
     // ── External changes ─────────────────────────────────────────────────────
@@ -372,7 +461,7 @@ public sealed class EditorEmbeddedBlockTests : IDisposable
         {
             using var owner = new OwnedDisposables();
             var editor = CreateEditor(owner);
-            await editor.OpenChapterAsync(Node("story.md"), path);
+            await PlanTestHarness.Within(editor.OpenChapterAsync(Node("story.md"), path));
 
             await File.WriteAllTextAsync(path, StoryFileFormat.Merge("After checkout.", Meta("checked out"), "\n"));
 
@@ -394,7 +483,7 @@ public sealed class EditorEmbeddedBlockTests : IDisposable
         var external = StoryFileFormat.Merge("External.", Meta("external"), "\n");
         await File.WriteAllTextAsync(path, external);
 
-        ApplyExternalFileChange(editor, external);
+        await editor.ProcessExternalFileChangeNowAsync();
 
         Assert.True(editor.HasConflict);
         Assert.Equal("Local edit.", editor.Text);
@@ -414,9 +503,9 @@ public sealed class EditorEmbeddedBlockTests : IDisposable
         var path = WriteFile("story.md", StoryFileFormat.Merge("Before.", Meta("old"), "\n"));
         var editor = CreateEditor();
         await editor.OpenChapterAsync(Node("story.md"), path);
-        var external = StoryFileFormat.Merge("External.", Meta("external"), "\n");
+        await File.WriteAllTextAsync(path, StoryFileFormat.Merge("External.", Meta("external"), "\n"));
 
-        ApplyExternalFileChange(editor, external);
+        await editor.ProcessExternalFileChangeNowAsync();
 
         Assert.Equal("External.", editor.Text);
         Assert.Equal("external", editor.CurrentMetadata?.Notes);
@@ -435,7 +524,7 @@ public sealed class EditorEmbeddedBlockTests : IDisposable
         {
             using var owner = new OwnedDisposables();
             var editor = CreateEditor(owner);
-            await editor.OpenChapterAsync(Node("story.md"), path);
+            await PlanTestHarness.Within(editor.OpenChapterAsync(Node("story.md"), path));
 
             await PlanTestHarness.PumpUntilAsync(() => editor.LiveWordCount == 3);
             return 0;

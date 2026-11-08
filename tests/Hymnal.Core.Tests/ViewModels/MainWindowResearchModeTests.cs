@@ -173,7 +173,7 @@ public sealed class MainWindowResearchModeTests
             Directory.CreateDirectory(ManuscriptRoot);
             Directory.CreateDirectory(DocsRoot);
 
-            EditorViewModel = _owned.Track(new EditorViewModel(MetadataStore, NotificationService, WordCountService));
+            EditorViewModel = _owned.Track(new EditorViewModel(MetadataStore, NotificationService, WordCountService, new StoryFileWriter(MetadataStore)));
             Workspace = new SpyWorkspaceViewModel(
                 _owned.Track(new ManuscriptService(NotificationService)),
                 new FakeBookTxtStructureService(),

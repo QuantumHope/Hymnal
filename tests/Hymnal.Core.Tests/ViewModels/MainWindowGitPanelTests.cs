@@ -124,7 +124,7 @@ public sealed class MainWindowGitPanelTests : IDisposable
             Directory.CreateDirectory(WorkspaceRoot);
             Directory.CreateDirectory(ManuscriptRoot);
 
-            Editor = _owned.Track(new EditorViewModel(MetadataStore, Notifications, WordCountService)
+            Editor = _owned.Track(new EditorViewModel(MetadataStore, Notifications, WordCountService, new StoryFileWriter(MetadataStore))
             {
                 HasWorkspace = true
             });
