@@ -31,6 +31,14 @@ public sealed class NotesService : INotesService
     }
 
     /// <inheritdoc/>
+    public Task DeleteAsync(string absoluteNotesPath)
+    {
+        if (File.Exists(absoluteNotesPath))
+            File.Delete(absoluteNotesPath);
+        return Task.CompletedTask;
+    }
+
+    /// <inheritdoc/>
     public static string DeriveNotesPath(string workspaceRoot, string chapterRelativePath) =>
         INotesService.DeriveNotesPath(workspaceRoot, chapterRelativePath);
 }

@@ -70,6 +70,9 @@ public sealed class ChapterInfoViewModel : ViewModelBase, IDisposable
 
     private readonly Subject<Unit> _scheduleSaveSubject = new();
 
+    /// <summary>True from a schedule row edit until the next schedule save starts.</summary>
+    private volatile bool _scheduleSavePending;
+
     /// <summary>Change subscriptions for the current <see cref="PhaseScheduleRows"/>.</summary>
     private readonly SerialDisposable _scheduleRowSubscriptions = new();
 
@@ -608,7 +611,10 @@ public sealed class ChapterInfoViewModel : ViewModelBase, IDisposable
                     .Subscribe(_ =>
                     {
                         if (!_suppressAutoSave)
+                        {
+                            _scheduleSavePending = true;
                             _scheduleSaveSubject.OnNext(Unit.Default);
+                        }
                     }));
         }
         _scheduleRowSubscriptions.Disposable = subscriptions;
@@ -636,6 +642,27 @@ public sealed class ChapterInfoViewModel : ViewModelBase, IDisposable
         catch (Exception ex)
         {
             Avalonia.Threading.Dispatcher.UIThread.Post(() => _notificationService.ShowError($"Schedule save failed: {ex.Message}"));
+        }
+    }
+
+    /// <summary>
+    /// Saves schedule edits still waiting on the debounce now. True when nothing was pending or the save
+    /// succeeded; false (after showing the error) when it failed.
+    /// </summary>
+    public async Task<bool> FlushScheduleAsync()
+    {
+        if (!_scheduleSavePending)
+            return true;
+        try
+        {
+            await SaveScheduleAsync().ConfigureAwait(false);
+            return true;
+        }
+        catch (Exception ex)
+        {
+            _scheduleSavePending = true;
+            Avalonia.Threading.Dispatcher.UIThread.Post(() => _notificationService.ShowError($"Schedule save failed: {ex.Message}"));
+            return false;
         }
     }
 
@@ -765,6 +792,7 @@ public sealed class ChapterInfoViewModel : ViewModelBase, IDisposable
 
     private async Task SaveScheduleAsync()
     {
+        _scheduleSavePending = false;
         var chapterVm = _activeChapterVm;
         var uuid = _loadedUuid;
         var workspaceRoot = _workspaceViewModel.WorkspaceRoot;

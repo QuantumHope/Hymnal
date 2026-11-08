@@ -53,6 +53,12 @@ public sealed class EmbeddedStoryMetadataStore(SidecarStoryMetadataStore sidecar
     /// <summary>Book.txt lists no story file: every story's data is refused.</summary>
     public void SetNoStoryFile() => _state = new(null, NoStoryFileMessage);
 
+    /// <summary>The story whose data lives in its own file (possibly unavailable); null when none is known.</summary>
+    public StoryRef? Primary => _state.Primary;
+
+    /// <summary>True when Book.txt lists no story file, so no story's data is embedded.</summary>
+    public bool HasNoStoryFile => _state is { Primary: null, Unavailable: NoStoryFileMessage };
+
     // ── Phase data ───────────────────────────────────────────────────────────
 
     public async Task<Dictionary<string, PhaseData>> LoadPhaseDataAsync(string root, IReadOnlyList<StoryRef> stories)
@@ -256,7 +262,7 @@ public sealed class EmbeddedStoryMetadataStore(SidecarStoryMetadataStore sidecar
             : current with { Id = current.Id ?? uuid };
     }
 
-    private static PhaseData? ToPhaseData(EmbeddedStoryMetadata? block)
+    internal static PhaseData? ToPhaseData(EmbeddedStoryMetadata? block)
     {
         if (block is null)
             return null;
@@ -277,7 +283,7 @@ public sealed class EmbeddedStoryMetadataStore(SidecarStoryMetadataStore sidecar
         };
     }
 
-    private static EmbeddedStoryMetadata WithPhaseData(EmbeddedStoryMetadata block, PhaseData data) =>
+    internal static EmbeddedStoryMetadata WithPhaseData(EmbeddedStoryMetadata block, PhaseData data) =>
         block with
         {
             Status = data.Status,

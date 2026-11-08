@@ -2,9 +2,11 @@ using System;
 using System.Collections.ObjectModel;
 using System.Linq;
 using System.Collections.Generic;
+using System.Collections.Specialized;
 using System.Reactive;
 using System.Reactive.Linq;
 using System.Threading.Tasks;
+using Hymnal.Core.Common;
 using Hymnal.Core.Interfaces;
 using Hymnal.Core.Models;
 using Hymnal.Core.Models.Ai;
@@ -30,7 +32,23 @@ public class SettingsViewModel : ViewModelBase
     private readonly ProjectSettingsService? _projectSettings;
     private readonly IBeatBoardService? _beatBoards;
     private readonly BeatBoardViewModel? _beatBoard;
+    private readonly StorageMigrator? _storageMigrator;
+    private readonly Func<Task<bool>>? _flushStoryEdits;
     private readonly ObservableAsPropertyHelper<string?> _projectChangeSummary;
+    private readonly ObservableAsPropertyHelper<bool> _isStorageOptionVisible;
+    private readonly ObservableAsPropertyHelper<bool> _isStorageOptionEnabled;
+    private readonly ObservableAsPropertyHelper<string?> _storageOptionExplanation;
+
+    /// <summary>Impact summary when "Keep everything in the story file" is turned on.</summary>
+    public const string MoveIntoFileSummary =
+        "The story's status, target, notes and beats will be kept at the end of its file.";
+
+    /// <summary>Impact summary when "Keep everything in the story file" is turned off.</summary>
+    public const string MoveOutOfFileSummary =
+        "The story's status, target, notes and beats will move from its file into project data.";
+
+    /// <summary>Why "Keep everything in the story file" can't be turned on.</summary>
+    public const string StorageOptionUnavailable = "Available when Book.txt lists exactly one story file.";
 
     public ObservableCollection<ProviderProfileViewModel> Profiles { get; } = new();
 
@@ -55,8 +73,35 @@ public class SettingsViewModel : ViewModelBase
         set => this.RaiseAndSetIfChanged(ref _selectedProjectKind, value);
     }
 
-    /// <summary>Summary of what switching to the selected kind does; null when unchanged.</summary>
+    /// <summary>Summary of what applying the selected kind and storage does; null when unchanged.</summary>
     public string? ProjectChangeSummary => _projectChangeSummary.Value;
+
+    private bool _keepInStoryFile;
+    /// <summary>"Keep everything in the story file": the Short Story's data lives in its file's trailing block.</summary>
+    public bool KeepInStoryFile
+    {
+        get => _keepInStoryFile;
+        set => this.RaiseAndSetIfChanged(ref _keepInStoryFile, value);
+    }
+
+    private int _storyFileCount;
+    /// <summary>How many chapter files Book.txt lists, missing ones included.</summary>
+    public int StoryFileCount
+    {
+        get => _storyFileCount;
+        private set => this.RaiseAndSetIfChanged(ref _storyFileCount, value);
+    }
+
+    /// <summary>The storage option applies to Short Story projects only.</summary>
+    public bool IsStorageOptionVisible => _isStorageOptionVisible.Value;
+
+    /// <summary>
+    /// The option can be turned on only when Book.txt lists exactly one story file; it can always be turned off.
+    /// </summary>
+    public bool IsStorageOptionEnabled => _isStorageOptionEnabled.Value;
+
+    /// <summary>One line saying why the option is disabled; null when it is enabled.</summary>
+    public string? StorageOptionExplanation => _storageOptionExplanation.Value;
 
     public ReactiveCommand<ProjectTypeCardViewModel, Unit> SelectProjectKindCommand { get; }
     public ReactiveCommand<Unit, Unit> ApplyProjectKindCommand { get; }
@@ -69,7 +114,9 @@ public class SettingsViewModel : ViewModelBase
         WorkspaceViewModel? workspace = null,
         ProjectSettingsService? projectSettings = null,
         IBeatBoardService? beatBoards = null,
-        BeatBoardViewModel? beatBoard = null)
+        BeatBoardViewModel? beatBoard = null,
+        StorageMigrator? storageMigrator = null,
+        Func<Task<bool>>? flushStoryEdits = null)
     {
         _profileService = profileService;
         _credentials = credentials;
@@ -79,6 +126,8 @@ public class SettingsViewModel : ViewModelBase
         _projectSettings = projectSettings;
         _beatBoards = beatBoards;
         _beatBoard = beatBoard;
+        _storageMigrator = storageMigrator;
+        _flushStoryEdits = flushStoryEdits;
 
         AddProfileCommand = ReactiveCommand.CreateFromTask(AddProfileAsync);
         Disposables.Add(AddProfileCommand.ThrownExceptions
@@ -89,19 +138,40 @@ public class SettingsViewModel : ViewModelBase
         foreach (var card in ProjectCards)
             card.IsSelected = card.Info.Kind == SelectedProjectKind;
 
-        var currentKind = workspace is null
-            ? Observable.Return<ProjectKind?>(null)
-            : workspace.WhenAnyValue(w => w.Profile).Select(p => (ProjectKind?)p.Kind);
-        var changed = this.WhenAnyValue(x => x.SelectedProjectKind)
-            .CombineLatest(currentKind, (selected, current) => selected.HasValue && current.HasValue && selected != current);
+        KeepInStoryFile = workspace?.Profile.Storage == StorageMode.Embedded;
+        if (workspace is not null)
+        {
+            StoryFileCount = CountStoryFiles();
+            var nodes = (INotifyCollectionChanged)workspace.Nodes;
+            NotifyCollectionChangedEventHandler recount = (_, _) => StoryFileCount = CountStoryFiles();
+            nodes.CollectionChanged += recount;
+            Disposables.Add(System.Reactive.Disposables.Disposable.Create(() => nodes.CollectionChanged -= recount));
+        }
 
-        _projectChangeSummary = this.WhenAnyValue(x => x.SelectedProjectKind)
-            .CombineLatest(currentKind, (selected, current) =>
-                selected.HasValue && current.HasValue && selected != current
-                    ? ProjectTypeCatalog.SwitchSummary(selected.Value)
-                    : null)
-            .ToProperty(this, x => x.ProjectChangeSummary);
+        var currentProfile = workspace is null
+            ? Observable.Return<ProjectProfile?>(null)
+            : workspace.WhenAnyValue(w => w.Profile).Select(p => (ProjectProfile?)p);
+        var pending = this.WhenAnyValue(x => x.SelectedProjectKind, x => x.KeepInStoryFile, x => x.StoryFileCount)
+            .CombineLatest(currentProfile, (choice, profile) => ChangeSummary(choice.Item1, profile));
+        var changed = pending.Select(summary => summary is not null);
+
+        _projectChangeSummary = pending.ToProperty(this, x => x.ProjectChangeSummary);
         Disposables.Add(_projectChangeSummary);
+
+        _isStorageOptionVisible = this.WhenAnyValue(x => x.SelectedProjectKind)
+            .Select(kind => kind == ProjectKind.Story)
+            .ToProperty(this, x => x.IsStorageOptionVisible);
+        Disposables.Add(_isStorageOptionVisible);
+
+        _isStorageOptionEnabled = this.WhenAnyValue(x => x.StoryFileCount)
+            .CombineLatest(currentProfile, (count, profile) => count == 1 || IsEmbedded(profile))
+            .ToProperty(this, x => x.IsStorageOptionEnabled);
+        Disposables.Add(_isStorageOptionEnabled);
+
+        _storageOptionExplanation = this.WhenAnyValue(x => x.IsStorageOptionEnabled)
+            .Select(enabled => enabled ? null : StorageOptionUnavailable)
+            .ToProperty(this, x => x.StorageOptionExplanation);
+        Disposables.Add(_storageOptionExplanation);
 
         SelectProjectKindCommand = ReactiveCommand.Create<ProjectTypeCardViewModel, Unit>(selectedCard =>
         {
@@ -122,26 +192,133 @@ public class SettingsViewModel : ViewModelBase
         _ = LoadAsync();
     }
 
+    /// <summary>
+    /// Applies the selected kind and storage. When the storage changes (including leaving Short Story while its
+    /// data is kept in the story file), the story's data is migrated first; if that fails nothing else changes.
+    /// Then project.json is saved, a Short Story ↔ Anthology board move runs, and the workspace reloads.
+    /// </summary>
     private async Task ApplyProjectKindAsync()
     {
         if (_workspace is null || _projectSettings is null || SelectedProjectKind is not { } kind)
             return;
 
-        var previousKind = _workspace.Profile.Kind;
-        var save = await _projectSettings.SaveAsync(
-            _workspace.WorkspaceRoot, new ProjectSettings(kind, _workspace.Profile.Storage));
+        var root = _workspace.WorkspaceRoot;
+        var previous = _workspace.Profile;
+        var fromStorage = IsEmbedded(previous) ? StorageMode.Embedded : StorageMode.Sidecar;
+        var toStorage = TargetStorage(kind, previous);
+
+        StoryRef? migrated = null;
+        if (fromStorage != toStorage)
+        {
+            var migration = await MigrateStorageAsync(root, fromStorage, toStorage);
+            if (!migration.IsSuccess)
+            {
+                _notifications.ShowError(migration.Error!);
+                return;
+            }
+            migrated = migration.Value;
+        }
+
+        var save = await _projectSettings.SaveAsync(root, new ProjectSettings(kind, toStorage));
         if (!save.IsSuccess)
         {
-            _notifications.ShowError(save.Error ?? "Could not save project settings.");
+            var error = save.Error ?? "Could not save project settings.";
+            if (migrated is not null)
+            {
+                // The data already moved: move it back so it stays where the unchanged project.json says.
+                var back = await _storageMigrator!.MigrateAsync(root, migrated, toStorage, fromStorage);
+                error += back.IsSuccess
+                    ? " The story's data was moved back."
+                    : $" The story's data couldn't be moved back: {back.Error}";
+            }
+            _notifications.ShowError(error);
             return;
         }
 
-        await MoveBeatBoardForKindAsync(previousKind, kind);
+        await MoveBeatBoardForKindAsync(previous.Kind, kind);
 
         var reload = await _workspace.ReloadProjectAsync();
         if (!reload.IsSuccess)
             _notifications.ShowError(reload.Error ?? "Could not reload the project.");
     }
+
+    /// <summary>
+    /// Saves pending edits, then moves the story's data from <paramref name="from"/> to <paramref name="to"/>
+    /// storage. Returns the story migrated (null when there was none), or why nothing was migrated.
+    /// </summary>
+    private async Task<Result<StoryRef?>> MigrateStorageAsync(string root, StorageMode from, StorageMode to)
+    {
+        if (_storageMigrator is null)
+            return Result<StoryRef?>.Fail("The story's data can't be moved here, so the project was not changed.");
+
+        StoryRef? story;
+        if (from == StorageMode.Embedded)
+        {
+            var primary = await _workspace!.GetEmbeddedPrimaryAsync();
+            if (!primary.IsSuccess)
+                return Result<StoryRef?>.Fail(primary.Error!);
+            story = primary.Value;
+        }
+        else
+        {
+            var files = StoryFiles().ToList();
+            if (files.Count != 1)
+                return Result<StoryRef?>.Fail(
+                    "Keep everything in the story file needs Book.txt to list exactly one story file.");
+            story = files[0].Story;
+        }
+
+        if (story is null)
+            return Result<StoryRef?>.Ok(null);
+
+        // Edits waiting on a debounce are saved where they belong now, so they move with the rest.
+        if (!await FlushPendingEditsAsync())
+            return Result<StoryRef?>.Fail("Pending edits couldn't be saved, so the story's data was not moved.");
+
+        var result = await _storageMigrator.MigrateAsync(root, story, from, to);
+        return result.IsSuccess ? Result<StoryRef?>.Ok(story) : Result<StoryRef?>.Fail(result.Error!);
+    }
+
+    private async Task<bool> FlushPendingEditsAsync()
+    {
+        if (_beatBoard is not null && !await _beatBoard.FlushAsync())
+            return false;
+        return _flushStoryEdits is null || await _flushStoryEdits();
+    }
+
+    /// <summary>The story's data is in its file: a Short Story set to embedded storage.</summary>
+    private static bool IsEmbedded(ProjectProfile? profile) =>
+        profile is { Kind: ProjectKind.Story, Storage: StorageMode.Embedded };
+
+    /// <summary>
+    /// The storage <paramref name="kind"/> gets: embedded for a Short Story with the option on, when it already
+    /// is embedded or Book.txt lists exactly one story file; sidecar otherwise.
+    /// </summary>
+    private StorageMode TargetStorage(ProjectKind kind, ProjectProfile current) =>
+        kind == ProjectKind.Story && KeepInStoryFile && (IsEmbedded(current) || StoryFileCount == 1)
+            ? StorageMode.Embedded
+            : StorageMode.Sidecar;
+
+    /// <summary>What applying <paramref name="selected"/> (and the storage option) changes; null when nothing.</summary>
+    private string? ChangeSummary(ProjectKind? selected, ProjectProfile? current)
+    {
+        if (selected is not { } kind || current is null)
+            return null;
+
+        var parts = new List<string>();
+        if (kind != current.Kind)
+            parts.Add(ProjectTypeCatalog.SwitchSummary(kind));
+        var toEmbedded = TargetStorage(kind, current) == StorageMode.Embedded;
+        if (toEmbedded != IsEmbedded(current))
+            parts.Add(toEmbedded ? MoveIntoFileSummary : MoveOutOfFileSummary);
+        return parts.Count == 0 ? null : string.Join(" ", parts);
+    }
+
+    /// <summary>The chapter files Book.txt lists (missing ones included), in order.</summary>
+    private IEnumerable<ChapterViewModel> StoryFiles() =>
+        _workspace?.Nodes.Where(n => n.Node.Kind == NodeKind.Chapter && !n.Node.IsExcluded) ?? [];
+
+    private int CountStoryFiles() => StoryFiles().Count();
 
     /// <summary>
     /// Keeps the beat board with the story across a Short Story ↔ Anthology switch: the Short Story board

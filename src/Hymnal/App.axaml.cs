@@ -74,6 +74,8 @@ public partial class App : Application
 
         // Beat boards (story/anthology plan mode)
         services.AddSingleton<IBeatBoardService, BeatBoardService>();
+        // Writes story files through the same StoryFileWriter singleton the editor uses.
+        services.AddSingleton<StorageMigrator>();
 
         // M004/S02 services — supplemental docs sidebar tree
         services.AddSingleton<ISupplementalDocsService, SupplementalDocsService>();
@@ -265,7 +267,14 @@ public partial class App : Application
                 sp.GetRequiredService<WorkspaceViewModel>(),
                 sp.GetRequiredService<ProjectSettingsService>(),
                 sp.GetRequiredService<IBeatBoardService>(),
-                sp.GetRequiredService<BeatBoardViewModel>()));
+                sp.GetRequiredService<BeatBoardViewModel>(),
+                sp.GetRequiredService<StorageMigrator>(),
+                async () =>
+                {
+                    var notes = await sp.GetRequiredService<NotesViewModel>().FlushAsync();
+                    var schedule = await sp.GetRequiredService<ChapterInfoViewModel>().FlushScheduleAsync();
+                    return notes && schedule;
+                }));
 
         services.AddTransient<MainWindowViewModel>(sp =>
             new MainWindowViewModel(

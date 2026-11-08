@@ -103,6 +103,23 @@ public class WorkspaceViewModel : ViewModelBase
     public IStoryMetadataStore MetadataStore => _metadataStore;
 
     /// <summary>
+    /// The story whose data is kept in its own file when embedded storage applies: null when it doesn't, or when
+    /// Book.txt lists no story file. Fails when that story isn't known (the project's data couldn't be loaded).
+    /// Waits for the store while it is being prepared.
+    /// </summary>
+    public async Task<Result<StoryRef?>> GetEmbeddedPrimaryAsync()
+    {
+        var store = _metadataStore;
+        if (store is DeferredStoryMetadataStore deferred)
+            store = await deferred.Store;
+        if (store is not EmbeddedStoryMetadataStore embedded || embedded.HasNoStoryFile)
+            return Result<StoryRef?>.Ok(null);
+        return embedded.Primary is { } primary
+            ? Result<StoryRef?>.Ok(primary)
+            : Result<StoryRef?>.Fail(EmbeddedStoryMetadataStore.NotLoadedMessage);
+    }
+
+    /// <summary>
     /// <paramref name="node"/>'s file as the metadata store sees it: with its chapter's UUID once the sidebar
     /// is built (empty before), and its absolute path. Call on the UI thread.
     /// </summary>

@@ -1020,6 +1020,9 @@ public sealed class IdeasViewModelTests : IDisposable
 
             public Task SaveAsync(string absoluteNotesPath, string content) =>
                 (context.PromoterNotes ?? real).SaveAsync(absoluteNotesPath, content);
+
+            public Task DeleteAsync(string absoluteNotesPath) =>
+                (context.PromoterNotes ?? real).DeleteAsync(absoluteNotesPath);
         }
 
         public void Dispose()
@@ -1106,6 +1109,7 @@ public sealed class IdeasViewModelTests : IDisposable
     {
         public Task<string> LoadAsync(string absoluteNotesPath) => Task.FromResult("");
         public Task SaveAsync(string absoluteNotesPath, string content) => throw new IOException("notes boom");
+        public Task DeleteAsync(string absoluteNotesPath) => throw new IOException("notes boom");
     }
 
     private sealed class NeverInitPrompt : IProjectInitPrompt

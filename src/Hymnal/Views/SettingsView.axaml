@@ -96,6 +96,17 @@
                             </ItemsControl.ItemTemplate>
                         </ItemsControl>
                     </ScrollViewer>
+                    <StackPanel Spacing="4" IsVisible="{Binding IsStorageOptionVisible}">
+                        <CheckBox Content="Keep everything in the story file"
+                                  IsChecked="{Binding KeepInStoryFile}"
+                                  IsEnabled="{Binding IsStorageOptionEnabled}"
+                                  Foreground="{DynamicResource OnSurfaceBrush}" />
+                        <TextBlock Text="{Binding StorageOptionExplanation}"
+                                   IsVisible="{Binding StorageOptionExplanation, Converter={x:Static ObjectConverters.IsNotNull}}"
+                                   FontSize="12"
+                                   TextWrapping="Wrap"
+                                   Foreground="{DynamicResource OnSurfaceMutedBrush}" />
+                    </StackPanel>
                     <TextBlock Text="{Binding ProjectChangeSummary}"
                                IsVisible="{Binding ProjectChangeSummary, Converter={x:Static ObjectConverters.IsNotNull}}"
                                FontSize="12"

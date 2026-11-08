@@ -257,5 +257,8 @@ public sealed class BeatBoardKindSwitchTests
 
         public Task<Result<Unit>> MoveBoardAsync(string workspaceRoot, string fromKey, string toKey) =>
             inner.MoveBoardAsync(workspaceRoot, fromKey, toKey);
+
+        public Task<Result<Unit>> DeleteBoardAsync(string workspaceRoot, string boardKey) =>
+            inner.DeleteBoardAsync(workspaceRoot, boardKey);
     }
 }

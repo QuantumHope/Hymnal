@@ -133,6 +133,7 @@ internal sealed class PlanTestContext : IDisposable
     public EditorViewModel Editor => _editor;
     public CorkboardViewModel Corkboard { get; }
     public BeatBoardViewModel Board { get; }
+    public StorageMigrator Migrator { get; }
 
     public PlanTestContext(string folder, Func<IMetadataStore, IBeatBoardService>? boards = null)
     {
@@ -147,6 +148,8 @@ internal sealed class PlanTestContext : IDisposable
         ProjectSettings = new ProjectSettingsService(_store);
         Boards = boards?.Invoke(_store) ?? new BeatBoardService(_store);
         var storyWriter = new StoryFileWriter(_store);
+        var notes = new NotesService(_store);
+        Migrator = new StorageMigrator(_phases, _targets, notes, Boards, storyWriter);
         _editor = _owned.Track(new EditorViewModel(_store, Notifications, wordCount, storyWriter));
         // As in the app: metadata changes for the chapter open in the editor are saved through it.
         storyWriter.AttachBuffer(_editor);
@@ -170,7 +173,7 @@ internal sealed class PlanTestContext : IDisposable
             ProjectSettings,
             new ProjectInitializer(_store, ProjectSettings),
             new NeverInitPrompt(),
-            new NotesService(_store),
+            notes,
             Boards);
 
         Corkboard = _owned.Track(new CorkboardViewModel(
@@ -187,7 +190,7 @@ internal sealed class PlanTestContext : IDisposable
     public PlanHostViewModel CreateHost() =>
         _owned.Track(new PlanHostViewModel(Workspace, Corkboard, Board, Notifications, Boards));
 
-    public SettingsViewModel CreateSettings() =>
+    public SettingsViewModel CreateSettings(Func<Task<bool>>? flushStoryEdits = null) =>
         new(new AiTestDoubles.InMemoryProviderProfileService(),
             new AiTestDoubles.InMemoryCredentialStore(),
             new AiTestDoubles.NoOpAiChatService(),
@@ -195,7 +198,9 @@ internal sealed class PlanTestContext : IDisposable
             Workspace,
             ProjectSettings,
             Boards,
-            Board);
+            Board,
+            Migrator,
+            flushStoryEdits);
 
     public MainWindowViewModel CreateMainWindow(PlanHostViewModel host)
     {

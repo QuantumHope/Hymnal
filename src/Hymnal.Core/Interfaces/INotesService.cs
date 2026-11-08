@@ -17,6 +17,12 @@ public interface INotesService
     Task SaveAsync(string absoluteNotesPath, string content);
 
     /// <summary>
+    /// Deletes the notes file at <paramref name="absoluteNotesPath"/>; does nothing when it does not exist.
+    /// Throws when it exists and cannot be deleted.
+    /// </summary>
+    Task DeleteAsync(string absoluteNotesPath);
+
+    /// <summary>
     /// Derives the canonical notes file path for a given workspace and chapter.
     /// Result: <c>{workspaceRoot}/.hymnal-data/notes/{chapterRelativePath}</c>
     /// where path separators in <paramref name="chapterRelativePath"/> are replaced with underscores.

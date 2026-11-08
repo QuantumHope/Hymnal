@@ -172,6 +172,7 @@ public sealed class SettingsProjectSectionTests : IDisposable
         public ProjectSettingsService ProjectSettings { get; }
         public WorkspaceViewModel Workspace { get; }
         public SettingsViewModel Settings { get; }
+        private readonly StorageMigrator _migrator;
 
         public Ctx(string? folder)
         {
@@ -180,7 +181,11 @@ public sealed class SettingsProjectSectionTests : IDisposable
             var registry = new ChapterRegistryService(store);
             var wordCount = new WordCountService();
             ProjectSettings = new ProjectSettingsService(store);
-            var editor = _owned.Track(new EditorViewModel(store, Notifications, wordCount, new StoryFileWriter(store)));
+            var writer = new StoryFileWriter(store);
+            var editor = _owned.Track(new EditorViewModel(store, Notifications, wordCount, writer));
+            _migrator = new StorageMigrator(
+                new PhaseDataService(store), new TargetsService(store), new NotesService(store),
+                new BeatBoardService(store), writer);
             _manuscript = _owned.Track(new ManuscriptService(Notifications, exclusions));
             LiveContexts.Add(this);
             Workspace = new WorkspaceViewModel(
@@ -210,7 +215,8 @@ public sealed class SettingsProjectSectionTests : IDisposable
             new AiTestDoubles.NoOpAiChatService(),
             Notifications,
             Workspace,
-            ProjectSettings);
+            ProjectSettings,
+            storageMigrator: _migrator);
 
         public Task OpenAsync()
         {

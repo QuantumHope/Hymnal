@@ -36,6 +36,7 @@ public class NotesViewModel : ViewModelBase, IDisposable
         set
         {
             this.RaiseAndSetIfChanged(ref _text, value);
+            _pendingText = value;
             _saveSubject.OnNext(value);
         }
     }
@@ -57,6 +58,9 @@ public class NotesViewModel : ViewModelBase, IDisposable
     // ── Auto-save plumbing ────────────────────────────────────────────────────
 
     private readonly Subject<string> _saveSubject = new();
+
+    /// <summary>Text typed but not yet saved (null when nothing is pending); taken by whichever save runs first.</summary>
+    private string? _pendingText;
 
     /// <summary>Tracks which chapter node was loaded most-recently (the toggle needs one).</summary>
     private ChapterNode? _loadedNode;
@@ -128,7 +132,7 @@ public class NotesViewModel : ViewModelBase, IDisposable
         Disposables.Add(
             _saveSubject
                 .Throttle(TimeSpan.FromMilliseconds(1500), TaskPoolScheduler.Default)
-                .Subscribe(text => _ = FlushSaveAsync(text)));
+                .Subscribe(text => _ = SavePendingAsync()));
     }
 
     public async Task RestoreSettingsAsync()
@@ -150,6 +154,7 @@ public class NotesViewModel : ViewModelBase, IDisposable
     private void OnActiveNodeChanged(ChapterNode? node)
     {
         // Cancel any pending save for the previous chapter.
+        _pendingText = null;
         _saveCts.Cancel();
         _saveCts.Dispose();
         _saveCts = new CancellationTokenSource();
@@ -201,24 +206,38 @@ public class NotesViewModel : ViewModelBase, IDisposable
 
     // ── Flush save ────────────────────────────────────────────────────────────
 
-    private async Task FlushSaveAsync(string text)
+    /// <summary>
+    /// Saves notes typed but not yet saved (waiting on the debounce) now. True when nothing was pending or the
+    /// save succeeded; false (after showing the error) when it failed.
+    /// </summary>
+    public Task<bool> FlushAsync() => SavePendingAsync();
+
+    private async Task<bool> SavePendingAsync()
     {
         var storyAtSave = _loadedStory;
-        if (storyAtSave == null) return;
-
         var ct = _saveCts.Token;
-        if (ct.IsCancellationRequested) return;
+        if (storyAtSave == null || ct.IsCancellationRequested) return true;
+
+        var text = Interlocked.Exchange(ref _pendingText, null);
+        if (text == null) return true;
 
         try
         {
             var workspaceRoot = _workspaceViewModel.WorkspaceRoot;
-            if (string.IsNullOrEmpty(workspaceRoot)) return;
+            if (string.IsNullOrEmpty(workspaceRoot)) return true;
 
             await _workspaceViewModel.MetadataStore.SaveNotesAsync(workspaceRoot, storyAtSave, text).ConfigureAwait(false);
+            return true;
         }
-        catch (Exception ex) when (!ct.IsCancellationRequested)
+        catch (Exception ex)
         {
+            // The chapter changed while saving: its pending text was discarded with it.
+            if (ct.IsCancellationRequested) return true;
+
+            // Still unsaved: keep it pending unless newer text has been typed meanwhile.
+            Interlocked.CompareExchange(ref _pendingText, text, null);
             _notificationService.ShowError($"Failed to save notes: {ex.Message}");
+            return false;
         }
     }
 

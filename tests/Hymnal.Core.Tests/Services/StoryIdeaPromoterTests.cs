@@ -49,6 +49,7 @@ public class StoryIdeaPromoterTests
     {
         public Task<string> LoadAsync(string absoluteNotesPath) => Task.FromResult("");
         public Task SaveAsync(string absoluteNotesPath, string content) => throw new IOException("notes boom");
+        public Task DeleteAsync(string absoluteNotesPath) => throw new IOException("notes boom");
     }
 
     private sealed class Env
@@ -407,6 +408,8 @@ public class StoryIdeaPromoterTests
     {
         public Task<string> LoadAsync(string absoluteNotesPath) => Task.FromResult("");
 
+        public Task DeleteAsync(string absoluteNotesPath) => env.Notes.DeleteAsync(absoluteNotesPath);
+
         public async Task SaveAsync(string absoluteNotesPath, string content)
         {
             await env.Notes.SaveAsync(absoluteNotesPath, content);
@@ -421,6 +424,8 @@ public class StoryIdeaPromoterTests
     private sealed class DeletingNotesService(Env env) : INotesService
     {
         public Task<string> LoadAsync(string absoluteNotesPath) => Task.FromResult("");
+
+        public Task DeleteAsync(string absoluteNotesPath) => env.Notes.DeleteAsync(absoluteNotesPath);
 
         public async Task SaveAsync(string absoluteNotesPath, string content)
         {

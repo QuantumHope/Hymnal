@@ -11,6 +11,9 @@ namespace Hymnal.Core.Services;
 /// </summary>
 public sealed class DeferredStoryMetadataStore(Task<IStoryMetadataStore> store) : IStoryMetadataStore
 {
+    /// <summary>The store being prepared.</summary>
+    public Task<IStoryMetadataStore> Store => store;
+
     public async Task<Dictionary<string, PhaseData>> LoadPhaseDataAsync(string root, IReadOnlyList<StoryRef> stories) =>
         await (await store.ConfigureAwait(false)).LoadPhaseDataAsync(root, stories).ConfigureAwait(false);
 

@@ -138,6 +138,24 @@ public sealed partial class BeatBoardService(IMetadataStore store) : IBeatBoardS
         }
     }
 
+    public Task<Result<Unit>> DeleteBoardAsync(string workspaceRoot, string boardKey)
+    {
+        if (!IsValidBoardKey(boardKey))
+            return Task.FromResult(Result<Unit>.Fail("Beat board key is not valid."));
+
+        var path = BoardFilePath(workspaceRoot, boardKey);
+        try
+        {
+            if (File.Exists(path))
+                File.Delete(path);
+            return Task.FromResult(Result<Unit>.Ok(Unit.Default));
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            return Task.FromResult(Result<Unit>.Fail($"{Path.GetFileName(path)} could not be deleted: {ex.Message}"));
+        }
+    }
+
     /// <exception cref="ArgumentException">The key is not a valid board key.</exception>
     public static string BoardFilePath(string workspaceRoot, string boardKey)
     {

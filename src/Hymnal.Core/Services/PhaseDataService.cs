@@ -77,6 +77,17 @@ public sealed class PhaseDataService
         }).ConfigureAwait(false);
     }
 
+    /// <summary>Removes <paramref name="uuid"/>'s entry; writes nothing when it has none.</summary>
+    public async Task RemoveAsync(string workspaceRoot, string uuid)
+    {
+        await WithWorkspaceLockAsync(workspaceRoot, async () =>
+        {
+            var phases = await LoadUnlockedAsync(workspaceRoot).ConfigureAwait(false);
+            if (phases.Remove(uuid))
+                await SaveUnlockedAsync(workspaceRoot, phases).ConfigureAwait(false);
+        }).ConfigureAwait(false);
+    }
+
     private static async Task<Dictionary<string, PhaseData>> LoadUnlockedAsync(string workspaceRoot)
     {
         var path = PhasesPath(workspaceRoot);

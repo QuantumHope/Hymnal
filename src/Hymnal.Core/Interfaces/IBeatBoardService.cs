@@ -17,4 +17,7 @@ public interface IBeatBoardService
     /// already exists.
     /// </summary>
     Task<Result<Unit>> MoveBoardAsync(string workspaceRoot, string fromKey, string toKey);
+
+    /// <summary>Deletes board <paramref name="boardKey"/>'s file; succeeds without doing anything when there is none.</summary>
+    Task<Result<Unit>> DeleteBoardAsync(string workspaceRoot, string boardKey);
 }
