@@ -119,7 +119,9 @@ public sealed class StorageMigrator(
         if (phase is not null)
             block = EmbeddedStoryMetadataStore.WithPhaseData(block, phase);
 
-        var written = await writer.UpdateMetadataAsync(primary.AbsolutePath, _ => block).ConfigureAwait(false);
+        // Fields a newer Hymnal wrote to an existing block aren't this story's sidecar data: they stay.
+        var written = await writer.UpdateMetadataAsync(primary.AbsolutePath, current => block with { Extra = current?.Extra })
+            .ConfigureAwait(false);
         return written.IsSuccess
             ? written
             : Result<Unit>.Fail(

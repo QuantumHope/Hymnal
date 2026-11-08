@@ -1,5 +1,7 @@
 using System;
 using System.Collections.Generic;
+using System.Text.Json;
+using System.Text.Json.Serialization;
 
 namespace Hymnal.Core.Models;
 
@@ -18,7 +20,15 @@ public sealed record EmbeddedStoryMetadata(
     IReadOnlyDictionary<string, PhaseScheduleEntry>? Schedule,
     WordCountTarget? Target,
     string? Notes,
-    IReadOnlyList<Beat>? Beats);
+    IReadOnlyList<Beat>? Beats)
+{
+    /// <summary>
+    /// Top-level block fields this version doesn't know (e.g. written by a newer Hymnal), kept as they are when
+    /// the block is rewritten; null when there are none.
+    /// </summary>
+    [JsonExtensionData]
+    public Dictionary<string, JsonElement>? Extra { get; init; }
+}
 
 /// <summary>
 /// The result of splitting a story file into its prose and its trailing metadata block.

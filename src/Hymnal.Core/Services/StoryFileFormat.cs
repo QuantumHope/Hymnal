@@ -30,7 +30,8 @@ public static class StoryFileFormat
     {
         PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
         DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull,
-        Converters = { new JsonStringEnumConverter(JsonNamingPolicy.CamelCase) },
+        // The lenient status converter comes first so it, not the enum converter, handles the block's status.
+        Converters = { new LenientStatusConverter(), new JsonStringEnumConverter(JsonNamingPolicy.CamelCase) },
         WriteIndented = true,
         NewLine = "\n",
         // Keeps non-ASCII text readable while still escaping '<' and '>' so a value can never
@@ -158,5 +159,42 @@ public static class StoryFileFormat
         return !IsEmptyProse(beforeBlock) && beforeBlock.EndsWith(separator, StringComparison.Ordinal)
             ? beforeBlock[..^separator.Length]
             : beforeBlock;
+    }
+    /// <summary>
+    /// Reads a status this version doesn't know (a newer Hymnal's, a typo, a number out of range, or any other
+    /// JSON value) as none instead of failing the whole block; writes camelCase names like the enum converter.
+    /// </summary>
+    private sealed class LenientStatusConverter : JsonConverter<ChapterStatus?>
+    {
+        public override bool HandleNull => true;
+
+        public override ChapterStatus? Read(ref Utf8JsonReader reader, Type typeToConvert, JsonSerializerOptions options)
+        {
+            switch (reader.TokenType)
+            {
+                case JsonTokenType.String:
+                    var name = reader.GetString();
+                    return !string.IsNullOrEmpty(name) && !char.IsDigit(name[0]) && name[0] != '-'
+                           && Enum.TryParse<ChapterStatus>(name, ignoreCase: true, out var parsed)
+                           && Enum.IsDefined(parsed)
+                        ? parsed
+                        : null;
+                case JsonTokenType.Number:
+                    return reader.TryGetInt32(out var number) && Enum.IsDefined((ChapterStatus)number)
+                        ? (ChapterStatus)number
+                        : null;
+                default:
+                    reader.Skip();
+                    return null;
+            }
+        }
+
+        public override void Write(Utf8JsonWriter writer, ChapterStatus? value, JsonSerializerOptions options)
+        {
+            if (value is { } status)
+                writer.WriteStringValue(JsonNamingPolicy.CamelCase.ConvertName(status.ToString()));
+            else
+                writer.WriteNullValue();
+        }
     }
 }

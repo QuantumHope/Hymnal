@@ -389,7 +389,6 @@ public class StoryFileFormatTests
     [InlineData("")]
     [InlineData("null")]
     [InlineData("[1, 2]")]
-    [InlineData("{ \"status\": \"notAStatus\" }")]
     public void Split_MalformedJson_KeepsBlockAsProseAndFlagsIt(string json)
     {
         var text = "Prose.\n\n<!-- hymnal:v1\n" + json + "\n-->\n";
@@ -414,5 +413,58 @@ public class StoryFileFormatTests
         Assert.Equal(text, resplit.Prose);
         Assert.False(resplit.HadMalformedBlock);
         AssertSameMetadata(MinimalMetadata(), resplit.Metadata);
+    }
+    // ── Forward compatibility ───────────────────────────────────────────────
+
+    [Theory]
+    [InlineData("\"notAStatus\"")]
+    [InlineData("\"\"")]
+    [InlineData("\"42\"")]
+    [InlineData("42")]
+    [InlineData("{ \"phase\": \"x\" }")]
+    [InlineData("[\"drafting\"]")]
+    [InlineData("true")]
+    public void Split_UnknownStatus_ReadsAsNoneAndKeepsTheOtherFields(string status)
+    {
+        var text = "Prose.\n\n<!-- hymnal:v1\n{ \"id\": \"id-1\", \"status\": " + status
+                   + ", \"notes\": \"Keep me.\", \"target\": { \"maxWords\": 7500 } }\n-->\n";
+
+        var split = StoryFileFormat.Split(text);
+
+        Assert.False(split.HadMalformedBlock);
+        Assert.Equal("Prose.", split.Prose);
+        Assert.Null(split.Metadata!.Status);
+        Assert.Equal("id-1", split.Metadata.Id);
+        Assert.Equal("Keep me.", split.Metadata.Notes);
+        Assert.Equal(7500, split.Metadata.Target?.MaxWords);
+    }
+
+    [Theory]
+    [InlineData("\"polishing\"", ChapterStatus.Polishing)]
+    [InlineData("\"Polishing\"", ChapterStatus.Polishing)]
+    [InlineData("1", ChapterStatus.Outlining)]
+    public void Split_KnownStatus_IsRead(string status, ChapterStatus expected)
+    {
+        var text = "<!-- hymnal:v1\n{ \"status\": " + status + " }\n-->\n";
+
+        Assert.Equal(expected, StoryFileFormat.Split(text).Metadata?.Status);
+    }
+
+    [Fact]
+    public void Merge_KeepsUnknownTopLevelFieldsAfterAnUpdate()
+    {
+        const string text = "Prose.\n\n<!-- hymnal:v1\n{ \"id\": \"id-1\", \"status\": \"editing\", "
+                            + "\"futureField\": { \"nested\": [1, \"two\"] }, \"futureFlag\": true }\n-->\n";
+        var split = StoryFileFormat.Split(text);
+
+        var updated = split.Metadata! with { Notes = "New notes." };
+        var resplit = StoryFileFormat.Split(StoryFileFormat.Merge(split.Prose, updated, split.LineEnding));
+
+        Assert.Equal("New notes.", resplit.Metadata!.Notes);
+        Assert.Equal(ChapterStatus.Editing, resplit.Metadata.Status);
+        Assert.Equal("{\"nested\":[1,\"two\"]}",
+            JsonSerializer.Serialize(resplit.Metadata.Extra!["futureField"]));
+        Assert.True(resplit.Metadata.Extra!["futureFlag"].GetBoolean());
+        Assert.Equal(2, resplit.Metadata.Extra.Count);
     }
 }

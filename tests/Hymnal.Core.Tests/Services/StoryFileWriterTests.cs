@@ -76,6 +76,21 @@ public class StoryFileWriterTests
     private static byte[] Concat(byte[] a, byte[] b) => [.. a, .. b];
 
     [Fact]
+    public Task UpdateMetadataAsync_keeps_unknown_fields_and_reads_an_unknown_status_as_none() => WithTempDirAsync(async dir =>
+    {
+        var path = WriteText(dir, "Prose.\n\n<!-- hymnal:v1\n{ \"id\": \"story-1\", \"status\": \"someday\", \"notes\": \"old\", \"later\": [1] }\n-->\n");
+        var writer = new StoryFileWriter(new MetadataStore());
+
+        var updated = await writer.UpdateMetadataAsync(path, current => current! with { Notes = "new" });
+
+        Assert.True(updated.IsSuccess, updated.Error);
+        var block = StoryFileFormat.Split(ReadText(path)).Metadata!;
+        Assert.Equal("new", block.Notes);
+        Assert.Null(block.Status);
+        Assert.Equal("[1]", System.Text.Json.JsonSerializer.Serialize(block.Extra!["later"]));
+    });
+
+    [Fact]
     public Task RewriteProseAsync_changes_the_prose_only_and_refuses_a_file_open_in_the_editor() => WithTempDirAsync(async dir =>
     {
         var original = "\uFEFF# Old\r\n\r\nBody.\r\n";
