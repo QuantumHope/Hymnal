@@ -383,6 +383,29 @@ public sealed class EditorEmbeddedBlockTests : IDisposable
         Assert.Equal(StoryFileFormat.Merge("Prose, edited.", Meta("n"), "\n"), ReadText(path));
     }
 
+    [SymlinkFact]
+    public async Task Rewriting_the_heading_of_an_open_linked_story_after_its_link_was_renamed_writes_the_target()
+    {
+        var path = WriteFile("story.md", StoryFileFormat.Merge("# Old\n\nProse.", Meta("n"), "\n"));
+        var link = Path.Combine(_root, "link.md");
+        File.CreateSymbolicLink(link, path);
+        var editor = CreateEditor();
+        await editor.OpenChapterAsync(Node("link.md"), link);
+
+        // A rename moves the link; the heading rewrite then goes through the new name.
+        var renamed = Path.Combine(_root, "renamed.md");
+        File.Move(link, renamed);
+        var rewritten = await _writer.RewriteProseAsync(renamed, prose => prose.Replace("# Old", "# New"));
+
+        Assert.True(rewritten.IsSuccess, rewritten.Error);
+        Assert.NotNull(new FileInfo(renamed).LinkTarget);
+        Assert.Equal(StoryFileFormat.Merge("# New\n\nProse.", Meta("n"), "\n"), ReadText(path));
+
+        // The spellings the editor opened the story by are still refused.
+        Assert.False((await _writer.RewriteProseAsync(path, prose => prose + "x")).IsSuccess);
+        Assert.Equal(StoryFileFormat.Merge("# New\n\nProse.", Meta("n"), "\n"), ReadText(path));
+    }
+
     [Fact]
     public async Task Apply_metadata_on_dirty_buffer_saves_new_prose_and_new_metadata()
     {

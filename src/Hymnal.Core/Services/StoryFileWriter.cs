@@ -213,7 +213,8 @@ public sealed class StoryFileWriter(IMetadataStore store)
     /// Applies <paramref name="change"/> to the prose of a file that is not open in the editor, keeping its
     /// block, line ending and a UTF-8 byte order mark (which stays at the start of the prose passed to
     /// <paramref name="change"/>). A malformed block is part of the prose. Fails without writing when the file is
-    /// open in the editor (its buffer owns the prose), and like the other writes for missing, read-only and
+    /// open in the editor under <paramref name="absolutePath"/> itself (its buffer owns the prose; a link to the open
+    /// file's target is not refused), and like the other writes for missing, read-only and
     /// non-UTF-8 files. <paramref name="change"/> runs while this file's locks are held: it must be pure.
     /// </summary>
     public async Task<Result<Unit>> RewriteProseAsync(string absolutePath, Func<string, string> change)
@@ -225,7 +226,9 @@ public sealed class StoryFileWriter(IMetadataStore store)
         await gate.WaitAsync().ConfigureAwait(false);
         try
         {
-            if (HeldBuffer(path) is not null)
+            // Only the path asked for counts: a renamed (moved) link still resolves to the open file's target,
+            // but it is the link being renamed, not the file open in the editor.
+            if (_buffer is { } buffer && buffer.HoldsFile(path.Full))
                 return Result<Unit>.Fail($"Story file is open in the editor and was left unchanged: {path.Full}");
 
             return await RewriteClosedFileAsync(path, split => (change(split.Prose), split.Metadata))
