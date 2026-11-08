@@ -443,6 +443,50 @@ public sealed class SettingsStorageTests
         finally { DeleteFolder(root); }
     }
 
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task Notes_saved_while_the_data_moves_are_refused_never_lost_to_cleanup(bool intoTheFile)
+    {
+        var store = new HookStore();
+        var root = CreateWorkspace(intoTheFile ? StoryJson : EmbeddedJson, (StoryFile, StoryText));
+        try
+        {
+            await Ui(root, 1, async context =>
+            {
+                var story = context.Node(StoryFile).Story;
+                Exception? refused = null;
+                var saved = false;
+                // Mid-move: while the block is written into the file, or while project.json commits the move out.
+                var destination = intoTheFile ? Path.Combine(root, StoryFile) : ProjectJsonPath(root);
+                store.OnWrite = async path =>
+                {
+                    if (saved || path != destination) return;
+                    saved = true;
+                    try { await context.Workspace.MetadataStore.SaveNotesAsync(root, story, "Typed during apply."); }
+                    catch (IOException ex) { refused = ex; }
+                };
+
+                var settings = context.CreateSettings();
+                settings.KeepInStoryFile = intoTheFile;
+                await ApplyAsync(context, settings);
+
+                Assert.True(saved);
+                Assert.Equal(intoTheFile ? StorageMode.Embedded : StorageMode.Sidecar, context.Workspace.Profile.Storage);
+                var kept = await context.Workspace.MetadataStore.LoadNotesAsync(root, context.Node(StoryFile).Story);
+                if (refused is null)
+                    Assert.Equal("Typed during apply.", kept);
+                else
+                    Assert.Equal(SettingsViewModel.MovingStoryDataMessage, refused.Message);
+
+                // Once reloaded, edits are accepted again.
+                await context.Workspace.MetadataStore.SaveNotesAsync(root, context.Node(StoryFile).Story, "After.");
+                Assert.Equal("After.", await context.Workspace.MetadataStore.LoadNotesAsync(root, context.Node(StoryFile).Story));
+            }, store: store);
+        }
+        finally { DeleteFolder(root); }
+    }
+
     [Fact]
     public async Task Sidebar_status_and_target_edits_after_a_failed_reload_never_reach_project_data()
     {

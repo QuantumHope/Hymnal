@@ -113,6 +113,23 @@ public class WorkspaceViewModel : ViewModelBase
         NeedsReopen = true;
     }
 
+    /// <summary>
+    /// Refuses every per-story write with <paramref name="reason"/> (reads still work) until the returned handle
+    /// is disposed, or until the store is rebuilt by an open, reload or <see cref="ResetMetadataStore"/>, whichever
+    /// comes first: used while the story's data moves between storages, so an edit made meanwhile is refused
+    /// rather than written to the location the move cleans up.
+    /// </summary>
+    public IDisposable SuspendStoryDataWrites(string reason)
+    {
+        var refusing = new RefusingStoryMetadataStore(_metadataStore, reason);
+        _metadataStore = refusing;
+        return Disposable.Create(() =>
+        {
+            if (ReferenceEquals(_metadataStore, refusing))
+                _metadataStore = refusing.Inner;
+        });
+    }
+
     private bool _needsReopen;
     /// <summary>
     /// True after <see cref="ResetMetadataStore"/> until the workspace is opened or reloaded successfully: the
@@ -132,6 +149,8 @@ public class WorkspaceViewModel : ViewModelBase
     public async Task<Result<StoryRef?>> GetEmbeddedPrimaryAsync()
     {
         var store = _metadataStore;
+        if (store is RefusingStoryMetadataStore refusing)
+            store = refusing.Inner;
         if (store is DeferredStoryMetadataStore deferred)
             store = await deferred.Store;
         if (store is not EmbeddedStoryMetadataStore embedded || embedded.HasNoStoryFile)

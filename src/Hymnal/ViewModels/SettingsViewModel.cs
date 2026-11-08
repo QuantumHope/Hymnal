@@ -51,6 +51,10 @@ public class SettingsViewModel : ViewModelBase
     public const string MoveOutOfFileSummary =
         "The story's status, target, notes and beats will move from its file into project data.";
 
+    /// <summary>Why a story data edit is refused while the story's data moves between storages.</summary>
+    public const string MovingStoryDataMessage =
+        "The story's data is being moved. Make this change again once the project has reloaded.";
+
     /// <summary>Shown when the storage switched but old copies couldn't all be removed.</summary>
     public const string CleanupLeftoversMessage =
         "Switched storage. Some old copies in .hymnal-data / the story file couldn't be removed; they're ignored and harmless.";
@@ -265,42 +269,61 @@ public class SettingsViewModel : ViewModelBase
         if (toStorage == StorageMode.Embedded)
             movedBoard = await MoveBeatBoardForKindAsync(current.Kind, kind);
 
-        // Ruling 9: write the destination; saving project.json in the new mode commits; then clean up the source.
-        if (story is not null)
+        IDisposable? suspended = null;
+        try
         {
-            var written = await _storageMigrator!.WriteDestinationAsync(root, story, fromStorage, toStorage);
-            if (!written.IsSuccess)
+            // Ruling 9: write the destination; saving project.json in the new mode commits; then clean up the source.
+            if (story is not null)
             {
+                // Edits made while the board moved are saved too; from here until the reload, story data edits are
+                // refused, so none is written to the old location after the destination was written from it.
+                if (!await FlushPendingEditsAsync())
+                {
+                    await UndoBoardMoveAsync(root, movedBoard);
+                    _notifications.ShowError("Pending edits couldn't be saved, so the story's data was not moved.");
+                    return;
+                }
+                suspended = _workspace.SuspendStoryDataWrites(MovingStoryDataMessage);
+
+                var written = await _storageMigrator!.WriteDestinationAsync(root, story, fromStorage, toStorage);
+                if (!written.IsSuccess)
+                {
+                    await UndoBoardMoveAsync(root, movedBoard);
+                    _notifications.ShowError(written.Error!);
+                    return;
+                }
+            }
+
+            var save = await _projectSettings.SaveAsync(root, new ProjectSettings(kind, toStorage));
+            if (!save.IsSuccess)
+            {
+                // What was written is ignored in the unchanged mode, which still has all the data.
                 await UndoBoardMoveAsync(root, movedBoard);
-                _notifications.ShowError(written.Error!);
+                _notifications.ShowError(save.Error ?? "Could not save project settings.");
                 return;
             }
+
+            if (story is not null
+                && !(await _storageMigrator!.CleanupSourceAsync(root, story, fromStorage, toStorage)).IsSuccess)
+                _notifications.ShowInfo(CleanupLeftoversMessage);
+
+            if (toStorage != StorageMode.Embedded)
+                await MoveBeatBoardForKindAsync(current.Kind, kind);
+
+            var reload = await _workspace.ReloadProjectAsync();
+            if (!reload.IsSuccess)
+            {
+                // Never keep writing to the old mode's location: use the new mode's store (refusing story data until
+                // it can be loaded) and ask for a reopen.
+                _workspace.ResetMetadataStore(new ProjectSettings(kind, toStorage));
+                _notifications.ShowError(
+                    $"{reload.Error ?? "Could not reload the project."} The project settings were saved; reopen the project to continue.");
+            }
         }
-
-        var save = await _projectSettings.SaveAsync(root, new ProjectSettings(kind, toStorage));
-        if (!save.IsSuccess)
+        finally
         {
-            // What was written is ignored in the unchanged mode, which still has all the data.
-            await UndoBoardMoveAsync(root, movedBoard);
-            _notifications.ShowError(save.Error ?? "Could not save project settings.");
-            return;
-        }
-
-        if (story is not null
-            && !(await _storageMigrator!.CleanupSourceAsync(root, story, fromStorage, toStorage)).IsSuccess)
-            _notifications.ShowInfo(CleanupLeftoversMessage);
-
-        if (toStorage != StorageMode.Embedded)
-            await MoveBeatBoardForKindAsync(current.Kind, kind);
-
-        var reload = await _workspace.ReloadProjectAsync();
-        if (!reload.IsSuccess)
-        {
-            // Never keep writing to the old mode's location: use the new mode's store (refusing story data until
-            // it can be loaded) and ask for a reopen.
-            _workspace.ResetMetadataStore(new ProjectSettings(kind, toStorage));
-            _notifications.ShowError(
-                $"{reload.Error ?? "Could not reload the project."} The project settings were saved; reopen the project to continue.");
+            // A no-op once the reload (or the reset) has rebuilt the store; otherwise edits go where they did before.
+            suspended?.Dispose();
         }
     }
 
