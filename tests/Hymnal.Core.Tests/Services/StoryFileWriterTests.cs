@@ -605,6 +605,7 @@ public class StoryFileWriterTests
     });
 
     [UnixPermissionFact]
+    [System.Runtime.Versioning.UnsupportedOSPlatform("windows")]
     public Task Update_file_without_user_write_permission_fails_without_writing() => WithTempDirAsync(async dir =>
     {
         const string original = "Locked prose.\n";

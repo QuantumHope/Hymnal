@@ -200,6 +200,7 @@ public sealed class EditorViewModelArbitraryFileTests : IDisposable
     }
 
     [UnixPermissionFact]
+    [System.Runtime.Versioning.UnsupportedOSPlatform("windows")]
     public async Task SwitchToUnreadableChapter_ShowsErrorAndRestoresPreviousChapter()
     {
         var one = CreateChapter("one.md", "One", "# One\n\nFirst.");

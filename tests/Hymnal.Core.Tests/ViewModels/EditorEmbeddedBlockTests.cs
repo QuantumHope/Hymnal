@@ -193,6 +193,7 @@ public sealed class EditorEmbeddedBlockTests : IDisposable
     }
 
     [UnixPermissionFact]
+    [System.Runtime.Versioning.UnsupportedOSPlatform("windows")]
     public async Task Read_only_non_utf8_chapter_fails_to_save_and_is_left_unchanged()
     {
         byte[] bytes = [0x63, 0x61, 0x66, 0xE9, 0x0A];
@@ -255,6 +256,7 @@ public sealed class EditorEmbeddedBlockTests : IDisposable
     }
 
     [UnixPermissionFact]
+    [System.Runtime.Versioning.UnsupportedOSPlatform("windows")]
     public async Task Failed_open_keeps_previous_chapter_and_its_watcher()
     {
         var first = WriteFile("first.md", "First.");
@@ -413,6 +415,7 @@ public sealed class EditorEmbeddedBlockTests : IDisposable
     }
 
     [UnixPermissionFact]
+    [System.Runtime.Versioning.UnsupportedOSPlatform("windows")]
     public async Task Apply_metadata_failure_keeps_previous_metadata()
     {
         var path = WriteFile("story.md", StoryFileFormat.Merge("Prose.", Meta("old"), "\n"));
