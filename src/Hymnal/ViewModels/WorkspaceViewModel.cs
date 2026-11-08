@@ -1067,12 +1067,15 @@ public class WorkspaceViewModel : ViewModelBase
 
     /// <summary>
     /// Embedded storage: picks the file whose data is embedded and sets it on <paramref name="store"/>. Going
-    /// through the present chapter files in Book.txt order, the first with a block is the primary, else the first
-    /// file; a file that can't be read stops the search and is the primary, unavailable (its data is refused, not
-    /// looked for in a later file), with one error until it is readable again or the workspace is reopened. When an available primary's block id
-    /// differs from its registry UUID the registry entry adopts the block id, so the story keeps its identity when
-    /// renamed outside Hymnal. When Book.txt lists more than one chapter file (missing ones included), says once
-    /// per workspace open that the others use project data. Returns the registry, with any adoption applied.
+    /// through the present chapter files in Book.txt order, the first with a block (a malformed one counts, so the
+    /// story never moves to another file because its block is damaged) is the primary, else the first file. A file
+    /// that can't be read stops the search and is the primary, unavailable (its data is refused, not looked for in
+    /// a later file), with one error until it is readable again or the workspace is reopened; meanwhile the other
+    /// files that might be the primary (every earlier file, and later ones with a block or that can't be read) are
+    /// refused too. When an available primary's block id differs from its registry UUID the registry entry adopts
+    /// the block id, so the story keeps its identity when renamed outside Hymnal. When Book.txt lists more than one
+    /// chapter file (missing ones included), says once per workspace open that the others use project data.
+    /// Returns the registry, with any adoption applied.
     /// </summary>
     private async Task<Dictionary<string, ChapterRegistryEntry>> SetPrimaryStoryAsync(
         EmbeddedStoryMetadataStore store,
@@ -1088,25 +1091,47 @@ public class WorkspaceViewModel : ViewModelBase
                 "Keep everything in the story file only covers single-file stories; other files use project data.");
         }
 
-        StoryRef? first = null;
-        foreach (var node in listed.Where(n => !n.IsMissing))
-        {
-            var file = new StoryRef(
+        var files = listed
+            .Where(n => !n.IsMissing)
+            .Select(node => new StoryRef(
                 TryGetRegistryUuid(registry, node.RelativePath),
                 node.RelativePath,
-                Path.Combine(model.ManuscriptRoot, node.RelativePath));
-            first ??= file;
+                Path.Combine(model.ManuscriptRoot, node.RelativePath)))
+            .ToList();
 
-            var read = await _editor.StoryWriter.ReadMetadataAsync(file.AbsolutePath).ConfigureAwait(false);
+        for (var i = 0; i < files.Count; i++)
+        {
+            var file = files[i];
+            var disk = await _editor.StoryWriter.ReadFileAsync(file.AbsolutePath).ConfigureAwait(false);
+            var read = disk.IsSuccess
+                ? await _editor.StoryWriter.ReadMetadataAsync(file.AbsolutePath).ConfigureAwait(false)
+                : Result<EmbeddedStoryMetadata?>.Fail(disk.Error!);
             if (!read.IsSuccess)
             {
-                var reason = $"Couldn't read '{Path.GetFileName(file.AbsolutePath)}'; its story data is read-only until it can be read.";
-                store.SetPrimaryUnavailable(file, reason);
+                var name = Path.GetFileName(file.AbsolutePath);
+                var reason = $"Couldn't read '{name}'; its story data is read-only until it can be read.";
+                var candidates = files.Take(i).Select(f => f.RelativePath).ToList();
+                foreach (var later in files.Skip(i + 1))
+                {
+                    var laterRead = await _editor.StoryWriter.ReadFileAsync(later.AbsolutePath).ConfigureAwait(false);
+                    if (!laterRead.IsSuccess || laterRead.Value!.Metadata is not null || laterRead.Value.HadMalformedBlock)
+                        candidates.Add(later.RelativePath);
+                }
+                store.SetPrimaryUnavailable(file, reason, candidates,
+                    $"Couldn't read '{name}', so it isn't known which file keeps the story's data; "
+                    + "this story's data is read-only until it can be read.");
                 if (!string.Equals(_unreadablePrimaryNoticeShownFor, file.RelativePath, StringComparison.Ordinal))
                 {
                     _unreadablePrimaryNoticeShownFor = file.RelativePath;
                     _notificationService.ShowError(reason);
                 }
+                return registry;
+            }
+
+            if (disk.Value!.HadMalformedBlock)
+            {
+                store.SetPrimaryStory(file);
+                _unreadablePrimaryNoticeShownFor = null;
                 return registry;
             }
 
@@ -1120,10 +1145,10 @@ public class WorkspaceViewModel : ViewModelBase
             }
         }
 
-        if (first is null)
+        if (files.Count == 0)
             store.SetNoStoryFile();
         else
-            store.SetPrimaryStory(first);
+            store.SetPrimaryStory(files[0]);
         _unreadablePrimaryNoticeShownFor = null;
         return registry;
     }

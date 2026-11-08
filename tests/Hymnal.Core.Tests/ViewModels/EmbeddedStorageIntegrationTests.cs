@@ -393,6 +393,70 @@ public sealed class EmbeddedStorageIntegrationTests
     }
 
     [Fact]
+    public async Task Malformed_block_keeps_its_file_primary_instead_of_a_later_file_with_a_block()
+    {
+        const string second = "second.md";
+        var damaged = StoryText + "\n<!-- hymnal:v1\n{ not json\n-->\n";
+        var root = CreateWorkspace(EmbeddedJson, (StoryFile, damaged),
+            (second, StoryFileFormat.Merge("# Second\n", new EmbeddedStoryMetadata(
+                "second-id", ChapterStatus.Done, null, null, null, null, null, null), "\n")));
+        try
+        {
+            await Ui(root, 2, async context =>
+            {
+                Assert.Equal(StoryFile, (await context.Workspace.GetEmbeddedPrimaryAsync()).Value?.RelativePath);
+
+                // The later file's block isn't the story's: it is ignored and its writes go to the sidecar.
+                var other = context.Node(second);
+                Assert.Equal(ChapterStatus.Planned, other.Status);
+                await Within(other.ChangeStatusCommand.Execute(ChapterStatus.Editing).ToTask());
+                Assert.True(PhasesHave(root, other.Uuid));
+                Assert.Equal(ChapterStatus.Done, ReadStory(root, second).Metadata?.Status);
+            });
+        }
+        finally { DeleteFolder(root); }
+    }
+
+    [Fact]
+    public async Task Unreadable_later_file_refuses_earlier_files_without_a_block_and_later_files_with_one()
+    {
+        const string middle = "middle.md";
+        const string last = "last.md";
+        const string plain = "plain.md";
+        var root = CreateWorkspace(EmbeddedJson, (StoryFile, StoryText), (middle, "# Middle\n"),
+            (last, StoryFileFormat.Merge("# Last\n", new EmbeddedStoryMetadata(
+                "last-id", null, null, null, null, null, null, null), "\n")),
+            (plain, "# Plain\n"));
+        File.WriteAllBytes(Path.Combine(root, middle), [.. System.Text.Encoding.ASCII.GetBytes("# Caf"), 0xE9, (byte)'\n']);
+        try
+        {
+            await Ui(root, 4, async context =>
+            {
+                Assert.Single(context.Errors, e => e.StartsWith("Couldn't read 'middle.md';", StringComparison.Ordinal));
+
+                foreach (var refused in new[] { StoryFile, last })
+                {
+                    var node = context.Node(refused);
+                    await Assert.ThrowsAsync<IOException>(
+                        () => node.ChangeStatusCommand.Execute(ChapterStatus.Drafting).ToTask());
+                    await Assert.ThrowsAsync<IOException>(() => context.Workspace.MetadataStore.SaveNotesAsync(
+                        root, node.Story, "Typed."));
+                    Assert.False(PhasesHave(root, node.Uuid));
+                    Assert.False(File.Exists(NotesPath(root, refused)));
+                }
+                await PumpUntilAsync(() => context.Errors.Count(e => e.Contains("isn't known which file")) >= 2);
+
+                // A later file with no block can't be the story's file: it keeps using the sidecar.
+                var other = context.Node(plain);
+                await Within(other.ChangeStatusCommand.Execute(ChapterStatus.Editing).ToTask());
+                Assert.True(PhasesHave(root, other.Uuid));
+            });
+            Assert.Equal(StoryText, File.ReadAllText(Path.Combine(root, StoryFile)));
+        }
+        finally { DeleteFolder(root); }
+    }
+
+    [Fact]
     public async Task Failed_hydration_refuses_notes_and_beats_instead_of_writing_the_sidecar()
     {
         var root = CreateWorkspace(EmbeddedJson, (StoryFile, StoryText));

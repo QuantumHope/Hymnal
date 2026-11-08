@@ -36,8 +36,13 @@ public sealed class EmbeddedStoryMetadataStore(SidecarStoryMetadataStore sidecar
     /// <summary>Why every story's data is refused when Book.txt lists no story file.</summary>
     public const string NoStoryFileMessage = "Add a story file to keep beats in it.";
 
-    /// <summary>The primary story (null: none known) and, when its data can't be used, why.</summary>
-    private sealed record PrimaryState(StoryRef? Primary, string? Unavailable);
+    /// <summary>
+    /// The primary story (null: none known) and, when its data can't be used, why; while it is unavailable,
+    /// the other files that might be the primary (<see cref="Ambiguous"/>, workspace-relative paths) are refused
+    /// with <see cref="AmbiguousReason"/>.
+    /// </summary>
+    private sealed record PrimaryState(
+        StoryRef? Primary, string? Unavailable, IReadOnlySet<string>? Ambiguous = null, string? AmbiguousReason = null);
 
     private volatile PrimaryState _state = new(null, NotLoadedMessage);
 
@@ -49,6 +54,15 @@ public sealed class EmbeddedStoryMetadataStore(SidecarStoryMetadataStore sidecar
     /// (never routed to the sidecar) until a later <see cref="SetPrimaryStory"/>.
     /// </summary>
     public void SetPrimaryUnavailable(StoryRef primary, string reason) => _state = new(primary, reason);
+
+    /// <summary>
+    /// Like <see cref="SetPrimaryUnavailable(StoryRef, string)"/>, and while it can't be read it isn't known which
+    /// file is the primary: the data of <paramref name="otherCandidates"/> (workspace-relative paths of files that
+    /// might be it) is refused too, with <paramref name="otherReason"/>, rather than routed to the sidecar.
+    /// </summary>
+    public void SetPrimaryUnavailable(
+        StoryRef primary, string reason, IEnumerable<string> otherCandidates, string otherReason) =>
+        _state = new(primary, reason, new HashSet<string>(otherCandidates, StringComparer.OrdinalIgnoreCase), otherReason);
 
     /// <summary>Book.txt lists no story file: every story's data is refused.</summary>
     public void SetNoStoryFile() => _state = new(null, NoStoryFileMessage);
@@ -78,7 +92,7 @@ public sealed class EmbeddedStoryMetadataStore(SidecarStoryMetadataStore sidecar
         {
             Route.Block => UpdateBlockAsync(state.Primary!, block => WithPhaseData(block, update(ToPhaseData(block)))),
             Route.Sidecar => sidecar.UpsertPhaseDataAsync(root, story, update),
-            _ => throw new IOException(state.Unavailable)
+            _ => throw new IOException(RefusalOf(state, story))
         };
     }
 
@@ -101,7 +115,7 @@ public sealed class EmbeddedStoryMetadataStore(SidecarStoryMetadataStore sidecar
         {
             Route.Block => UpdateBlockAsync(state.Primary!, block => block with { Target = target }),
             Route.Sidecar => sidecar.SetTargetAsync(root, story, target),
-            _ => throw new IOException(state.Unavailable)
+            _ => throw new IOException(RefusalOf(state, story))
         };
     }
 
@@ -114,7 +128,7 @@ public sealed class EmbeddedStoryMetadataStore(SidecarStoryMetadataStore sidecar
         {
             Route.Block => (await ReadBlockAsync(state.Primary!).ConfigureAwait(false))?.Notes ?? "",
             Route.Sidecar => await sidecar.LoadNotesAsync(root, story).ConfigureAwait(false),
-            _ => throw new IOException(state.Unavailable)
+            _ => throw new IOException(RefusalOf(state, story))
         };
     }
 
@@ -126,7 +140,7 @@ public sealed class EmbeddedStoryMetadataStore(SidecarStoryMetadataStore sidecar
             Route.Block => UpdateBlockAsync(
                 state.Primary!, block => block with { Notes = string.IsNullOrEmpty(notes) ? null : notes }),
             Route.Sidecar => sidecar.SaveNotesAsync(root, story, notes),
-            _ => throw new IOException(state.Unavailable)
+            _ => throw new IOException(RefusalOf(state, story))
         };
     }
 
@@ -181,16 +195,21 @@ public sealed class EmbeddedStoryMetadataStore(SidecarStoryMetadataStore sidecar
 
     /// <summary>
     /// Where <paramref name="story"/>'s data goes: the primary's block, the sidecar (any other file), or nowhere
-    /// (the primary is unavailable, or no primary is known so any story might be it).
+    /// (the primary is unavailable, or is a file that might be it while the primary is unavailable, or no primary
+    /// is known so any story might be it).
     /// </summary>
     private static Route RouteOf(PrimaryState state, StoryRef story)
     {
         if (state.Primary is not { } primary)
             return Route.Refused;
         if (!IsSameFile(primary, story))
-            return Route.Sidecar;
+            return state.Ambiguous?.Contains(story.RelativePath) == true ? Route.Refused : Route.Sidecar;
         return state.Unavailable is null ? Route.Block : Route.Refused;
     }
+
+    /// <summary>Why <paramref name="story"/>'s data is refused (its route is <see cref="Route.Refused"/>).</summary>
+    private static string? RefusalOf(PrimaryState state, StoryRef story) =>
+        state.Primary is { } primary && !IsSameFile(primary, story) ? state.AmbiguousReason : state.Unavailable;
 
     /// <summary>Matches by workspace-relative path, ignoring case like the chapter registry and the sidebar.</summary>
     private static bool IsSameFile(StoryRef primary, StoryRef story) =>
