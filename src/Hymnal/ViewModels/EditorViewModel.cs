@@ -633,6 +633,15 @@ public class EditorViewModel : ViewModelBase, IDisposable, IOpenStoryBuffer
                 if (!written.IsSuccess)
                     throw new IOException(written.Error);
             }
+            else if (_chapterOpen)
+            {
+                // A chapter that isn't UTF-8 is saved as UTF-8 text with no block, through the writer so that
+                // read-only files and symbolic links are treated as for every other chapter.
+                var written = await _storyWriter.WriteFileAsync(
+                    savePath, text, null, StoryFileFormat.Split(text).LineEnding);
+                if (!written.IsSuccess)
+                    throw new IOException(written.Error);
+            }
             else
             {
                 await _metadataStore.WriteTextAtomicAsync(savePath, text);

@@ -192,6 +192,45 @@ public sealed class EditorEmbeddedBlockTests : IDisposable
         Assert.False(editor.IsDirty);
     }
 
+    [UnixPermissionFact]
+    public async Task Read_only_non_utf8_chapter_fails_to_save_and_is_left_unchanged()
+    {
+        byte[] bytes = [0x63, 0x61, 0x66, 0xE9, 0x0A];
+        var path = WriteBytes("story.md", bytes);
+        var editor = CreateEditor();
+        await editor.OpenChapterAsync(Node("story.md"), path);
+        File.SetUnixFileMode(path, UnixFileMode.UserRead);
+        try
+        {
+            editor.Text = "Edited.\n";
+            await Assert.ThrowsAsync<IOException>(() => editor.SaveAsync());
+
+            Assert.Equal(bytes, File.ReadAllBytes(path));
+            Assert.True(editor.IsDirty);
+            Assert.Contains(_notifications.Errors, m => m.Contains("read-only"));
+        }
+        finally
+        {
+            File.SetUnixFileMode(path, UnixFileMode.UserRead | UnixFileMode.UserWrite);
+        }
+    }
+
+    [SymlinkFact]
+    public async Task Non_utf8_chapter_saved_through_a_link_keeps_the_link()
+    {
+        var path = WriteBytes("story.md", [0x63, 0x61, 0x66, 0xE9, 0x0A]);
+        var link = Path.Combine(_root, "link.md");
+        File.CreateSymbolicLink(link, path);
+        var editor = CreateEditor();
+        await editor.OpenChapterAsync(Node("link.md"), link);
+
+        editor.Text = "Saved as UTF-8.\n";
+        await editor.SaveAsync();
+
+        Assert.NotNull(new FileInfo(link).LinkTarget);
+        Assert.Equal("Saved as UTF-8.\n", ReadText(path));
+    }
+
     [Fact]
     public async Task Buffer_closed_during_a_save_keeps_its_own_clean_state()
     {
@@ -611,13 +650,19 @@ public sealed class EditorEmbeddedBlockTests : IDisposable
     {
         private readonly object _gate = new();
         private readonly List<string> _infos = [];
+        private readonly List<string> _errors = [];
 
         public IReadOnlyList<string> Infos
         {
             get { lock (_gate) return _infos.ToList(); }
         }
 
-        public void ShowError(string message) { }
+        public IReadOnlyList<string> Errors
+        {
+            get { lock (_gate) return _errors.ToList(); }
+        }
+
+        public void ShowError(string message) { lock (_gate) _errors.Add(message); }
         public void ShowInfo(string message) { lock (_gate) _infos.Add(message); }
         public void ShowSuccess(string message) { }
     }
