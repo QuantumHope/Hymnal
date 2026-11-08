@@ -147,10 +147,10 @@ internal sealed class PlanTestContext : IDisposable
         var wordCount = new WordCountService();
         _phases = new PhaseDataService(_store);
         _targets = new TargetsService(_store);
-        _structure = new BookTxtStructureService(_store, exclusions, registry);
+        var storyWriter = new StoryFileWriter(_store);
+        _structure = new BookTxtStructureService(_store, exclusions, registry, storyWriter);
         ProjectSettings = new ProjectSettingsService(_store);
         Boards = boards?.Invoke(_store) ?? new BeatBoardService(_store);
-        var storyWriter = new StoryFileWriter(_store);
         var notes = new NotesService(_store);
         Migrator = new StorageMigrator(_phases, _targets, notes, Boards, storyWriter);
         _editor = _owned.Track(new EditorViewModel(_store, Notifications, wordCount, storyWriter));

@@ -124,7 +124,7 @@ Baseline: 761 tests (`dotnet test Hymnal.slnx --list-tests`). Measured 2026-11-0
 
 **Don't:**
 - Put business logic directly in Views or code-behind files
-- Don't modify chapter `.md` files outside of `StoryFileWriter`, which the editor save path uses.
+- Modify chapter `.md` files outside of `StoryFileWriter`, which the editor save path and rename heading rewrites use (exceptions: a non-UTF-8 file's heading rewrite, and a failed rename's rollback restoring the file's exact original text)
 - Read or write per-story status/schedule, target, notes or beats other than through `IStoryMetadataStore` (`WorkspaceViewModel.MetadataStore`); only `StorageMigrator` moves them between storages
 - Bypass `INotesService`, `IChapterRegistryService`, or `IMetadataStore` to write `.hymnal-data` directly
 - Assume `dotnet test` alone works — always target the solution file

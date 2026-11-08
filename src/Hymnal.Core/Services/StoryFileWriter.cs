@@ -147,7 +147,7 @@ public sealed class StoryFileWriter(IMetadataStore store)
                 // the file is closed now, so write it as one.
             }
 
-            return await RewriteClosedFileAsync(path, split => update(split.Metadata)).ConfigureAwait(false);
+            return await RewriteClosedFileAsync(path, split => (split.Prose, update(split.Metadata))).ConfigureAwait(false);
         }
         finally
         {
@@ -201,7 +201,7 @@ public sealed class StoryFileWriter(IMetadataStore store)
                 // As in UpdateMetadataAsync: the buffer closed the file meanwhile, so rewrite it as a closed file.
             }
 
-            return await RewriteClosedFileAsync(path, _ => null).ConfigureAwait(false);
+            return await RewriteClosedFileAsync(path, split => (split.Prose, null)).ConfigureAwait(false);
         }
         finally
         {
@@ -210,11 +210,39 @@ public sealed class StoryFileWriter(IMetadataStore store)
     }
 
     /// <summary>
-    /// Reads, splits and re-merges a file that is not open, with the metadata <paramref name="newMetadata"/>
+    /// Applies <paramref name="change"/> to the prose of a file that is not open in the editor, keeping its
+    /// block, line ending and a UTF-8 byte order mark (which stays at the start of the prose passed to
+    /// <paramref name="change"/>). A malformed block is part of the prose. Fails without writing when the file is
+    /// open in the editor (its buffer owns the prose), and like the other writes for missing, read-only and
+    /// non-UTF-8 files. <paramref name="change"/> runs while this file's locks are held: it must be pure.
+    /// </summary>
+    public async Task<Result<Unit>> RewriteProseAsync(string absolutePath, Func<string, string> change)
+    {
+        if (!TryResolve(absolutePath, out var path, out var error))
+            return Result<Unit>.Fail(error);
+
+        var gate = Lock(_metadataLocks, path);
+        await gate.WaitAsync().ConfigureAwait(false);
+        try
+        {
+            if (HeldBuffer(path) is not null)
+                return Result<Unit>.Fail($"Story file is open in the editor and was left unchanged: {path.Full}");
+
+            return await RewriteClosedFileAsync(path, split => (change(split.Prose), split.Metadata))
+                .ConfigureAwait(false);
+        }
+        finally
+        {
+            gate.Release();
+        }
+    }
+
+    /// <summary>
+    /// Reads, splits and re-merges a file that is not open, with the prose and metadata <paramref name="rewrite"/>
     /// returns. Skips the write when the merged text equals the file's current text.
     /// </summary>
     private async Task<Result<Unit>> RewriteClosedFileAsync(
-        StoryPath path, Func<StorySplit, EmbeddedStoryMetadata?> newMetadata)
+        StoryPath path, Func<StorySplit, (string Prose, EmbeddedStoryMetadata? Metadata)> rewrite)
     {
         var gate = Lock(_fileLocks, path);
         await gate.WaitAsync().ConfigureAwait(false);
@@ -225,7 +253,8 @@ public sealed class StoryFileWriter(IMetadataStore store)
                 return Result<Unit>.Fail(read.Error!);
 
             var (original, split) = read.Value;
-            var merged = StoryFileFormat.Merge(split.Prose, newMetadata(split), split.LineEnding);
+            var (prose, metadata) = rewrite(split);
+            var merged = StoryFileFormat.Merge(prose, metadata, split.LineEnding);
             if (string.Equals(merged, original, StringComparison.Ordinal))
                 return Result<Unit>.Ok(Unit.Default);
 

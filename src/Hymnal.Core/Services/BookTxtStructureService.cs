@@ -10,6 +10,9 @@ public sealed class BookTxtStructureService : IBookTxtStructureService
     private readonly IMetadataStore _metadataStore;
     private readonly IExclusionManifestService _exclusionManifestService;
     private readonly ChapterRegistryService _chapterRegistryService;
+    private readonly StoryFileWriter _storyWriter;
+
+    private static readonly System.Text.UTF8Encoding StrictUtf8 = new(encoderShouldEmitUTF8Identifier: false, throwOnInvalidBytes: true);
 
     public BookTxtStructureService(IMetadataStore metadataStore)
         : this(metadataStore, new ExclusionManifestService(metadataStore), new ChapterRegistryService(metadataStore))
@@ -25,10 +28,23 @@ public sealed class BookTxtStructureService : IBookTxtStructureService
         IMetadataStore metadataStore,
         IExclusionManifestService exclusionManifestService,
         ChapterRegistryService chapterRegistryService)
+        : this(metadataStore, exclusionManifestService, chapterRegistryService, new StoryFileWriter(metadataStore))
+    {
+    }
+
+    /// <param name="storyWriter">
+    /// Rewrites a renamed file's first heading, keeping its metadata block; the app passes the editor's writer.
+    /// </param>
+    public BookTxtStructureService(
+        IMetadataStore metadataStore,
+        IExclusionManifestService exclusionManifestService,
+        ChapterRegistryService chapterRegistryService,
+        StoryFileWriter storyWriter)
     {
         _metadataStore = metadataStore;
         _exclusionManifestService = exclusionManifestService;
         _chapterRegistryService = chapterRegistryService;
+        _storyWriter = storyWriter;
     }
 
     public async Task<Result<IReadOnlyList<string>>> ReadNormalizedEntriesAsync(string bookTxtPath)
@@ -806,7 +822,16 @@ public sealed class BookTxtStructureService : IBookTxtStructureService
     {
         try
         {
-            return Result<string>.Ok(await File.ReadAllTextAsync(absolutePath).ConfigureAwait(false));
+            // A UTF-8 file is decoded with its byte order mark kept, so a restore writes back the same bytes.
+            var bytes = await File.ReadAllBytesAsync(absolutePath).ConfigureAwait(false);
+            try
+            {
+                return Result<string>.Ok(StrictUtf8.GetString(bytes));
+            }
+            catch (System.Text.DecoderFallbackException)
+            {
+                return Result<string>.Ok(await File.ReadAllTextAsync(absolutePath).ConfigureAwait(false));
+            }
         }
         catch (Exception ex)
         {
@@ -833,24 +858,63 @@ public sealed class BookTxtStructureService : IBookTxtStructureService
         }
     }
 
+    /// <summary>
+    /// Sets the file's first <c># </c> heading to <paramref name="title"/> (inserting one at the top when there is
+    /// none) through the story file writer, so a trailing metadata block, a UTF-8 byte order mark, the line
+    /// endings and a trailing newline are kept. A file that isn't UTF-8 is rewritten as UTF-8 text, as the
+    /// editor saves it.
+    /// </summary>
     private async Task<Result<Unit>> RewriteFirstHeadingAsync(string absolutePath, string title)
     {
         try
         {
-            var lines = (await File.ReadAllLinesAsync(absolutePath).ConfigureAwait(false)).ToList();
-            var headingIndex = lines.FindIndex(line => line.TrimStart().StartsWith("# ", StringComparison.Ordinal));
-            if (headingIndex >= 0)
-                lines[headingIndex] = "# " + title;
-            else
-                lines.Insert(0, "# " + title);
+            var written = await _storyWriter.RewriteProseAsync(absolutePath, prose => WithFirstHeading(prose, title))
+                .ConfigureAwait(false);
+            if (written.IsSuccess)
+                return written;
+            if (!(await _storyWriter.TryReadFileAsync(absolutePath).ConfigureAwait(false)).NotUtf8)
+                return Result<Unit>.Fail($"failed to update first '# ' heading at '{absolutePath}': {written.Error}");
 
-            await _metadataStore.WriteTextAtomicAsync(absolutePath, string.Join(Environment.NewLine, lines)).ConfigureAwait(false);
+            var text = await File.ReadAllTextAsync(absolutePath).ConfigureAwait(false);
+            await _metadataStore.WriteTextAtomicAsync(absolutePath, WithFirstHeading(text, title)).ConfigureAwait(false);
             return Result<Unit>.Ok(Unit.Default);
         }
         catch (Exception ex)
         {
             return Result<Unit>.Fail($"failed to update first '# ' heading at '{absolutePath}': {ex.Message}");
         }
+    }
+
+    /// <summary>
+    /// <paramref name="text"/> with its first line starting (after indentation) with <c># </c> replaced by
+    /// <c># </c><paramref name="title"/>, or with that heading inserted as the first line. Every other character,
+    /// a leading byte order mark and each line's own line break are kept.
+    /// </summary>
+    private static string WithFirstHeading(string text, string title)
+    {
+        const char byteOrderMark = '\uFEFF';
+        var bom = text.Length > 0 && text[0] == byteOrderMark ? 1 : 0;
+        var heading = "# " + title;
+
+        var lineStart = bom;
+        while (lineStart <= text.Length)
+        {
+            var newline = text.IndexOf('\n', lineStart);
+            var lineEnd = newline < 0 ? text.Length : newline;
+            if (lineEnd > lineStart && text[lineEnd - 1] == '\r')
+                lineEnd--;
+
+            if (text.AsSpan(lineStart, lineEnd - lineStart).TrimStart().StartsWith("# ", StringComparison.Ordinal))
+                return string.Concat(text.AsSpan(0, lineStart), heading, text.AsSpan(lineEnd));
+
+            if (newline < 0)
+                break;
+            lineStart = newline + 1;
+        }
+
+        var firstNewline = text.IndexOf('\n', bom);
+        var lineEnding = firstNewline > 0 && text[firstNewline - 1] == '\r' ? "\r\n" : firstNewline >= 0 ? "\n" : Environment.NewLine;
+        return string.Concat(text.AsSpan(0, bom), heading, text.Length > bom ? lineEnding : "", text.AsSpan(bom));
     }
 
     private async Task<Result<Unit>> RollBackRenameFileAsync(

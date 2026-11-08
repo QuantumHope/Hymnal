@@ -75,6 +75,25 @@ public class StoryFileWriterTests
 
     private static byte[] Concat(byte[] a, byte[] b) => [.. a, .. b];
 
+    [Fact]
+    public Task RewriteProseAsync_changes_the_prose_only_and_refuses_a_file_open_in_the_editor() => WithTempDirAsync(async dir =>
+    {
+        var original = "\uFEFF# Old\r\n\r\nBody.\r\n";
+        var path = WriteText(dir, StoryFileFormat.Merge(original, Metadata("keep"), "\r\n"));
+        var writer = new StoryFileWriter(new MetadataStore());
+
+        var rewritten = await writer.RewriteProseAsync(path, prose => prose.Replace("# Old", "# New"));
+
+        Assert.True(rewritten.IsSuccess, rewritten.Error);
+        Assert.Equal(StoryFileFormat.Merge(original.Replace("# Old", "# New"), Metadata("keep"), "\r\n"), ReadText(path));
+
+        var before = ReadText(path);
+        writer.AttachBuffer(new FakeBuffer(Path.GetFullPath(path), Metadata("keep")));
+        var refused = await writer.RewriteProseAsync(path, prose => prose + "x");
+        Assert.False(refused.IsSuccess);
+        Assert.Equal(before, ReadText(path));
+    });
+
     [Theory]
     [InlineData("# Title\n\nFirst paragraph.\n")]
     [InlineData("# Title\r\n\r\nFirst paragraph.\r\n")]

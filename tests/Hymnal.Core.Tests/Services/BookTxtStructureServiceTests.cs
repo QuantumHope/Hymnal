@@ -1238,6 +1238,60 @@ public class BookTxtStructureServiceTests
         }
     }
 
+    [Theory]
+    [InlineData("\n", true)]
+    [InlineData("\r\n", false)]
+    public async Task RenameEntryAsync_ChapterRename_KeepsBomLineEndingsTrailingNewlineAndBlock(string le, bool bom)
+    {
+        var block = new EmbeddedStoryMetadata("story-id", ChapterStatus.Editing, null, null, null, null, "Keep me.", null);
+        var prose = $"{(bom ? "\uFEFF" : "")}Intro line{le}# Chapter One{le}{le}Body{le}";
+        var workspace = CreateWorkspace(("Book.txt", "chapter-one.md"));
+        var source = AbsolutePath(workspace.Root, "chapter-one.md");
+        await File.WriteAllBytesAsync(source,
+            new System.Text.UTF8Encoding(false).GetBytes(StoryFileFormat.Merge(prose, block, le)));
+
+        try
+        {
+            await SaveRegistryAsync(workspace.Root, new ChapterRegistryEntry
+            {
+                Uuid = "story-id", CurrentPath = "chapter-one.md", Orphaned = false, Title = "Chapter One"
+            });
+            var result = await CreateService().RenameEntryAsync(workspace.BookTxtPath, "chapter-one.md", "chapter-renamed.md");
+
+            Assert.True(result.IsSuccess, result.Error);
+            var text = new System.Text.UTF8Encoding(false).GetString(
+                await File.ReadAllBytesAsync(AbsolutePath(workspace.Root, "chapter-renamed.md")));
+            var expectedProse = $"{(bom ? "\uFEFF" : "")}Intro line{le}# Chapter Renamed{le}{le}Body{le}";
+            Assert.Equal(StoryFileFormat.Merge(expectedProse, block, le), text);
+        }
+        finally
+        {
+            Directory.Delete(workspace.Root, recursive: true);
+        }
+    }
+
+    [Fact]
+    public async Task RenameEntryAsync_ChapterRename_InsertsHeadingWithTheFileLineEnding()
+    {
+        var workspace = CreateWorkspace(("Book.txt", "chapter-one.md"), ("chapter-one.md", "Body\r\nMore\r\n"));
+        try
+        {
+            await SaveRegistryAsync(workspace.Root, new ChapterRegistryEntry
+            {
+                Uuid = "story-id", CurrentPath = "chapter-one.md", Orphaned = false, Title = "Chapter One"
+            });
+            var result = await CreateService().RenameEntryAsync(workspace.BookTxtPath, "chapter-one.md", "chapter-renamed.md");
+
+            Assert.True(result.IsSuccess, result.Error);
+            Assert.Equal("# Chapter Renamed\r\nBody\r\nMore\r\n",
+                await File.ReadAllTextAsync(AbsolutePath(workspace.Root, "chapter-renamed.md")));
+        }
+        finally
+        {
+            Directory.Delete(workspace.Root, recursive: true);
+        }
+    }
+
     [Fact]
     public async Task RenameEntryAsync_PartFolderRename_MovesFolderRewritesDescendantsHeadingAndRegistryPaths()
     {
