@@ -819,22 +819,28 @@ public class EditorViewModel : ViewModelBase, IDisposable, IOpenStoryBuffer
         if (_watcher == null || path == null)
             return;
 
-        string? content = null;
-        ChapterRead? chapter = null;
-        try
+        // A chapter is read and reloaded while metadata changes to it are held off (as AcceptExternalCommand
+        // does), so a writer update in progress reaches the disk before the read or the reloaded buffer after it,
+        // never a buffer about to be replaced by an older read.
+        using (isChapter ? await _storyWriter.HoldMetadataChangesAsync(path).ConfigureAwait(false) : null)
         {
-            if (isChapter)
-                chapter = await ReadChapterFileAsync(path).ConfigureAwait(false);
-            else
-                content = await File.ReadAllTextAsync(path).ConfigureAwait(false);
-        }
-        catch (Exception ex)
-        {
-            await onUiThread(() => _notificationService.ShowError($"Auto-reload failed: {ex.Message}")).ConfigureAwait(false);
-            return;
-        }
+            string? content = null;
+            ChapterRead? chapter = null;
+            try
+            {
+                if (isChapter)
+                    chapter = await ReadChapterFileAsync(path).ConfigureAwait(false);
+                else
+                    content = await File.ReadAllTextAsync(path).ConfigureAwait(false);
+            }
+            catch (Exception ex)
+            {
+                await onUiThread(() => _notificationService.ShowError($"Auto-reload failed: {ex.Message}")).ConfigureAwait(false);
+                return;
+            }
 
-        await onUiThread(() => ApplyExternalChange(content, chapter, generation)).ConfigureAwait(false);
+            await onUiThread(() => ApplyExternalChange(content, chapter, generation)).ConfigureAwait(false);
+        }
     }
 
     private void ApplyExternalChange(string? content, ChapterRead? chapter, int generation)

@@ -583,6 +583,29 @@ public sealed class EditorEmbeddedBlockTests : IDisposable
     }
 
     [Fact]
+    public async Task External_reload_waits_for_a_metadata_change_in_progress()
+    {
+        var path = WriteFile("story.md", StoryFileFormat.Merge("Before.", Meta("old"), "\n"));
+        var editor = CreateEditor();
+        await editor.OpenChapterAsync(Node("story.md"), path);
+        await File.WriteAllTextAsync(path, StoryFileFormat.Merge("External.", Meta("external"), "\n"));
+
+        // Stands in for a writer update that is writing the file when the external change is noticed.
+        var hold = await _writer.HoldMetadataChangesAsync(path);
+        var reload = editor.ProcessExternalFileChangeNowAsync();
+        await Task.Delay(100);
+        Assert.False(reload.IsCompleted);
+
+        File.WriteAllText(path, StoryFileFormat.Merge("External.", Meta("written meanwhile"), "\n"));
+        hold.Dispose();
+        await reload.WaitAsync(Step);
+
+        Assert.Equal("External.", editor.Text);
+        Assert.Equal("written meanwhile", editor.CurrentMetadata?.Notes);
+        Assert.False(editor.IsDirty);
+    }
+
+    [Fact]
     public async Task External_change_on_clean_buffer_reloads_both()
     {
         var path = WriteFile("story.md", StoryFileFormat.Merge("Before.", Meta("old"), "\n"));
