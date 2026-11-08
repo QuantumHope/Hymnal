@@ -13,7 +13,9 @@ namespace Hymnal.Core.Services;
 /// For the primary story the block is the only source: a sidecar entry under its UUID is ignored on load and
 /// never written. Block values are guarded on read: an undefined status means none, and an invalid story board
 /// (empty, id-less, title-less or duplicate-id beats, or a malformed block) fails to load so the board stays
-/// read-only, as with sidecar boards. An existing block <c>id</c> is kept; a new block takes the story's UUID.
+/// read-only, as with sidecar boards; a story-board save onto a malformed block fails too. A primary file that
+/// can't be read makes the loads throw <see cref="IOException"/>, like the sidecar loads. An existing block
+/// <c>id</c> is kept; a new block takes the story's UUID.
 /// </para>
 /// </summary>
 public sealed class EmbeddedStoryMetadataStore(SidecarStoryMetadataStore sidecar, StoryFileWriter writer)
@@ -30,12 +32,9 @@ public sealed class EmbeddedStoryMetadataStore(SidecarStoryMetadataStore sidecar
     public async Task<Dictionary<string, PhaseData>> LoadPhaseDataAsync(string root, IReadOnlyList<StoryRef> stories)
     {
         var result = await sidecar.LoadPhaseDataAsync(root, stories).ConfigureAwait(false);
-        if (PrimaryIn(stories) is { } primary)
-        {
-            result.Remove(primary.Uuid);
-            if (ToPhaseData(await ReadBlockAsync(primary).ConfigureAwait(false)) is { } phaseData)
-                result[primary.Uuid] = phaseData;
-        }
+        if (DropPrimaryEntries(result, stories) is { } primary
+            && ToPhaseData(await ReadBlockAsync(primary).ConfigureAwait(false)) is { } phaseData)
+            result[primary.Uuid] = phaseData;
         return result;
     }
 
@@ -49,12 +48,9 @@ public sealed class EmbeddedStoryMetadataStore(SidecarStoryMetadataStore sidecar
     public async Task<Dictionary<string, WordCountTarget>> LoadTargetsAsync(string root, IReadOnlyList<StoryRef> stories)
     {
         var result = await sidecar.LoadTargetsAsync(root, stories).ConfigureAwait(false);
-        if (PrimaryIn(stories) is { } primary)
-        {
-            result.Remove(primary.Uuid);
-            if ((await ReadBlockAsync(primary).ConfigureAwait(false))?.Target is { } target)
-                result[primary.Uuid] = target;
-        }
+        if (DropPrimaryEntries(result, stories) is { } primary
+            && (await ReadBlockAsync(primary).ConfigureAwait(false))?.Target is { } target)
+            result[primary.Uuid] = target;
         return result;
     }
 
@@ -83,18 +79,15 @@ public sealed class EmbeddedStoryMetadataStore(SidecarStoryMetadataStore sidecar
             return await sidecar.LoadBeatsAsync(root, boardKey).ConfigureAwait(false);
 
         // A damaged block must never be replaced by a beat save, so the board loads as an error (read-only).
-        var file = await writer.ReadFileAsync(primary.AbsolutePath).ConfigureAwait(false);
-        if (!file.IsSuccess)
-            return Result<IReadOnlyList<Beat>>.Fail(file.Error!);
-        if (file.Value!.HadMalformedBlock)
-            return Result<IReadOnlyList<Beat>>.Fail(
-                $"The Hymnal data at the end of {Path.GetFileName(primary.AbsolutePath)} could not be read.");
+        if (await CheckBlockReadableAsync(primary).ConfigureAwait(false) is { } error)
+            return Result<IReadOnlyList<Beat>>.Fail(error);
 
         var current = await writer.ReadMetadataAsync(primary.AbsolutePath).ConfigureAwait(false);
         if (!current.IsSuccess)
             return Result<IReadOnlyList<Beat>>.Fail(current.Error!);
 
-        return ValidateBeats(current.Value?.Beats, Path.GetFileName(primary.AbsolutePath));
+        return BeatBoardService.ValidateBeats(
+            current.Value?.Beats, $"The story board in {Path.GetFileName(primary.AbsolutePath)}");
     }
 
     public async Task<Result<Unit>> SaveBeatsAsync(string root, string boardKey, IReadOnlyList<Beat> beats)
@@ -104,6 +97,9 @@ public sealed class EmbeddedStoryMetadataStore(SidecarStoryMetadataStore sidecar
 
         if (beats is null || beats.Any(b => b is null))
             return Result<Unit>.Fail("Beat board cannot be saved with missing beats.");
+
+        if (await CheckBlockReadableAsync(primary).ConfigureAwait(false) is { } error)
+            return Result<Unit>.Fail(error);
 
         var saved = beats.ToList();
         return await writer.UpdateMetadataAsync(
@@ -117,16 +113,45 @@ public sealed class EmbeddedStoryMetadataStore(SidecarStoryMetadataStore sidecar
     private bool IsPrimary(StoryRef story) =>
         _primary is { } primary && string.Equals(primary.RelativePath, story.RelativePath, StringComparison.Ordinal);
 
-    private StoryRef? PrimaryIn(IReadOnlyList<StoryRef> stories) => stories.FirstOrDefault(IsPrimary);
+    /// <summary>
+    /// Removes the primary story's sidecar entries (under the primary's UUID and under the UUID its entry in
+    /// <paramref name="stories"/> carries, which differ while a block id is being adopted) and returns that
+    /// entry, or null when <paramref name="stories"/> doesn't include the primary.
+    /// </summary>
+    private StoryRef? DropPrimaryEntries<T>(Dictionary<string, T> sidecarEntries, IReadOnlyList<StoryRef> stories)
+    {
+        if (_primary is not { } primary)
+            return null;
+
+        sidecarEntries.Remove(primary.Uuid);
+        var listed = stories.FirstOrDefault(IsPrimary);
+        if (listed is not null)
+            sidecarEntries.Remove(listed.Uuid);
+        return listed;
+    }
 
     private StoryRef? StoryBoardPrimary(string boardKey) =>
         string.Equals(boardKey, BeatBoardService.ShortStoryBoardKey, StringComparison.Ordinal) ? _primary : null;
 
-    /// <summary>The story's block, or null when it has none, it is malformed or the file can't be read.</summary>
+    /// <summary>
+    /// The story's block, or null when it has none or it is malformed. Throws <see cref="IOException"/> when the
+    /// file can't be read, as the sidecar loads do, so a caller never mistakes unreadable data for none.
+    /// </summary>
     private async Task<EmbeddedStoryMetadata?> ReadBlockAsync(StoryRef story)
     {
         var read = await writer.ReadMetadataAsync(story.AbsolutePath).ConfigureAwait(false);
-        return read.IsSuccess ? read.Value : null;
+        return read.IsSuccess ? read.Value : throw new IOException(read.Error);
+    }
+
+    /// <summary>The error when the file can't be read or its block is malformed; null when it is fine.</summary>
+    private async Task<string?> CheckBlockReadableAsync(StoryRef story)
+    {
+        var file = await writer.ReadFileAsync(story.AbsolutePath).ConfigureAwait(false);
+        if (!file.IsSuccess)
+            return file.Error;
+        return file.Value!.HadMalformedBlock
+            ? $"The Hymnal data at the end of {Path.GetFileName(story.AbsolutePath)} could not be read."
+            : null;
     }
 
     /// <summary>Applies the pure <paramref name="change"/> to the story's block; throws when it can't be stored.</summary>
@@ -181,22 +206,4 @@ public sealed class EmbeddedStoryMetadataStore(SidecarStoryMetadataStore sidecar
         DateOnly.TryParseExact(date, IsoDate, CultureInfo.InvariantCulture, DateTimeStyles.None, out var parsed)
             ? parsed
             : null;
-
-    /// <summary>Applies <see cref="BeatBoardService"/>'s load rules to block beats.</summary>
-    private static Result<IReadOnlyList<Beat>> ValidateBeats(IReadOnlyList<Beat>? blockBeats, string fileName)
-    {
-        var beats = new List<Beat>();
-        var seenIds = new HashSet<string>(StringComparer.Ordinal);
-        foreach (var b in blockBeats ?? [])
-        {
-            if (b is null)
-                return Result<IReadOnlyList<Beat>>.Fail($"The story board in {fileName} contains an empty beat entry.");
-            if (string.IsNullOrWhiteSpace(b.Id) || b.Title is null)
-                return Result<IReadOnlyList<Beat>>.Fail($"The story board in {fileName} contains a beat without an id or title.");
-            if (!seenIds.Add(b.Id))
-                return Result<IReadOnlyList<Beat>>.Fail($"The story board in {fileName} contains duplicate beat id '{b.Id}'.");
-            beats.Add(b with { Note = b.Note ?? "" });
-        }
-        return Result<IReadOnlyList<Beat>>.Ok(beats);
-    }
 }

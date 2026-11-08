@@ -41,19 +41,7 @@ public sealed partial class BeatBoardService(IMetadataStore store) : IBeatBoardS
             if (doc.SchemaVersion != CurrentSchemaVersion)
                 return Result<IReadOnlyList<Beat>>.Fail(
                     $"{name} has unsupported schemaVersion {doc.SchemaVersion}. Expected {CurrentSchemaVersion}.");
-            var beats = new List<Beat>();
-            var seenIds = new HashSet<string>(StringComparer.Ordinal);
-            foreach (var b in doc.Beats ?? [])
-            {
-                if (b is null)
-                    return Result<IReadOnlyList<Beat>>.Fail($"{name} contains an empty beat entry.");
-                if (string.IsNullOrWhiteSpace(b.Id) || b.Title is null)
-                    return Result<IReadOnlyList<Beat>>.Fail($"{name} contains a beat without an id or title.");
-                if (!seenIds.Add(b.Id))
-                    return Result<IReadOnlyList<Beat>>.Fail($"{name} contains duplicate beat id '{b.Id}'.");
-                beats.Add(b with { Note = b.Note ?? "" });
-            }
-            return Result<IReadOnlyList<Beat>>.Ok(beats);
+            return ValidateBeats(doc.Beats, name);
         }
         catch (JsonException ex)
         {
@@ -67,6 +55,27 @@ public sealed partial class BeatBoardService(IMetadataStore store) : IBeatBoardS
         {
             return Result<IReadOnlyList<Beat>>.Fail($"{name} could not be read: {ex.Message}");
         }
+    }
+
+    /// <summary>
+    /// The load rules for stored beats: fails on an empty entry, a beat without an id or title, or a duplicate id;
+    /// a missing note reads as "". <paramref name="sourceName"/> begins each error message.
+    /// </summary>
+    internal static Result<IReadOnlyList<Beat>> ValidateBeats(IEnumerable<Beat?>? beats, string sourceName)
+    {
+        var valid = new List<Beat>();
+        var seenIds = new HashSet<string>(StringComparer.Ordinal);
+        foreach (var b in beats ?? [])
+        {
+            if (b is null)
+                return Result<IReadOnlyList<Beat>>.Fail($"{sourceName} contains an empty beat entry.");
+            if (string.IsNullOrWhiteSpace(b.Id) || b.Title is null)
+                return Result<IReadOnlyList<Beat>>.Fail($"{sourceName} contains a beat without an id or title.");
+            if (!seenIds.Add(b.Id))
+                return Result<IReadOnlyList<Beat>>.Fail($"{sourceName} contains duplicate beat id '{b.Id}'.");
+            valid.Add(b with { Note = b.Note ?? "" });
+        }
+        return Result<IReadOnlyList<Beat>>.Ok(valid);
     }
 
     public async Task<Result<Unit>> SaveAsync(string workspaceRoot, string boardKey, IReadOnlyList<Beat> beats)

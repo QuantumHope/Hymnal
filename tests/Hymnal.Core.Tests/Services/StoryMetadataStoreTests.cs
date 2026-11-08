@@ -406,6 +406,83 @@ public class StoryMetadataStoreTests
     });
 
     [Fact]
+    public Task Embedded_unreadable_primary_makes_loads_throw() => WithTempDirAsync(async dir =>
+    {
+        var story = new StoryRef("uuid-1", "story.md", Path.Combine(dir, "story.md"));
+        File.WriteAllBytes(story.AbsolutePath, [0x41, 0xFF, 0xFE, 0x42]); // not valid UTF-8
+        var store = NewEmbedded(story);
+
+        await Assert.ThrowsAsync<IOException>(() => store.LoadNotesAsync(dir, story));
+        await Assert.ThrowsAsync<IOException>(() => store.LoadPhaseDataAsync(dir, [story]));
+        await Assert.ThrowsAsync<IOException>(() => store.LoadTargetsAsync(dir, [story]));
+        Assert.False((await store.LoadBeatsAsync(dir, BeatBoardService.ShortStoryBoardKey)).IsSuccess);
+    });
+
+    [Fact]
+    public Task Embedded_read_only_primary_write_throws() => WithTempDirAsync(async dir =>
+    {
+        var story = WriteStory(dir, "story.md", Prose, "uuid-1");
+        File.SetAttributes(story.AbsolutePath, FileAttributes.ReadOnly);
+        try
+        {
+            await Assert.ThrowsAsync<IOException>(() => NewEmbedded(story).SaveNotesAsync(dir, story, "n"));
+            Assert.Equal(Prose, File.ReadAllText(story.AbsolutePath));
+        }
+        finally
+        {
+            File.SetAttributes(story.AbsolutePath, FileAttributes.Normal);
+        }
+    });
+
+    [Fact]
+    public Task Embedded_story_board_save_onto_malformed_block_fails_and_keeps_the_file() => WithTempDirAsync(async dir =>
+    {
+        var content = Block("""{ "id": "x", "beats": [ """);
+        var story = WriteStory(dir, "story.md", content, "uuid-1");
+
+        var result = await NewEmbedded(story).SaveBeatsAsync(dir, BeatBoardService.ShortStoryBoardKey, SampleBeats);
+
+        Assert.False(result.IsSuccess);
+        Assert.Equal(content, File.ReadAllText(story.AbsolutePath));
+    });
+
+    [Fact]
+    public Task Embedded_drops_primary_sidecar_entry_even_when_primary_is_not_listed() => WithTempDirAsync(async dir =>
+    {
+        var primary = WriteStory(dir, "story.md", Prose, "uuid-1");
+        var other = WriteStory(dir, "extra.md", "Extra.", "uuid-2");
+        var sidecar = NewSidecar();
+        await sidecar.UpsertPhaseDataAsync(dir, primary, _ => new PhaseData { Status = ChapterStatus.Done });
+        await sidecar.UpsertPhaseDataAsync(dir, other, _ => new PhaseData { Status = ChapterStatus.Editing });
+        await sidecar.SetTargetAsync(dir, primary, SampleTarget);
+        await sidecar.SetTargetAsync(dir, other, SampleTarget);
+        var store = NewEmbedded(primary);
+
+        Assert.Equal(["uuid-2"], (await store.LoadPhaseDataAsync(dir, [other])).Keys);
+        Assert.Equal(["uuid-2"], (await store.LoadTargetsAsync(dir, [other])).Keys);
+    });
+
+    [Fact]
+    public Task Embedded_matches_primary_by_path_when_its_uuid_was_adopted() => WithTempDirAsync(async dir =>
+    {
+        var registered = WriteStory(dir, "story.md", Block("""{ "id": "block-id", "status": "editing" }"""), "registry-uuid");
+        var adopted = registered with { Uuid = "block-id" };
+        var sidecar = NewSidecar();
+        await sidecar.UpsertPhaseDataAsync(dir, registered, _ => new PhaseData { Status = ChapterStatus.Done });
+        await sidecar.UpsertPhaseDataAsync(dir, adopted, _ => new PhaseData { Status = ChapterStatus.Done });
+        var store = NewEmbedded(registered);
+
+        var phases = await store.LoadPhaseDataAsync(dir, [adopted]);
+        Assert.Equal(["block-id"], phases.Keys);
+        Assert.Equal(ChapterStatus.Editing, phases["block-id"].Status);
+
+        await store.SaveNotesAsync(dir, adopted, "via adopted ref");
+        Assert.Equal("via adopted ref", BlockOf(registered)!.Notes);
+        Assert.Equal("block-id", BlockOf(registered)!.Id);
+        Assert.False(Directory.Exists(Sidecar(dir, "notes")));
+    });
+
+    [Fact]
     public Task Embedded_write_preserves_crlf_prose_bytes() => WithTempDirAsync(async dir =>
     {
         var story = WriteStory(dir, "story.md", Prose, "uuid-1");
