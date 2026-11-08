@@ -25,7 +25,8 @@ public sealed class ChapterDetailViewModel : ViewModelBase, IDisposable
     // ── Dependencies ──────────────────────────────────────────────────────────
 
     private readonly ChapterViewModel _chapterVm;
-    private readonly IStoryMetadataStore _metadataStore;
+    /// <summary>The workspace's current metadata store, read at each save (the dialog may outlive a reload).</summary>
+    private readonly Func<IStoryMetadataStore> _metadataStore;
     private readonly string _workspaceRoot;
     private readonly INotificationService _notificationService;
 
@@ -125,7 +126,7 @@ public sealed class ChapterDetailViewModel : ViewModelBase, IDisposable
 
     public ChapterDetailViewModel(
         ChapterViewModel chapterVm,
-        IStoryMetadataStore metadataStore,
+        Func<IStoryMetadataStore> metadataStore,
         string workspaceRoot,
         INotificationService notificationService)
     {
@@ -267,7 +268,7 @@ public sealed class ChapterDetailViewModel : ViewModelBase, IDisposable
         var currentStatus = Status;
 
         PhaseData? updated = null;
-        await _metadataStore.UpsertPhaseDataAsync(_workspaceRoot, _chapterVm.Story, current =>
+        await _metadataStore().UpsertPhaseDataAsync(_workspaceRoot, _chapterVm.Story, current =>
         {
             // Keep entries for phases this profile doesn't show (e.g. novel phases in a story).
             var rowNames = rows.Select(r => r.PhaseName).ToHashSet(StringComparer.Ordinal);
@@ -310,7 +311,7 @@ public sealed class ChapterDetailViewModel : ViewModelBase, IDisposable
     private async Task SetStatusAsync(ChapterStatus newStatus)
     {
         PhaseData? updated = null;
-        await _metadataStore.UpsertPhaseDataAsync(_workspaceRoot, _chapterVm.Story, current =>
+        await _metadataStore().UpsertPhaseDataAsync(_workspaceRoot, _chapterVm.Story, current =>
         {
             var statusChanged = current?.Status != newStatus;
             var isAdvancing = (int)newStatus > (int)(current?.Status ?? ChapterStatus.Planned);

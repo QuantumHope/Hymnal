@@ -205,7 +205,7 @@ public sealed class ProfileDrivenUiTests : IDisposable
             };
             await phaseService.UpsertAsync(root, "uuid-1", _ => stored);
             var detail = new ChapterDetailViewModel(
-                CreateStoryChapter(root, store, phaseService, stored), TestMetadataStores.Sidecar(phaseService), root, new RecordingNotificationService());
+                CreateStoryChapter(root, store, phaseService, stored), () => TestMetadataStores.Sidecar(phaseService), root, new RecordingNotificationService());
 
             await RunOnUiThreadWithPumpingAsync(async () =>
             {
@@ -340,7 +340,7 @@ public sealed class ProfileDrivenUiTests : IDisposable
             };
             await phaseService.UpsertAsync(root, "uuid-1", _ => stored);
             var detail = new ChapterDetailViewModel(
-                CreateStoryChapter(root, store, phaseService, stored), TestMetadataStores.Sidecar(phaseService), root, new RecordingNotificationService());
+                CreateStoryChapter(root, store, phaseService, stored), () => TestMetadataStores.Sidecar(phaseService), root, new RecordingNotificationService());
 
             await RunOnUiThreadWithPumpingAsync(() =>
             {

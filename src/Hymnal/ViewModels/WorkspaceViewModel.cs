@@ -44,6 +44,7 @@ public class WorkspaceViewModel : ViewModelBase
     private Task? _hydrationTask;
     private bool _isSwitching;
     private bool _multiFileNoticeShown;
+    private string? _unreadablePrimaryNoticeShownFor;
     private volatile IStoryMetadataStore _metadataStore;
     private readonly Subject<Unit> _workspaceChanged = new();
     private CompositeDisposable _partSubscriptions = new();
@@ -611,6 +612,7 @@ public class WorkspaceViewModel : ViewModelBase
             await LoadProfileAsync(result.Value!.WorkspaceRoot);
             _editor.HasWorkspace = true;
             _multiFileNoticeShown = false;
+            _unreadablePrimaryNoticeShownFor = null;
             BindModel(result.Value!);
         }
         finally
@@ -714,6 +716,7 @@ public class WorkspaceViewModel : ViewModelBase
         _model = null;
         _metadataStore = _sidecarStore;
         _multiFileNoticeShown = false;
+        _unreadablePrimaryNoticeShownFor = null;
         _nodes.Clear();
         _nodesByPath.Clear();
         TargetFlyoutChapter = null;
@@ -750,6 +753,7 @@ public class WorkspaceViewModel : ViewModelBase
 
             await LoadProfileAsync(result.Value!.WorkspaceRoot);
             _multiFileNoticeShown = false;
+            _unreadablePrimaryNoticeShownFor = null;
             BindModel(result.Value!);
             _editor.HasWorkspace = true;
 
@@ -860,8 +864,10 @@ public class WorkspaceViewModel : ViewModelBase
                 _registryService.AssignUuid(registry, node.RelativePath, node.Title);
             }
 
-            if (store is EmbeddedStoryMetadataStore)
-                registry = await SetPrimaryStoryAsync(store, model, activeNodes, registry).ConfigureAwait(false);
+            if (store is EmbeddedStoryMetadataStore embedded)
+                registry = await SetPrimaryStoryAsync(embedded, model, activeNodes, registry).ConfigureAwait(false);
+            // Handed over before the registry save: if that save fails, the adopted block id is simply adopted
+            // again on the next load, and the block (not the registry) is what the store reads by.
             preparedStore.TrySetResult(store);
 
             if (RegistryChanged(originalRegistry, registry))
@@ -1013,56 +1019,72 @@ public class WorkspaceViewModel : ViewModelBase
         }
         finally
         {
-            // Calls waiting for the store go ahead even when hydration failed or was superseded.
+            // Calls waiting for the store go ahead even when hydration failed or was superseded. An embedded store
+            // whose primary was never set refuses every story's data rather than sending it to the sidecar.
             preparedStore.TrySetResult(store);
         }
     }
 
     /// <summary>
-    /// Embedded storage: picks the file whose data is embedded (the first in Book.txt with a block, else the
-    /// first) and sets it on <paramref name="store"/>. When its block id differs from its registry UUID the
-    /// registry entry adopts the block id, so the story keeps its identity when renamed outside Hymnal. With
-    /// more than one chapter file, says once per workspace open that the others use project data.
-    /// Returns the registry, with the adoption applied.
+    /// Embedded storage: picks the file whose data is embedded and sets it on <paramref name="store"/>. Going
+    /// through the present chapter files in Book.txt order, the first with a block is the primary, else the first
+    /// file; a file that can't be read stops the search and is the primary, unavailable (its data is refused, not
+    /// looked for in a later file), with one error until it is readable again or the workspace is reopened. When an available primary's block id
+    /// differs from its registry UUID the registry entry adopts the block id, so the story keeps its identity when
+    /// renamed outside Hymnal. When Book.txt lists more than one chapter file (missing ones included), says once
+    /// per workspace open that the others use project data. Returns the registry, with any adoption applied.
     /// </summary>
     private async Task<Dictionary<string, ChapterRegistryEntry>> SetPrimaryStoryAsync(
-        IStoryMetadataStore store,
+        EmbeddedStoryMetadataStore store,
         ManuscriptModel model,
         IReadOnlyList<ChapterNode> activeNodes,
         Dictionary<string, ChapterRegistryEntry> registry)
     {
-        var files = activeNodes
-            .Where(n => n.Kind == NodeKind.Chapter && !n.IsMissing)
-            .Select(n => new StoryRef(
-                TryGetRegistryUuid(registry, n.RelativePath),
-                n.RelativePath,
-                Path.Combine(model.ManuscriptRoot, n.RelativePath)))
-            .ToList();
-
-        var blocks = new Dictionary<string, EmbeddedStoryMetadata?>(StringComparer.Ordinal);
-        foreach (var file in files)
-        {
-            // An unreadable file has no block to find here; reading its data reports the error.
-            var read = await _editor.StoryWriter.ReadMetadataAsync(file.AbsolutePath).ConfigureAwait(false);
-            blocks[file.RelativePath] = read.IsSuccess ? read.Value : null;
-        }
-
-        var primary = StoryMetadataStoreFactory.ResolvePrimary(files, file => blocks[file.RelativePath]);
-        if (primary is not null)
-        {
-            if (blocks[primary.RelativePath]?.Id is { } blockId && blockId != primary.Uuid)
-                registry = _registryService.AdoptUuid(registry, primary.RelativePath, blockId);
-            primary = primary with { Uuid = TryGetRegistryUuid(registry, primary.RelativePath) };
-        }
-        store.SetPrimaryStory(primary);
-
-        if (files.Count > 1 && !_multiFileNoticeShown)
+        var listed = activeNodes.Where(n => n.Kind == NodeKind.Chapter).ToList();
+        if (listed.Count > 1 && !_multiFileNoticeShown)
         {
             _multiFileNoticeShown = true;
             _notificationService.ShowInfo(
                 "Keep everything in the story file only covers single-file stories; other files use project data.");
         }
 
+        StoryRef? first = null;
+        foreach (var node in listed.Where(n => !n.IsMissing))
+        {
+            var file = new StoryRef(
+                TryGetRegistryUuid(registry, node.RelativePath),
+                node.RelativePath,
+                Path.Combine(model.ManuscriptRoot, node.RelativePath));
+            first ??= file;
+
+            var read = await _editor.StoryWriter.ReadMetadataAsync(file.AbsolutePath).ConfigureAwait(false);
+            if (!read.IsSuccess)
+            {
+                var reason = $"Couldn't read '{Path.GetFileName(file.AbsolutePath)}'; its story data is read-only until it can be read.";
+                store.SetPrimaryUnavailable(file, reason);
+                if (!string.Equals(_unreadablePrimaryNoticeShownFor, file.RelativePath, StringComparison.Ordinal))
+                {
+                    _unreadablePrimaryNoticeShownFor = file.RelativePath;
+                    _notificationService.ShowError(reason);
+                }
+                return registry;
+            }
+
+            if (read.Value is { } block)
+            {
+                if (block.Id is { } blockId && blockId != file.Uuid)
+                    registry = _registryService.AdoptUuid(registry, file.RelativePath, blockId);
+                store.SetPrimaryStory(file with { Uuid = TryGetRegistryUuid(registry, file.RelativePath) });
+                _unreadablePrimaryNoticeShownFor = null;
+                return registry;
+            }
+        }
+
+        if (first is null)
+            store.SetNoStoryFile();
+        else
+            store.SetPrimaryStory(first);
+        _unreadablePrimaryNoticeShownFor = null;
         return registry;
     }
 

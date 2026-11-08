@@ -330,6 +330,102 @@ public sealed class EmbeddedStorageIntegrationTests
     }
 
     [Fact]
+    public async Task Missing_listed_file_counts_toward_the_notice_and_the_present_file_is_primary()
+    {
+        var root = CreateWorkspace(EmbeddedJson, (StoryFile, StoryText), ("gone.md", "# Gone\n"));
+        File.Delete(Path.Combine(root, "gone.md"));
+        try
+        {
+            await Ui(root, 2, async context =>
+            {
+                Assert.Single(context.Infos, i => i == MultiFileNotice);
+                await Within(context.Node(StoryFile).ChangeStatusCommand.Execute(ChapterStatus.Drafting).ToTask());
+                Assert.Empty(context.Errors);
+            });
+
+            Assert.Equal(ChapterStatus.Drafting, ReadStory(root).Metadata?.Status);
+            Assert.False(File.Exists(PhasesPath(root)));
+        }
+        finally { DeleteFolder(root); }
+    }
+
+    // ── Unavailable data is refused, never routed to the sidecar ──────────────
+
+    [Fact]
+    public async Task Unreadable_primary_loads_the_sidebar_and_refuses_its_writes()
+    {
+        const string second = "second.md";
+        var root = CreateWorkspace(EmbeddedJson, (StoryFile, StoryText), (second, "# Second\n\nMore.\n"));
+        // Not valid UTF-8 (Latin-1 "é"): the sidebar can list it, but its block can't be read. (A file without read
+        // permission can't be tested here: the workspace itself fails to load, as it always has.)
+        var path = Path.Combine(root, StoryFile);
+        File.WriteAllBytes(path, [.. System.Text.Encoding.ASCII.GetBytes("# The Lighthouse\n\nCaf"), 0xE9, (byte)'\n']);
+        var bytes = File.ReadAllBytes(path);
+        try
+        {
+            const string reason = "Couldn't read 'story.md'; its story data is read-only until it can be read.";
+            await Ui(root, 2, async context =>
+            {
+                var node = context.Node(StoryFile);
+                Assert.Equal(ChapterStatus.Planned, node.Status);
+                Assert.Single(context.Errors, e => e == reason);
+
+                await Assert.ThrowsAsync<IOException>(
+                    () => node.ChangeStatusCommand.Execute(ChapterStatus.Drafting).ToTask());
+                await PumpUntilAsync(() => context.Errors.Count(e => e == reason) == 2);
+
+                // A later file with no block doesn't take over the primary role: it still uses the sidecar.
+                var other = context.Node(second);
+                await Within(other.ChangeStatusCommand.Execute(ChapterStatus.Editing).ToTask());
+                Assert.True(PhasesHave(root, other.Uuid));
+                Assert.False(PhasesHave(root, node.Uuid));
+
+                // A reload doesn't repeat the error while the file stays unreadable.
+                var reload = await Within(context.Workspace.ReloadCurrentWorkspaceAsync());
+                Assert.True(reload.IsSuccess, reload.Error);
+                await context.SettleAsync();
+                Assert.Equal(2, context.Errors.Count(e => e == reason));
+            });
+
+            Assert.Equal(bytes, File.ReadAllBytes(path));
+        }
+        finally { DeleteFolder(root); }
+    }
+
+    [Fact]
+    public async Task Failed_hydration_refuses_notes_and_beats_instead_of_writing_the_sidecar()
+    {
+        var root = CreateWorkspace(EmbeddedJson, (StoryFile, StoryText));
+        File.WriteAllText(Path.Combine(root, ".hymnal-data", "chapter-registry.json"), "{ not json");
+        try
+        {
+            await Ui(root, 0, async context =>
+            {
+                await PumpUntilAsync(() => context.Errors.Any(e => e.StartsWith("Failed to load chapter registry", StringComparison.Ordinal)));
+
+                var notes = context.CreateNotes();
+                var node = new ChapterNode(StoryFile, StoryFile, "The Lighthouse", NodeKind.Chapter, IsMissing: false, Index: 0);
+                await Within(context.Editor.OpenChapterAsync(node, Path.Combine(root, StoryFile)));
+                notes.Text = "Remember the lamp.";
+                await PumpUntilAsync(() => context.Errors.Any(e =>
+                    e == "Failed to save notes: " + EmbeddedStoryMetadataStore.NotLoadedMessage));
+
+                await Within(context.Board.OpenBoardAsync(BeatBoardService.ShortStoryBoardKey, "The Story", [StoryFile]));
+                Assert.True(context.Board.IsReadOnly);
+                Assert.Contains(context.Infos, i => i.StartsWith(EmbeddedStoryMetadataStore.NotLoadedMessage, StringComparison.Ordinal));
+                await Within(context.Board.AddBeatAsync());
+                Assert.Empty(context.Board.Beats);
+            });
+
+            Assert.Equal(StoryText, File.ReadAllText(Path.Combine(root, StoryFile)));
+            Assert.False(Directory.Exists(Path.Combine(root, ".hymnal-data", "notes")));
+            Assert.False(Directory.Exists(Path.Combine(root, ".hymnal-data", "beats")));
+            Assert.False(File.Exists(PhasesPath(root)));
+        }
+        finally { DeleteFolder(root); }
+    }
+
+    [Fact]
     public async Task Single_file_story_shows_no_notice()
     {
         var root = CreateWorkspace(EmbeddedJson, (StoryFile, StoryText));

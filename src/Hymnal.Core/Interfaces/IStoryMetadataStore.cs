@@ -42,10 +42,4 @@ public interface IStoryMetadataStore
     Task<Result<IReadOnlyList<Beat>>> LoadBeatsAsync(string root, string boardKey);
 
     Task<Result<Unit>> SaveBeatsAsync(string root, string boardKey, IReadOnlyList<Beat> beats);
-
-    /// <summary>
-    /// Sets the story whose data lives in its own file (embedded storage only; ignored by the sidecar store).
-    /// Null means no story is embedded.
-    /// </summary>
-    void SetPrimaryStory(StoryRef? primary);
 }

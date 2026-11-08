@@ -34,8 +34,4 @@ public sealed class DeferredStoryMetadataStore(Task<IStoryMetadataStore> store) 
 
     public async Task<Result<Unit>> SaveBeatsAsync(string root, string boardKey, IReadOnlyList<Beat> beats) =>
         await (await store.ConfigureAwait(false)).SaveBeatsAsync(root, boardKey, beats).ConfigureAwait(false);
-
-    /// <summary>Not used: the primary story is set on the prepared store before it is handed over.</summary>
-    public void SetPrimaryStory(StoryRef? primary) =>
-        throw new NotSupportedException("Set the primary story on the store being prepared.");
 }

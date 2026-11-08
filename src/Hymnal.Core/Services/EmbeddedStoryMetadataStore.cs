@@ -13,9 +13,16 @@ namespace Hymnal.Core.Services;
 /// For the primary story the block is the only source: a sidecar entry under its UUID is ignored on load and
 /// never written. Block values are guarded on read: an undefined status means none, and an invalid story board
 /// (empty, id-less, title-less or duplicate-id beats, or a malformed block) fails to load so the board stays
-/// read-only, as with sidecar boards; a story-board save onto a malformed block fails too. A primary file that
-/// can't be read makes the loads throw <see cref="IOException"/>, like the sidecar loads. An existing block
-/// <c>id</c> is kept; a new block takes the story's UUID.
+/// read-only, as with sidecar boards; a story-board save onto a malformed block fails too. An existing block
+/// <c>id</c> is kept; a new block takes the primary story's UUID.
+/// </para>
+/// <para>
+/// Until the workspace sets the primary (<see cref="SetPrimaryStory"/>), and when it is unavailable
+/// (<see cref="SetPrimaryUnavailable"/>, <see cref="SetNoStoryFile"/>), the story's data is never routed to the
+/// sidecar instead: its writes throw <see cref="IOException"/> (story-board saves fail), its notes load throws
+/// and its story board loads as failed, all with the reason; its phase data and target load as none. With no
+/// primary at all that applies to every story. Loading the phase data or target of a primary that can't be read
+/// throws <see cref="IOException"/>, like the sidecar loads.
 /// </para>
 /// </summary>
 public sealed class EmbeddedStoryMetadataStore(SidecarStoryMetadataStore sidecar, StoryFileWriter writer)
@@ -23,60 +30,110 @@ public sealed class EmbeddedStoryMetadataStore(SidecarStoryMetadataStore sidecar
 {
     private const string IsoDate = "yyyy-MM-dd";
 
-    private volatile StoryRef? _primary;
+    /// <summary>Why every story's data is refused before the workspace has set the primary.</summary>
+    public const string NotLoadedMessage = "This story's data couldn't be loaded. Reopen the project to try again.";
 
-    public void SetPrimaryStory(StoryRef? primary) => _primary = primary;
+    /// <summary>Why every story's data is refused when Book.txt lists no story file.</summary>
+    public const string NoStoryFileMessage = "Add a story file to keep beats in it.";
+
+    /// <summary>The primary story (null: none known) and, when its data can't be used, why.</summary>
+    private sealed record PrimaryState(StoryRef? Primary, string? Unavailable);
+
+    private volatile PrimaryState _state = new(null, NotLoadedMessage);
+
+    /// <summary>Sets the story whose data lives in its own file.</summary>
+    public void SetPrimaryStory(StoryRef primary) => _state = new(primary, null);
+
+    /// <summary>
+    /// Sets the primary story whose file can't be read: its data is refused with <paramref name="reason"/>
+    /// (never routed to the sidecar) until a later <see cref="SetPrimaryStory"/>.
+    /// </summary>
+    public void SetPrimaryUnavailable(StoryRef primary, string reason) => _state = new(primary, reason);
+
+    /// <summary>Book.txt lists no story file: every story's data is refused.</summary>
+    public void SetNoStoryFile() => _state = new(null, NoStoryFileMessage);
 
     // ── Phase data ───────────────────────────────────────────────────────────
 
     public async Task<Dictionary<string, PhaseData>> LoadPhaseDataAsync(string root, IReadOnlyList<StoryRef> stories)
     {
+        var state = _state;
         var result = await sidecar.LoadPhaseDataAsync(root, stories).ConfigureAwait(false);
-        if (DropPrimaryEntries(result, stories) is { } primary
+        if (DropPrimaryEntries(state, result, stories) is { } primary && state.Unavailable is null
             && ToPhaseData(await ReadBlockAsync(primary).ConfigureAwait(false)) is { } phaseData)
             result[primary.Uuid] = phaseData;
         return result;
     }
 
-    public Task UpsertPhaseDataAsync(string root, StoryRef story, Func<PhaseData?, PhaseData> update) =>
-        IsPrimary(story)
-            ? UpdateBlockAsync(story, block => WithPhaseData(block, update(ToPhaseData(block))))
-            : sidecar.UpsertPhaseDataAsync(root, story, update);
+    public Task UpsertPhaseDataAsync(string root, StoryRef story, Func<PhaseData?, PhaseData> update)
+    {
+        var state = _state;
+        return RouteOf(state, story) switch
+        {
+            Route.Block => UpdateBlockAsync(state.Primary!, block => WithPhaseData(block, update(ToPhaseData(block)))),
+            Route.Sidecar => sidecar.UpsertPhaseDataAsync(root, story, update),
+            _ => throw new IOException(state.Unavailable)
+        };
+    }
 
     // ── Targets ──────────────────────────────────────────────────────────────
 
     public async Task<Dictionary<string, WordCountTarget>> LoadTargetsAsync(string root, IReadOnlyList<StoryRef> stories)
     {
+        var state = _state;
         var result = await sidecar.LoadTargetsAsync(root, stories).ConfigureAwait(false);
-        if (DropPrimaryEntries(result, stories) is { } primary
+        if (DropPrimaryEntries(state, result, stories) is { } primary && state.Unavailable is null
             && (await ReadBlockAsync(primary).ConfigureAwait(false))?.Target is { } target)
             result[primary.Uuid] = target;
         return result;
     }
 
-    public Task SetTargetAsync(string root, StoryRef story, WordCountTarget? target) =>
-        IsPrimary(story)
-            ? UpdateBlockAsync(story, block => block with { Target = target })
-            : sidecar.SetTargetAsync(root, story, target);
+    public Task SetTargetAsync(string root, StoryRef story, WordCountTarget? target)
+    {
+        var state = _state;
+        return RouteOf(state, story) switch
+        {
+            Route.Block => UpdateBlockAsync(state.Primary!, block => block with { Target = target }),
+            Route.Sidecar => sidecar.SetTargetAsync(root, story, target),
+            _ => throw new IOException(state.Unavailable)
+        };
+    }
 
     // ── Notes ────────────────────────────────────────────────────────────────
 
-    public async Task<string> LoadNotesAsync(string root, StoryRef story) =>
-        IsPrimary(story)
-            ? (await ReadBlockAsync(story).ConfigureAwait(false))?.Notes ?? ""
-            : await sidecar.LoadNotesAsync(root, story).ConfigureAwait(false);
+    public async Task<string> LoadNotesAsync(string root, StoryRef story)
+    {
+        var state = _state;
+        return RouteOf(state, story) switch
+        {
+            Route.Block => (await ReadBlockAsync(state.Primary!).ConfigureAwait(false))?.Notes ?? "",
+            Route.Sidecar => await sidecar.LoadNotesAsync(root, story).ConfigureAwait(false),
+            _ => throw new IOException(state.Unavailable)
+        };
+    }
 
-    public Task SaveNotesAsync(string root, StoryRef story, string notes) =>
-        IsPrimary(story)
-            ? UpdateBlockAsync(story, block => block with { Notes = string.IsNullOrEmpty(notes) ? null : notes })
-            : sidecar.SaveNotesAsync(root, story, notes);
+    public Task SaveNotesAsync(string root, StoryRef story, string notes)
+    {
+        var state = _state;
+        return RouteOf(state, story) switch
+        {
+            Route.Block => UpdateBlockAsync(
+                state.Primary!, block => block with { Notes = string.IsNullOrEmpty(notes) ? null : notes }),
+            Route.Sidecar => sidecar.SaveNotesAsync(root, story, notes),
+            _ => throw new IOException(state.Unavailable)
+        };
+    }
 
     // ── Beats ────────────────────────────────────────────────────────────────
 
     public async Task<Result<IReadOnlyList<Beat>>> LoadBeatsAsync(string root, string boardKey)
     {
-        if (StoryBoardPrimary(boardKey) is not { } primary)
+        var state = _state;
+        if (!IsStoryBoard(boardKey))
             return await sidecar.LoadBeatsAsync(root, boardKey).ConfigureAwait(false);
+        if (state.Unavailable is { } unavailable)
+            return Result<IReadOnlyList<Beat>>.Fail(unavailable);
+        var primary = state.Primary!;
 
         // A damaged block must never be replaced by a beat save, so the board loads as an error (read-only).
         if (await CheckBlockReadableAsync(primary).ConfigureAwait(false) is { } error)
@@ -92,8 +149,12 @@ public sealed class EmbeddedStoryMetadataStore(SidecarStoryMetadataStore sidecar
 
     public async Task<Result<Unit>> SaveBeatsAsync(string root, string boardKey, IReadOnlyList<Beat> beats)
     {
-        if (StoryBoardPrimary(boardKey) is not { } primary)
+        var state = _state;
+        if (!IsStoryBoard(boardKey))
             return await sidecar.SaveBeatsAsync(root, boardKey, beats).ConfigureAwait(false);
+        if (state.Unavailable is { } unavailable)
+            return Result<Unit>.Fail(unavailable);
+        var primary = state.Primary!;
 
         if (beats is null || beats.Any(b => b is null))
             return Result<Unit>.Fail("Beat board cannot be saved with missing beats.");
@@ -110,28 +171,45 @@ public sealed class EmbeddedStoryMetadataStore(SidecarStoryMetadataStore sidecar
 
     // ── Helpers ──────────────────────────────────────────────────────────────
 
-    private bool IsPrimary(StoryRef story) =>
-        _primary is { } primary && string.Equals(primary.RelativePath, story.RelativePath, StringComparison.Ordinal);
+    private enum Route { Block, Sidecar, Refused }
+
+    /// <summary>
+    /// Where <paramref name="story"/>'s data goes: the primary's block, the sidecar (any other file), or nowhere
+    /// (the primary is unavailable, or no primary is known so any story might be it).
+    /// </summary>
+    private static Route RouteOf(PrimaryState state, StoryRef story)
+    {
+        if (state.Primary is not { } primary)
+            return Route.Refused;
+        if (!IsSameFile(primary, story))
+            return Route.Sidecar;
+        return state.Unavailable is null ? Route.Block : Route.Refused;
+    }
+
+    /// <summary>Matches by workspace-relative path, ignoring case like the chapter registry and the sidebar.</summary>
+    private static bool IsSameFile(StoryRef primary, StoryRef story) =>
+        string.Equals(primary.RelativePath, story.RelativePath, StringComparison.OrdinalIgnoreCase);
 
     /// <summary>
     /// Removes the primary story's sidecar entries (under the primary's UUID and under the UUID its entry in
     /// <paramref name="stories"/> carries, which differ while a block id is being adopted) and returns that
-    /// entry, or null when <paramref name="stories"/> doesn't include the primary.
+    /// entry, or null when there is no primary or <paramref name="stories"/> doesn't include it.
     /// </summary>
-    private StoryRef? DropPrimaryEntries<T>(Dictionary<string, T> sidecarEntries, IReadOnlyList<StoryRef> stories)
+    private static StoryRef? DropPrimaryEntries<T>(
+        PrimaryState state, Dictionary<string, T> sidecarEntries, IReadOnlyList<StoryRef> stories)
     {
-        if (_primary is not { } primary)
+        if (state.Primary is not { } primary)
             return null;
 
         sidecarEntries.Remove(primary.Uuid);
-        var listed = stories.FirstOrDefault(IsPrimary);
+        var listed = stories.FirstOrDefault(story => IsSameFile(primary, story));
         if (listed is not null)
             sidecarEntries.Remove(listed.Uuid);
         return listed;
     }
 
-    private StoryRef? StoryBoardPrimary(string boardKey) =>
-        string.Equals(boardKey, BeatBoardService.ShortStoryBoardKey, StringComparison.Ordinal) ? _primary : null;
+    private static bool IsStoryBoard(string boardKey) =>
+        string.Equals(boardKey, BeatBoardService.ShortStoryBoardKey, StringComparison.Ordinal);
 
     /// <summary>
     /// The story's block, or null when it has none or it is malformed. Throws <see cref="IOException"/> when the
@@ -154,7 +232,10 @@ public sealed class EmbeddedStoryMetadataStore(SidecarStoryMetadataStore sidecar
             : null;
     }
 
-    /// <summary>Applies the pure <paramref name="change"/> to the story's block; throws when it can't be stored.</summary>
+    /// <summary>
+    /// Applies the pure <paramref name="change"/> to the primary's block (a new block takes the primary's UUID);
+    /// throws when it can't be stored.
+    /// </summary>
     private async Task UpdateBlockAsync(StoryRef story, Func<EmbeddedStoryMetadata, EmbeddedStoryMetadata> change)
     {
         var result = await writer.UpdateMetadataAsync(story.AbsolutePath, current => change(Seed(current, story)))

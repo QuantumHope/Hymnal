@@ -98,7 +98,7 @@ public sealed class ScheduleAutoSaveTests
             root,
             target: null,
             profile: ProjectProfile.For(new ProjectSettings(ProjectKind.Story)));
-        return (chapter, new ChapterDetailViewModel(chapter, TestMetadataStores.Sidecar(phases), root, notes));
+        return (chapter, new ChapterDetailViewModel(chapter, () => TestMetadataStores.Sidecar(phases), root, notes));
     }
 
     private sealed class RecordingNotificationService : INotificationService

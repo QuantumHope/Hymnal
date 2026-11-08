@@ -272,7 +272,7 @@ public sealed class GanttViewModel : ViewModelBase
 
         return new ChapterDetailViewModel(
             chapterVm,
-            _workspace.MetadataStore,
+            () => _workspace.MetadataStore,
             _workspace.WorkspaceRoot,
             _notificationService);
     }

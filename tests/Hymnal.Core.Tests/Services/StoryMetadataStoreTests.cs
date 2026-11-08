@@ -34,7 +34,8 @@ public class StoryMetadataStoreTests
     private static EmbeddedStoryMetadataStore NewEmbedded(StoryRef? primary)
     {
         var store = new EmbeddedStoryMetadataStore(NewSidecar(), new StoryFileWriter(new MetadataStore()));
-        store.SetPrimaryStory(primary);
+        if (primary is not null)
+            store.SetPrimaryStory(primary);
         return store;
     }
 
@@ -237,7 +238,8 @@ public class StoryMetadataStoreTests
             await store.SaveNotesAsync(dir, unknown, "n");
             Assert.Null(BlockOf(unknown)!.Id);
 
-            await store.SetTargetAsync(dir, unknown with { Uuid = "known" }, SampleTarget);
+            store.SetPrimaryStory(unknown with { Uuid = "known" });
+            await store.SetTargetAsync(dir, unknown, SampleTarget);
             Assert.Equal("known", BlockOf(unknown)!.Id);
         });
 
@@ -282,18 +284,87 @@ public class StoryMetadataStoreTests
         Assert.Equal("Other notes", await store.LoadNotesAsync(dir, other));
     });
 
+    private static async Task AssertEveryStoryWriteRefusedAsync(
+        EmbeddedStoryMetadataStore store, string dir, StoryRef story, string reason)
+    {
+        Assert.Equal(reason, (await Assert.ThrowsAsync<IOException>(
+            () => store.UpsertPhaseDataAsync(dir, story, _ => SamplePhaseData()))).Message);
+        Assert.Equal(reason, (await Assert.ThrowsAsync<IOException>(
+            () => store.SetTargetAsync(dir, story, SampleTarget))).Message);
+        Assert.Equal(reason, (await Assert.ThrowsAsync<IOException>(
+            () => store.SaveNotesAsync(dir, story, "n"))).Message);
+        Assert.Equal(reason, (await Assert.ThrowsAsync<IOException>(
+            () => store.LoadNotesAsync(dir, story))).Message);
+        var save = await store.SaveBeatsAsync(dir, BeatBoardService.ShortStoryBoardKey, SampleBeats);
+        Assert.Equal(reason, save.Error);
+        var load = await store.LoadBeatsAsync(dir, BeatBoardService.ShortStoryBoardKey);
+        Assert.Equal(reason, load.Error);
+    }
+
     [Fact]
-    public Task Embedded_without_primary_delegates_everything_to_sidecar() => WithTempDirAsync(async dir =>
+    public Task Embedded_before_the_primary_is_set_refuses_every_story_and_writes_nothing() => WithTempDirAsync(async dir =>
     {
         var story = WriteStory(dir, "story.md", Prose, "uuid-1");
         var store = NewEmbedded(null);
 
-        await store.UpsertPhaseDataAsync(dir, story, _ => SamplePhaseData());
-        await store.SaveBeatsAsync(dir, BeatBoardService.ShortStoryBoardKey, SampleBeats);
+        await AssertEveryStoryWriteRefusedAsync(store, dir, story, EmbeddedStoryMetadataStore.NotLoadedMessage);
 
         Assert.Equal(Prose, File.ReadAllText(story.AbsolutePath));
-        Assert.True(File.Exists(Sidecar(dir, "phases.json")));
-        Assert.True(File.Exists(Sidecar(dir, "beats", "story.json")));
+        Assert.False(Directory.Exists(Sidecar(dir)));
+    });
+
+    [Fact]
+    public Task Embedded_with_no_story_file_refuses_every_story_and_writes_nothing() => WithTempDirAsync(async dir =>
+    {
+        var story = WriteStory(dir, "notes-only.md", Prose, "uuid-1");
+        var store = NewEmbedded(null);
+        store.SetNoStoryFile();
+
+        await AssertEveryStoryWriteRefusedAsync(store, dir, story, "Add a story file to keep beats in it.");
+
+        Assert.False(Directory.Exists(Sidecar(dir)));
+    });
+
+    [Fact]
+    public Task Embedded_unavailable_primary_refuses_its_data_and_other_files_still_use_sidecar() => WithTempDirAsync(async dir =>
+    {
+        var primary = WriteStory(dir, "story.md", Block("""{ "id": "uuid-1", "status": "done" }"""), "uuid-1");
+        var other = WriteStory(dir, "other.md", "Other.\n", "uuid-2");
+        var store = NewEmbedded(null);
+        store.SetPrimaryUnavailable(primary, "Couldn't read it.");
+        var before = File.ReadAllText(primary.AbsolutePath);
+
+        await AssertEveryStoryWriteRefusedAsync(store, dir, primary, "Couldn't read it.");
+        await store.UpsertPhaseDataAsync(dir, other, _ => SamplePhaseData());
+
+        Assert.Equal(before, File.ReadAllText(primary.AbsolutePath));
+        var phases = await store.LoadPhaseDataAsync(dir, [primary, other]);
+        Assert.False(phases.ContainsKey("uuid-1"));
+        Assert.Equal(ChapterStatus.Drafting, phases["uuid-2"].Status);
+        Assert.Empty(await store.LoadTargetsAsync(dir, [primary, other]));
+    });
+
+    [Fact]
+    public Task Embedded_matches_the_primary_ignoring_path_case() => WithTempDirAsync(async dir =>
+    {
+        var primary = WriteStory(dir, "Story.md", Prose, "uuid-1");
+        var store = NewEmbedded(primary);
+
+        await store.SaveNotesAsync(dir, primary with { RelativePath = "story.md" }, "n");
+
+        Assert.Equal("n", BlockOf(primary)!.Notes);
+        Assert.False(Directory.Exists(Sidecar(dir, "notes")));
+    });
+
+    [Fact]
+    public Task Embedded_new_block_takes_the_primary_uuid_not_the_callers() => WithTempDirAsync(async dir =>
+    {
+        var primary = WriteStory(dir, "story.md", Prose, "uuid-1");
+        var store = NewEmbedded(primary);
+
+        await store.SetTargetAsync(dir, primary with { Uuid = "" }, SampleTarget);
+
+        Assert.Equal("uuid-1", BlockOf(primary)!.Id);
     });
 
     [Fact]
@@ -593,6 +664,5 @@ public class StoryMetadataStoreTests
         Assert.Equal(7500, (await deferred.LoadTargetsAsync(dir, [story]))["uuid-1"].MaxWords);
         Assert.Equal("n", await deferred.LoadNotesAsync(dir, story));
         Assert.Equal(SampleBeats.Count, (await deferred.LoadBeatsAsync(dir, BeatBoardService.ShortStoryBoardKey)).Value!.Count);
-        Assert.Throws<NotSupportedException>(() => deferred.SetPrimaryStory(story));
     });
 }

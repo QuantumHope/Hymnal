@@ -37,9 +37,4 @@ public sealed class SidecarStoryMetadataStore(
 
     public Task<Result<Unit>> SaveBeatsAsync(string root, string boardKey, IReadOnlyList<Beat> beats) =>
         beatBoardService.SaveAsync(root, boardKey, beats);
-
-    /// <summary>No story is embedded in sidecar storage.</summary>
-    public void SetPrimaryStory(StoryRef? primary)
-    {
-    }
 }
