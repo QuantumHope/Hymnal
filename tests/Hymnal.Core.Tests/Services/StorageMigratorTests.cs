@@ -315,6 +315,36 @@ public class StorageMigratorTests
         Assert.Equal(before, env.Snapshot());
     }
 
+    [Fact]
+    public async Task Embedded_to_sidecar_refuses_a_file_that_is_not_utf8()
+    {
+        using var env = new Env();
+        var story = env.WriteStory("");
+        await File.WriteAllBytesAsync(story.AbsolutePath, [0x43, 0x61, 0x66, 0xE9, 0x0A]); // "Café" in Latin-1
+        var before = env.Snapshot();
+
+        var result = await env.MigrateAsync(story, StorageMode.Embedded, StorageMode.Sidecar);
+
+        Assert.False(result.IsSuccess);
+        Assert.Contains("UTF-8", result.Error);
+        Assert.Equal(before, env.Snapshot());
+    }
+
+    [Fact]
+    public async Task Sidecar_to_embedded_keeps_unknown_fields_of_an_existing_block()
+    {
+        using var env = new Env();
+        var story = env.WriteStory(Prose + "\r\n\r\n<!-- hymnal:v1\r\n{ \"id\": \"old\", \"futureField\": 7 }\r\n-->\r\n");
+        await env.SeedSidecarAsync(story);
+
+        var result = await env.MigrateAsync(story, StorageMode.Sidecar, StorageMode.Embedded);
+
+        Assert.True(result.IsSuccess, result.Error);
+        var block = StoryFileFormat.Split(await File.ReadAllTextAsync(story.AbsolutePath)).Metadata!;
+        Assert.Equal(SampleNotes, block.Notes);
+        Assert.Equal(7, block.Extra!["futureField"].GetInt32());
+    }
+
     // ── Helpers ───────────────────────────────────────────────────────────────
 
     private static void AssertSchedule(

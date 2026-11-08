@@ -134,10 +134,11 @@ public sealed class StorageMigrator(
     {
         var fileName = Path.GetFileName(primary.AbsolutePath);
         var file = await writer.TryReadFileAsync(primary.AbsolutePath).ConfigureAwait(false);
-        // A file that isn't UTF-8 can't hold a block Hymnal wrote: there is nothing to move, and the sidecar is
-        // left as it is.
+        // The story's data can't be read from a file that isn't UTF-8, so it can't be moved out of it either.
         if (file.NotUtf8)
-            return Result<Unit>.Ok(Unit.Default);
+            return Result<Unit>.Fail(
+                $"{fileName} isn't saved as UTF-8 text, so Hymnal can't read the data kept in it. "
+                + "Save it as UTF-8, then try again. Nothing was changed.");
         if (!file.Result.IsSuccess)
             return Result<Unit>.Fail($"{file.Result.Error} Nothing was changed.");
         if (file.Result.Value!.HadMalformedBlock)
