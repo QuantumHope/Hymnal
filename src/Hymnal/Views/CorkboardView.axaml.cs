@@ -24,6 +24,8 @@ public partial class CorkboardView : UserControl
     private Panel? _lastDropIndicator;
     /// <summary>Anthology: a Part header click waiting to see whether it is the first half of a double-click.</summary>
     private DispatcherTimer? _pendingPartToggle;
+    /// <summary>Click count of the last press on a Part header; a Click from the second press of a double-click is not a toggle.</summary>
+    private int _partHeaderPressCount;
 
     public CorkboardView()
     {
@@ -210,6 +212,8 @@ public partial class CorkboardView : UserControl
             return;
 
         DragDrop.SetAllowDrop(control, true);
+        // Tunnel: the Button handles the press before a bubbling handler would see it.
+        control.AddHandler(PointerPressedEvent, PartHeader_PointerPressed, RoutingStrategies.Tunnel);
         DragDrop.AddDragOverHandler(control, PartHeader_DragOver);
         DragDrop.AddDragLeaveHandler(control, PartHeader_DragLeave);
         DragDrop.AddDropHandler(control, PartHeader_Drop);
@@ -266,12 +270,18 @@ public partial class CorkboardView : UserControl
         await ExecuteCommandAsync(vm.OpenCardCommand.Execute(card));
     }
 
+    private void PartHeader_PointerPressed(object? sender, PointerPressedEventArgs e) =>
+        _partHeaderPressCount = e.ClickCount;
+
     /// <summary>
     /// Toggles the Part. In an anthology a double-click opens the story's beats instead, so the toggle waits
-    /// out the double-click time and a second click cancels it (no collapse-and-expand flicker).
+    /// out the double-click time, and the Click of the second press (whether it arrives before or after
+    /// DoubleTapped) cancels it instead of toggling (no collapse-and-expand flicker).
     /// </summary>
     private async void PartHeader_Click(object? sender, RoutedEventArgs e)
     {
+        var pressCount = _partHeaderPressCount;
+        _partHeaderPressCount = 0;
         if (sender is not Control { DataContext: PartDividerItemViewModel part }
             || DataContext is not CorkboardViewModel vm)
             return;
@@ -282,13 +292,11 @@ public partial class CorkboardView : UserControl
             return;
         }
 
-        if (_pendingPartToggle is { } pending)
-        {
-            pending.Stop();
-            _pendingPartToggle = null;
-            if (ReferenceEquals(pending.Tag, part))
-                return;
-        }
+        var pending = _pendingPartToggle;
+        pending?.Stop();
+        _pendingPartToggle = null;
+        if (pressCount >= 2 || (pending is not null && ReferenceEquals(pending.Tag, part)))
+            return;
 
         var interval = Application.Current?.PlatformSettings?.GetDoubleTapTime(PointerType.Mouse)
             ?? TimeSpan.FromMilliseconds(500);
