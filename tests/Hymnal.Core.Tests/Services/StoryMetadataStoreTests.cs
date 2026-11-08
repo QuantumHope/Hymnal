@@ -176,6 +176,26 @@ public class StoryMetadataStoreTests
     });
 
     [Fact]
+    public Task Embedded_schedule_edit_keeps_an_unknown_status_until_a_status_is_chosen() => WithTempDirAsync(async dir =>
+    {
+        var story = WriteStory(dir, "story.md", Block("{ \"id\": \"uuid-1\", \"status\": \"someday\" }"), "uuid-1");
+        var store = NewEmbedded(story);
+
+        await store.UpsertPhaseDataAsync(dir, story, current =>
+            new PhaseData { Status = current?.Status ?? default, PhaseStartDate = "2026-11-01" });
+        await store.SaveNotesAsync(dir, story, "Notes.");
+
+        Assert.Contains("\"status\": \"someday\"", File.ReadAllText(story.AbsolutePath));
+        Assert.Equal(new DateOnly(2026, 11, 1), BlockOf(story)!.PhaseStartDate);
+
+        await store.UpsertPhaseDataAsync(dir, story, current =>
+            new PhaseData { Status = ChapterStatus.Editing, PhaseStartDate = current!.PhaseStartDate });
+
+        Assert.DoesNotContain("someday", File.ReadAllText(story.AbsolutePath));
+        Assert.Equal(ChapterStatus.Editing, BlockOf(story)!.Status);
+    });
+
+    [Fact]
     public Task Embedded_upsert_passes_current_block_data_and_keeps_other_fields() => WithTempDirAsync(async dir =>
     {
         var story = WriteStory(dir, "story.md", Prose, "uuid-1");

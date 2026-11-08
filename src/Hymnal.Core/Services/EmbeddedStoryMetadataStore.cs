@@ -90,7 +90,7 @@ public sealed class EmbeddedStoryMetadataStore(SidecarStoryMetadataStore sidecar
         var state = _state;
         return RouteOf(state, story) switch
         {
-            Route.Block => UpdateBlockAsync(state.Primary!, block => WithPhaseData(block, update(ToPhaseData(block)))),
+            Route.Block => UpdateBlockAsync(state.Primary!, block => UpdatePhaseData(block, update)),
             Route.Sidecar => sidecar.UpsertPhaseDataAsync(root, story, update),
             _ => throw new IOException(RefusalOf(state, story))
         };
@@ -300,6 +300,20 @@ public sealed class EmbeddedStoryMetadataStore(SidecarStoryMetadataStore sidecar
                 .Where(kv => kv.Value is not null)
                 .ToDictionary(kv => kv.Key, kv => kv.Value)
         };
+    }
+
+    /// <summary>
+    /// Applies <paramref name="update"/> to the block's phase data. A status this version doesn't know (read as the
+    /// default) is kept when the update leaves the status as it read it.
+    /// </summary>
+    private static EmbeddedStoryMetadata UpdatePhaseData(EmbeddedStoryMetadata block, Func<PhaseData?, PhaseData> update)
+    {
+        var before = ToPhaseData(block);
+        var after = update(before);
+        var updated = WithPhaseData(block, after);
+        return block.UnknownStatus is { } unknown && after.Status == (before?.Status ?? default)
+            ? (updated with { Status = null }).WithUnknownStatus(unknown)
+            : updated;
     }
 
     internal static EmbeddedStoryMetadata WithPhaseData(EmbeddedStoryMetadata block, PhaseData data) =>

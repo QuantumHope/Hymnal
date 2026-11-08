@@ -467,4 +467,35 @@ public class StoryFileFormatTests
         Assert.True(resplit.Metadata.Extra!["futureFlag"].GetBoolean());
         Assert.Equal(2, resplit.Metadata.Extra.Count);
     }
+    [Theory]
+    [InlineData("\"someday\"")]
+    [InlineData("42")]
+    [InlineData("{ \"phase\": \"x\" }")]
+    public void Merge_KeepsAnUnknownStatusThatAnUpdateLeavesAsNone(string status)
+    {
+        var text = "Prose.\n\n<!-- hymnal:v1\n{ \"id\": \"id-1\", \"status\": " + status + " }\n-->\n";
+        var split = StoryFileFormat.Split(text);
+
+        var updated = split.Metadata! with { Notes = "New notes.", Status = null };
+        var merged = StoryFileFormat.Merge(split.Prose, updated, split.LineEnding);
+
+        var block = JsonDocument.Parse(StoryFileFormat.SerializeMetadata(updated)).RootElement;
+        Assert.True(JsonElement.DeepEquals(JsonDocument.Parse(status).RootElement, block.GetProperty("status")));
+        var resplit = StoryFileFormat.Split(merged);
+        Assert.Equal("New notes.", resplit.Metadata!.Notes);
+        Assert.Null(resplit.Metadata.Status);
+        Assert.Null(resplit.Metadata.Extra);
+    }
+
+    [Fact]
+    public void Merge_ReplacesAnUnknownStatusWhenAStatusIsSet()
+    {
+        const string text = "Prose.\n\n<!-- hymnal:v1\n{ \"status\": \"someday\" }\n-->\n";
+        var split = StoryFileFormat.Split(text);
+
+        var merged = StoryFileFormat.Merge(split.Prose, split.Metadata! with { Status = ChapterStatus.Done }, "\n");
+
+        Assert.DoesNotContain("someday", merged);
+        Assert.Equal(ChapterStatus.Done, StoryFileFormat.Split(merged).Metadata!.Status);
+    }
 }

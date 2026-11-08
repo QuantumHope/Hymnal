@@ -87,6 +87,7 @@ public class StoryFileWriterTests
         var block = StoryFileFormat.Split(ReadText(path)).Metadata!;
         Assert.Equal("new", block.Notes);
         Assert.Null(block.Status);
+        Assert.Contains("\"status\": \"someday\"", ReadText(path));
         Assert.Equal("[1]", System.Text.Json.JsonSerializer.Serialize(block.Extra!["later"]));
     });
 

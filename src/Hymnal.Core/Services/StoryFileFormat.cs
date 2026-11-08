@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Text.Encodings.Web;
 using System.Text.Json;
 using System.Text.Json.Serialization;
@@ -25,6 +26,7 @@ public static class StoryFileFormat
     private const string OpeningMarker = "<!-- hymnal:v1";
     private const string ClosingMarker = "-->";
     private const char ByteOrderMark = '﻿';
+    private const string StatusPropertyName = "status";
 
     private static readonly JsonSerializerOptions JsonOptions = new()
     {
@@ -78,8 +80,23 @@ public static class StoryFileFormat
         return prose + separator + OpeningMarker + lineEnding + json + lineEnding + ClosingMarker + lineEnding;
     }
 
-    /// <summary>Serializes <paramref name="m"/> as indented camelCase JSON with "\n" line breaks.</summary>
-    public static string SerializeMetadata(EmbeddedStoryMetadata m) => JsonSerializer.Serialize(m, JsonOptions);
+    /// <summary>
+    /// Serializes <paramref name="m"/> as indented camelCase JSON with "\n" line breaks. A status this version
+    /// doesn't know, kept from the block read while <see cref="EmbeddedStoryMetadata.Status"/> stays none, is
+    /// written back as it was.
+    /// </summary>
+    public static string SerializeMetadata(EmbeddedStoryMetadata m)
+    {
+        if (m is { Status: null, UnknownStatus: { } raw })
+        {
+            using var status = JsonDocument.Parse(raw);
+            var extra = m.Extra is null ? new Dictionary<string, JsonElement>() : new Dictionary<string, JsonElement>(m.Extra);
+            extra[StatusPropertyName] = status.RootElement.Clone();
+            m = m with { Extra = extra };
+        }
+
+        return JsonSerializer.Serialize(m, JsonOptions);
+    }
 
     private static string DetectLineEnding(string text)
     {
@@ -138,12 +155,24 @@ public static class StoryFileFormat
     {
         try
         {
-            return JsonSerializer.Deserialize<EmbeddedStoryMetadata>(json, JsonOptions);
+            var metadata = JsonSerializer.Deserialize<EmbeddedStoryMetadata>(json, JsonOptions);
+            return metadata is { Status: null } ? KeepUnknownStatus(metadata, json) : metadata;
         }
         catch (JsonException)
         {
             return null;
         }
+    }
+
+    /// <summary>Keeps a status value the lenient converter read as none, so a rewrite doesn't drop it.</summary>
+    private static EmbeddedStoryMetadata KeepUnknownStatus(EmbeddedStoryMetadata metadata, string json)
+    {
+        using var document = JsonDocument.Parse(json);
+        return document.RootElement.ValueKind == JsonValueKind.Object
+               && document.RootElement.TryGetProperty(StatusPropertyName, out var status)
+               && status.ValueKind != JsonValueKind.Null
+            ? metadata.WithUnknownStatus(status.GetRawText())
+            : metadata;
     }
 
     private static bool IsEmptyProse(string prose) =>
