@@ -117,17 +117,45 @@ public class WorkspaceViewModel : ViewModelBase
     /// Refuses every per-story write with <paramref name="reason"/> (reads still work) until the returned handle
     /// is disposed, or until the store is rebuilt by an open, reload or <see cref="ResetMetadataStore"/>, whichever
     /// comes first: used while the story's data moves between storages, so an edit made meanwhile is refused
-    /// rather than written to the location the move cleans up.
+    /// rather than written to the location the move cleans up. The handle's
+    /// <see cref="StoryDataWriteSuspension.PermitWritesInThisFlow"/> lets the move's own flush through.
     /// </summary>
-    public IDisposable SuspendStoryDataWrites(string reason)
+    public StoryDataWriteSuspension SuspendStoryDataWrites(string reason)
     {
         var refusing = new RefusingStoryMetadataStore(_metadataStore, reason);
         _metadataStore = refusing;
-        return Disposable.Create(() =>
+        return new StoryDataWriteSuspension(this, refusing);
+    }
+
+    /// <summary>A suspension from <see cref="SuspendStoryDataWrites"/>; disposing it lifts it.</summary>
+    public sealed class StoryDataWriteSuspension : IDisposable
+    {
+        private readonly WorkspaceViewModel _workspace;
+        private readonly RefusingStoryMetadataStore _refusing;
+
+        internal StoryDataWriteSuspension(WorkspaceViewModel workspace, RefusingStoryMetadataStore refusing)
         {
-            if (ReferenceEquals(_metadataStore, refusing))
-                _metadataStore = refusing.Inner;
-        });
+            _workspace = workspace;
+            _refusing = refusing;
+        }
+
+        /// <summary>
+        /// True while the workspace's store is still this suspension's refusing store (not yet rebuilt by an open,
+        /// reload or <see cref="ResetMetadataStore"/>, nor lifted).
+        /// </summary>
+        public bool IsInEffect => ReferenceEquals(_workspace._metadataStore, _refusing);
+
+        /// <summary>
+        /// Lets the calling async flow's story data writes through to the suspended store until the returned
+        /// handle is disposed; every other flow's writes stay refused.
+        /// </summary>
+        public IDisposable PermitWritesInThisFlow() => _refusing.PermitWritesInThisFlow();
+
+        public void Dispose()
+        {
+            if (IsInEffect)
+                _workspace._metadataStore = _refusing.Inner;
+        }
     }
 
     private bool _needsReopen;

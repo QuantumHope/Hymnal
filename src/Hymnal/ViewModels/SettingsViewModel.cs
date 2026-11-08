@@ -269,21 +269,27 @@ public class SettingsViewModel : ViewModelBase
         if (toStorage == StorageMode.Embedded)
             movedBoard = await MoveBeatBoardForKindAsync(current.Kind, kind);
 
-        IDisposable? suspended = null;
+        WorkspaceViewModel.StoryDataWriteSuspension? suspended = null;
+        var committed = false;
         try
         {
             // Ruling 9: write the destination; saving project.json in the new mode commits; then clean up the source.
             if (story is not null)
             {
-                // Edits made while the board moved are saved too; from here until the reload, story data edits are
-                // refused, so none is written to the old location after the destination was written from it.
-                if (!await FlushPendingEditsAsync())
+                // From here until the reload, story data edits are refused, so none is written to the old location
+                // after the destination was written from it. Only this flow's flush gets through: edits made while
+                // the board moved, and saves that were already writing (the flush waits for them), are saved where
+                // they belong now and moved with the rest.
+                suspended = _workspace.SuspendStoryDataWrites(MovingStoryDataMessage);
+                bool flushed;
+                using (suspended.PermitWritesInThisFlow())
+                    flushed = await FlushPendingEditsAsync();
+                if (!flushed)
                 {
                     await UndoBoardMoveAsync(root, movedBoard);
                     _notifications.ShowError("Pending edits couldn't be saved, so the story's data was not moved.");
                     return;
                 }
-                suspended = _workspace.SuspendStoryDataWrites(MovingStoryDataMessage);
 
                 var written = await _storageMigrator!.WriteDestinationAsync(root, story, fromStorage, toStorage);
                 if (!written.IsSuccess)
@@ -302,6 +308,7 @@ public class SettingsViewModel : ViewModelBase
                 _notifications.ShowError(save.Error ?? "Could not save project settings.");
                 return;
             }
+            committed = true;
 
             if (story is not null
                 && !(await _storageMigrator!.CleanupSourceAsync(root, story, fromStorage, toStorage)).IsSuccess)
@@ -322,8 +329,14 @@ public class SettingsViewModel : ViewModelBase
         }
         finally
         {
-            // A no-op once the reload (or the reset) has rebuilt the store; otherwise edits go where they did before.
-            suspended?.Dispose();
+            // After the commit, the old mode's location must never be written again: if something threw before the
+            // store was rebuilt, point it at the new mode (as after a failed reload) rather than lifting the
+            // suspension back onto the old store. Otherwise lifting it is a no-op once the reload (or the reset)
+            // has rebuilt the store, and before the commit edits go where they did before.
+            if (committed && suspended is { IsInEffect: true })
+                _workspace.ResetMetadataStore(new ProjectSettings(kind, toStorage));
+            else
+                suspended?.Dispose();
         }
     }
 

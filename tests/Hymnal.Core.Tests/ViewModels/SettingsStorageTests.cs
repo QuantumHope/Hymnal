@@ -488,6 +488,120 @@ public sealed class SettingsStorageTests
     }
 
     [Fact]
+    public async Task A_save_that_reaches_the_store_during_the_final_flush_is_refused_or_moved_never_lost_to_cleanup()
+    {
+        var store = new HookStore();
+        var root = CreateWorkspace(StoryJson, (StoryFile, StoryText));
+        try
+        {
+            await Ui(root, 1, async context =>
+            {
+                var story = context.Node(StoryFile).Story;
+                IStoryMetadataStore? seenByOtherSave = null;
+                Exception? refused = null;
+                var flushes = 0;
+                var settings = context.CreateSettings(async () =>
+                {
+                    // The final flush (after the board move) saves its own edit; meanwhile a debounced save on
+                    // another flow reaches the store and is still writing after the destination was read.
+                    if (++flushes == 2)
+                    {
+                        await context.Workspace.MetadataStore.SaveNotesAsync(root, story, "Flushed.");
+                        seenByOtherSave = context.Workspace.MetadataStore;
+                    }
+                    return true;
+                });
+                store.OnWrite = async path =>
+                {
+                    if (seenByOtherSave is not { } other || path != Path.Combine(root, StoryFile)) return;
+                    seenByOtherSave = null;
+                    try { await InAnotherFlow(() => other.SaveNotesAsync(root, story, "Other save.")); }
+                    catch (IOException ex) { refused = ex; }
+                };
+
+                settings.KeepInStoryFile = true;
+                await ApplyAsync(context, settings);
+
+                Assert.Equal(2, flushes);
+                Assert.Empty(context.Errors);
+                Assert.Equal(StorageMode.Embedded, context.Workspace.Profile.Storage);
+                var kept = ReadStory(root).Metadata?.Notes;
+                if (refused is null)
+                    Assert.Equal("Other save.", kept);
+                else
+                {
+                    Assert.Equal(SettingsViewModel.MovingStoryDataMessage, refused.Message);
+                    Assert.Equal("Flushed.", kept);
+                }
+            }, store: store);
+        }
+        finally { DeleteFolder(root); }
+
+        static Task InAnotherFlow(Func<Task> save)
+        {
+            using (System.Threading.ExecutionContext.SuppressFlow())
+                return Task.Run(save);
+        }
+    }
+
+    [Fact]
+    public async Task A_failure_after_the_commit_points_the_store_at_the_new_mode_and_asks_for_a_reopen()
+    {
+        BoardsThrowingOnMove? boards = null;
+        var root = CreateWorkspace(EmbeddedJson, (StoryFile, WithBlock(StoryText,
+            new EmbeddedStoryMetadata(null, null, null, null, null, null, "In the block.", [new Beat("b1", "Hook", "", null)]))));
+        try
+        {
+            await Ui(root, 1, async context =>
+            {
+                var chapter = context.Node(StoryFile);
+                var settings = context.CreateSettings();
+                settings.SelectedProjectKind = ProjectKind.Anthology;
+                // Moving the board for the new kind runs after project.json is saved in the new mode.
+                boards!.ThrowOnMove = true;
+                await Assert.ThrowsAsync<InvalidOperationException>(() => ApplyAsync(context, settings));
+                await context.SettleAsync();
+
+                Assert.Contains(context.Errors, e => e.StartsWith("Project change failed", StringComparison.Ordinal));
+                Assert.Contains("\"anthology\"", await File.ReadAllTextAsync(ProjectJsonPath(root)));
+                Assert.True(context.Workspace.NeedsReopen);
+                Assert.IsNotType<RefusingStoryMetadataStore>(context.Workspace.MetadataStore);
+                Assert.Equal(StoryText, await File.ReadAllTextAsync(Path.Combine(root, StoryFile)));
+                Assert.Equal("In the block.", await File.ReadAllTextAsync(NotesPath(root)));
+
+                // Sidebar edits go to the new mode's location, never back into the story file.
+                await chapter.ChangeStatusCommand.Execute(ChapterStatus.Polishing).ToTask();
+                await context.SettleAsync();
+                Assert.Equal(StoryText, await File.ReadAllTextAsync(Path.Combine(root, StoryFile)));
+                Assert.Equal(ChapterStatus.Polishing,
+                    (await new PhaseDataService(new MetadataStore()).LoadAsync(root))[chapter.Uuid].Status);
+            }, boards: store => boards = new BoardsThrowingOnMove(new BeatBoardService(store)));
+        }
+        finally { DeleteFolder(root); }
+    }
+
+    /// <summary>The real board service, whose <see cref="MoveBoardAsync"/> throws once <see cref="ThrowOnMove"/> is set.</summary>
+    private sealed class BoardsThrowingOnMove(BeatBoardService inner) : IBeatBoardService
+    {
+        public bool ThrowOnMove { get; set; }
+
+        public Task<Hymnal.Core.Common.Result<System.Collections.Generic.IReadOnlyList<Beat>>> LoadAsync(string workspaceRoot, string boardKey) =>
+            inner.LoadAsync(workspaceRoot, boardKey);
+
+        public Task<Hymnal.Core.Common.Result<Hymnal.Core.Common.Unit>> SaveAsync(
+            string workspaceRoot, string boardKey, System.Collections.Generic.IReadOnlyList<Beat> beats) =>
+            inner.SaveAsync(workspaceRoot, boardKey, beats);
+
+        public bool BoardExists(string workspaceRoot, string boardKey) => inner.BoardExists(workspaceRoot, boardKey);
+
+        public Task<Hymnal.Core.Common.Result<Hymnal.Core.Common.Unit>> MoveBoardAsync(string workspaceRoot, string fromKey, string toKey) =>
+            ThrowOnMove ? throw new InvalidOperationException("The board move broke.") : inner.MoveBoardAsync(workspaceRoot, fromKey, toKey);
+
+        public Task<Hymnal.Core.Common.Result<Hymnal.Core.Common.Unit>> DeleteBoardAsync(string workspaceRoot, string boardKey) =>
+            inner.DeleteBoardAsync(workspaceRoot, boardKey);
+    }
+
+    [Fact]
     public async Task Sidebar_status_and_target_edits_after_a_failed_reload_never_reach_project_data()
     {
         var root = CreateWorkspace(StoryJson, (StoryFile, StoryText));
