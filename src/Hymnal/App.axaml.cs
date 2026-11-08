@@ -46,6 +46,8 @@ public partial class App : Application
         services.AddSingleton<IProcessRunner, GitProcessRunner>();
         services.AddSingleton<IGitService, ProcessGitService>();
         services.AddSingleton<IMetadataStore, MetadataStore>();
+        // The single writer of story .md files with their metadata block (the editor save path uses it)
+        services.AddSingleton<StoryFileWriter>();
 
         // M002/S01 services — chapter registry and phase data
         services.AddSingleton<ChapterRegistryService>();
@@ -104,10 +106,17 @@ public partial class App : Application
 
         // S03 view-models (order matters: EditorViewModel before WorkspaceViewModel)
         services.AddSingleton<EditorViewModel>(sp =>
-            new EditorViewModel(
+        {
+            var storyFileWriter = sp.GetRequiredService<StoryFileWriter>();
+            var editor = new EditorViewModel(
                 sp.GetRequiredService<IMetadataStore>(),
                 sp.GetRequiredService<INotificationService>(),
-                sp.GetRequiredService<WordCountService>()));
+                sp.GetRequiredService<WordCountService>(),
+                storyFileWriter);
+            // Metadata changes for the chapter open in the editor are saved through it, keeping unsaved prose.
+            storyFileWriter.AttachBuffer(editor);
+            return editor;
+        });
 
         services.AddSingleton<IFolderPickerService>(sp =>
             new FolderPickerService(() =>

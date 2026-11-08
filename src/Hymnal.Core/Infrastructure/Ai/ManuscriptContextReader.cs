@@ -6,7 +6,7 @@ namespace Hymnal.Core.Infrastructure.Ai;
 
 /// <summary>
 /// Read-only access to manuscript content for context building.
-/// Reuses BookTxtParser; never writes to any file.
+/// Reuses BookTxtParser; never writes to any file. Chapter text is prose only (no metadata block).
 /// </summary>
 public sealed class ManuscriptContextReader : IManuscriptContextReader
 {
@@ -17,7 +17,9 @@ public sealed class ManuscriptContextReader : IManuscriptContextReader
         var absolutePath = Path.Combine(workspaceRoot, chapterRelativePath.Replace('/', Path.DirectorySeparatorChar));
         if (!File.Exists(absolutePath))
             return string.Empty;
-        return await File.ReadAllTextAsync(absolutePath, ct).ConfigureAwait(false);
+        var text = await File.ReadAllTextAsync(absolutePath, ct).ConfigureAwait(false);
+        // Prose only: a story file's trailing metadata block is Hymnal data, not manuscript text.
+        return StoryFileFormat.Split(text).Prose;
     }
 
     public async Task<IReadOnlyList<(string RelativePath, string Title, bool IsPart)>> ReadBookOrderAsync(

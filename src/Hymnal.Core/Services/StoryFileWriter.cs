@@ -29,7 +29,8 @@ public sealed class StoryFileWriter(IMetadataStore store)
 {
     private static readonly UTF8Encoding StrictUtf8 = new(encoderShouldEmitUTF8Identifier: false, throwOnInvalidBytes: true);
 
-    private static readonly StringComparer PathComparer =
+    /// <summary>How story paths are compared: case-insensitively on Windows, ordinally elsewhere.</summary>
+    public static StringComparer PathComparer { get; } =
         OperatingSystem.IsWindows() ? StringComparer.OrdinalIgnoreCase : StringComparer.Ordinal;
 
     // Two per-path locks keyed by the real (link-resolved) full path: the metadata lock covers a whole
@@ -45,6 +46,41 @@ public sealed class StoryFileWriter(IMetadataStore store)
 
     /// <summary>Sets (or, with null, clears) the editor buffer that receives metadata changes for its file.</summary>
     public void AttachBuffer(IOpenStoryBuffer? buffer) => _buffer = buffer;
+
+    /// <summary>
+    /// Waits for any metadata change in progress for the given files and holds further ones off until the
+    /// returned handle is disposed. The editor holds it while it loads a file into (or switches its buffer
+    /// away from) a story file, so every change either reaches the disk before the load or reaches the buffer
+    /// after it. Null, empty and invalid paths are ignored; spellings of one real file take its lock once.
+    /// The holder must not wait for a metadata change to the same files while holding it, or it deadlocks.
+    /// </summary>
+    public async Task<IDisposable> HoldMetadataChangesAsync(params string?[] absolutePaths)
+    {
+        var realPaths = absolutePaths
+            .Select(p => TryResolve(p ?? "", out var path, out _) ? path.Real : null)
+            .OfType<string>()
+            .Distinct(PathComparer)
+            .Order(PathComparer) // one global order, so two holders can never deadlock each other
+            .ToList();
+
+        var held = new List<SemaphoreSlim>(realPaths.Count);
+        try
+        {
+            foreach (var real in realPaths)
+            {
+                var gate = _metadataLocks.GetOrAdd(real, _ => new SemaphoreSlim(1, 1));
+                await gate.WaitAsync().ConfigureAwait(false);
+                held.Add(gate);
+            }
+        }
+        catch
+        {
+            Release(held);
+            throw;
+        }
+
+        return new Releaser(held);
+    }
 
     /// <summary>
     /// Returns the file's metadata (the buffer's when the file is open), or null when it has none.
@@ -248,6 +284,19 @@ public sealed class StoryFileWriter(IMetadataStore store)
     }
 
     /// <summary>
+    /// Makes <paramref name="absolutePath"/> absolute (<paramref name="fullPath"/>) and resolves a symbolic link
+    /// to its final target (<paramref name="realPath"/>; the full path when it is not a link), exactly as the
+    /// writer does. Returns false for empty or invalid paths and unresolvable links.
+    /// </summary>
+    public static bool TryResolvePath(string absolutePath, out string fullPath, out string realPath)
+    {
+        var ok = TryResolve(absolutePath, out var path, out _);
+        fullPath = path.Full;
+        realPath = path.Real;
+        return ok;
+    }
+
+    /// <summary>
     /// Makes <paramref name="absolutePath"/> absolute and resolves a symbolic link to its final target.
     /// Returns false with an error for invalid paths or unresolvable links.
     /// </summary>
@@ -274,6 +323,24 @@ public sealed class StoryFileWriter(IMetadataStore store)
         {
             error = $"Invalid story file path '{absolutePath}': {ex.Message}";
             return false;
+        }
+    }
+
+    private static void Release(List<SemaphoreSlim> gates)
+    {
+        for (var i = gates.Count - 1; i >= 0; i--)
+            gates[i].Release();
+    }
+
+    /// <summary>Releases the locks taken by <see cref="HoldMetadataChangesAsync"/> once.</summary>
+    private sealed class Releaser(List<SemaphoreSlim> gates) : IDisposable
+    {
+        private int _disposed;
+
+        public void Dispose()
+        {
+            if (Interlocked.Exchange(ref _disposed, 1) == 0)
+                Release(gates);
         }
     }
 

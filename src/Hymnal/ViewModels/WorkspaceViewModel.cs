@@ -872,7 +872,8 @@ public class WorkspaceViewModel : ViewModelBase
                             try
                             {
                                 var content = await File.ReadAllTextAsync(target.AbsPath).ConfigureAwait(false);
-                                return (target.Vm, Count: _wordCountService.CountWords(content));
+                                // Prose only: a story file's trailing metadata block is not counted.
+                                return (target.Vm, Count: _wordCountService.CountWords(StoryFileFormat.Split(content).Prose));
                             }
                             catch
                             {

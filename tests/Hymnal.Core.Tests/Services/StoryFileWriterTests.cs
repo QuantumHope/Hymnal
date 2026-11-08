@@ -663,3 +663,80 @@ public class StoryFileWriterTests
         Assert.Equal("﻿Text.", split.Value!.Prose);
     });
 }
+
+public class StoryFileWriterHoldTests
+{
+    private static EmbeddedStoryMetadata Metadata(string notes) => new("story-1", null, null, null, null, null, notes, null);
+
+    private static async Task WithTempDirAsync(Func<string, Task> body)
+    {
+        var dir = Path.Combine(Path.GetTempPath(), "hymnal-storywriter-hold-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(dir);
+        try
+        {
+            await body(dir);
+        }
+        finally
+        {
+            Directory.Delete(dir, true);
+        }
+    }
+
+    [Fact]
+    public Task Hold_delays_metadata_update_until_released() => WithTempDirAsync(async dir =>
+    {
+        var path = Path.Combine(dir, "story.md");
+        File.WriteAllText(path, "Prose.");
+        var writer = new StoryFileWriter(new MetadataStore());
+
+        var hold = await writer.HoldMetadataChangesAsync(path);
+        var update = writer.UpdateMetadataAsync(path, _ => Metadata("held"));
+        await Task.Delay(100);
+
+        Assert.False(update.IsCompleted);
+        Assert.Equal("Prose.", File.ReadAllText(path));
+
+        hold.Dispose();
+        var result = await update.WaitAsync(TimeSpan.FromSeconds(5));
+        Assert.True(result.IsSuccess, result.Error);
+        Assert.Equal("held", StoryFileFormat.Split(File.ReadAllText(path)).Metadata?.Notes);
+    });
+
+    [Fact]
+    public Task Hold_on_two_spellings_of_one_file_takes_its_lock_once() => WithTempDirAsync(async dir =>
+    {
+        var path = Path.Combine(dir, "story.md");
+        File.WriteAllText(path, "Prose.");
+        var dotted = Path.Combine(dir, "sub", "..", "story.md");
+        var writer = new StoryFileWriter(new MetadataStore());
+
+        var hold = await writer.HoldMetadataChangesAsync(path, dotted).WaitAsync(TimeSpan.FromSeconds(5));
+        hold.Dispose();
+
+        var result = await writer.UpdateMetadataAsync(path, _ => Metadata("after")).WaitAsync(TimeSpan.FromSeconds(5));
+        Assert.True(result.IsSuccess, result.Error);
+    });
+
+    [Fact]
+    public Task Hold_ignores_null_and_invalid_paths() => WithTempDirAsync(async dir =>
+    {
+        var writer = new StoryFileWriter(new MetadataStore());
+
+        using var hold = await writer.HoldMetadataChangesAsync(null, "", "bad\0path").WaitAsync(TimeSpan.FromSeconds(5));
+    });
+
+    [Fact]
+    public Task Try_resolve_path_makes_full_and_resolves_links() => WithTempDirAsync(dir =>
+    {
+        var target = Path.Combine(dir, "story.md");
+        File.WriteAllText(target, "Prose.");
+        var link = Path.Combine(dir, "link.md");
+        File.CreateSymbolicLink(link, target);
+
+        Assert.True(StoryFileWriter.TryResolvePath(Path.Combine(dir, "sub", "..", "link.md"), out var full, out var real));
+        Assert.Equal(link, full);
+        Assert.Equal(target, real);
+        Assert.False(StoryFileWriter.TryResolvePath("", out _, out _));
+        return Task.CompletedTask;
+    });
+}
