@@ -41,6 +41,24 @@ public class NotesViewModel : ViewModelBase, IDisposable
         }
     }
 
+    private string? _loadError;
+    /// <summary>
+    /// Why the shown chapter's notes couldn't be loaded; null when they were. While set the notes are shown empty
+    /// and read-only, so neither another chapter's notes nor text typed over unread notes is ever saved for it.
+    /// </summary>
+    public string? LoadError
+    {
+        get => _loadError;
+        private set
+        {
+            this.RaiseAndSetIfChanged(ref _loadError, value);
+            this.RaisePropertyChanged(nameof(IsReadOnly));
+        }
+    }
+
+    /// <summary>True while the shown chapter's notes couldn't be loaded (see <see cref="LoadError"/>).</summary>
+    public bool IsReadOnly => _loadError is not null;
+
     private bool _isVisible;
     public bool IsVisible
     {
@@ -168,6 +186,7 @@ public class NotesViewModel : ViewModelBase, IDisposable
             _loadedStory = null;
             _text = "";
             this.RaisePropertyChanged(nameof(Text));
+            LoadError = null;
             ChapterTitle = null;
             IsVisible = false;
             return;
@@ -197,12 +216,17 @@ public class NotesViewModel : ViewModelBase, IDisposable
             // Update Text without triggering auto-save (set backing field directly, then notify).
             _text = content;
             this.RaisePropertyChanged(nameof(Text));
+            LoadError = null;
 
             // Restore panel visibility only if it was shown before the chapter switch.
             IsVisible = wasVisible;
         }
         catch (Exception ex) when (!ct.IsCancellationRequested)
         {
+            // Never leave the previous chapter's notes showing under this chapter's title.
+            _text = "";
+            this.RaisePropertyChanged(nameof(Text));
+            LoadError = $"Notes couldn't be loaded: {ex.Message}";
             _notificationService.ShowError($"Failed to load notes: {ex.Message}");
         }
     }

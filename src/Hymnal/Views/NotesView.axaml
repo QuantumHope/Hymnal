@@ -20,6 +20,8 @@
 
         <!-- Notes text area -->
         <TextBox Text="{Binding Text, Mode=TwoWay}"
+                 IsReadOnly="{Binding IsReadOnly}"
+                 PlaceholderText="{Binding LoadError}"
                  IsVisible="{Binding ChapterTitle, Converter={x:Static ObjectConverters.IsNotNull}}"
                  AcceptsReturn="True"
                  TextWrapping="Wrap"

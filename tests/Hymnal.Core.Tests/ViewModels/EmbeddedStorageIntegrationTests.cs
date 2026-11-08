@@ -457,6 +457,42 @@ public sealed class EmbeddedStorageIntegrationTests
     }
 
     [Fact]
+    public async Task Notes_that_cannot_be_loaded_never_show_the_previous_chapter_s_notes()
+    {
+        const string second = "second.md";
+        var root = CreateWorkspace(EmbeddedJson, (StoryFile, StoryText), (second, "# Second\n\nMore.\n"));
+        File.WriteAllBytes(Path.Combine(root, StoryFile), [.. System.Text.Encoding.ASCII.GetBytes("# Caf"), 0xE9, (byte)'\n']);
+        await new NotesService(new MetadataStore()).SaveAsync(NotesPath(root, second), "Second's notes.");
+        try
+        {
+            await Ui(root, 2, async context =>
+            {
+                var notes = context.CreateNotes();
+                var other = context.Node(second);
+                await Within(context.Editor.OpenChapterAsync(other.Node, Path.Combine(root, second)));
+                await PumpUntilAsync(() => notes.Text == "Second's notes.");
+                Assert.False(notes.IsReadOnly);
+
+                var primary = context.Node(StoryFile);
+                await Within(context.Editor.OpenChapterAsync(primary.Node, Path.Combine(root, StoryFile)));
+                await PumpUntilAsync(() => notes.IsReadOnly);
+
+                Assert.Equal("", notes.Text);
+                Assert.Equal(primary.Node.Title, notes.ChapterTitle);
+                Assert.Contains("Couldn't read 'story.md'", notes.LoadError);
+                Assert.Contains(context.Errors, e => e.StartsWith("Failed to load notes: ", StringComparison.Ordinal));
+
+                // Back on a chapter whose notes load, they are editable again.
+                await Within(context.Editor.OpenChapterAsync(other.Node, Path.Combine(root, second)));
+                await PumpUntilAsync(() => !notes.IsReadOnly);
+                Assert.Equal("Second's notes.", notes.Text);
+            });
+            Assert.Equal("Second's notes.", File.ReadAllText(NotesPath(root, second)));
+        }
+        finally { DeleteFolder(root); }
+    }
+
+    [Fact]
     public async Task Failed_hydration_refuses_notes_and_beats_instead_of_writing_the_sidecar()
     {
         var root = CreateWorkspace(EmbeddedJson, (StoryFile, StoryText));
