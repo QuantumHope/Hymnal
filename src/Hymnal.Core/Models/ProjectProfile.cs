@@ -105,6 +105,12 @@ public sealed class ProjectProfile
     public string UnitNoun { get; }
     public string PartNoun { get; }
     public string CollectionNoun { get; }
+
+    /// <summary>
+    /// What a <see cref="PartNoun"/> holds: chapters in a novel's part, scenes in a story. Plan mode uses it
+    /// for counts and "add" actions inside a Part.
+    /// </summary>
+    public string SubunitNoun => Kind == ProjectKind.Novel ? "Chapter" : "Scene";
     public string InfoPanelTitle { get; }
     public string BookStatsTitle { get; }
     public string BookStatsBarLabel { get; }

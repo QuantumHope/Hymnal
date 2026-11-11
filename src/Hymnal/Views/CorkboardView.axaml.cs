@@ -504,7 +504,7 @@ public partial class CorkboardView : UserControl
             return;
 
         var initial = card.RelativePath;
-        var replacement = await PromptForTextAsync("Rename chapter", "Enter the new Book.txt path:", initial);
+        var replacement = await PromptForTextAsync($"Rename {card.Noun.ToLowerInvariant()}", "Enter the new Book.txt path:", initial);
         if (string.IsNullOrWhiteSpace(replacement) || string.Equals(replacement, initial, StringComparison.OrdinalIgnoreCase))
             return;
 
@@ -525,7 +525,7 @@ public partial class CorkboardView : UserControl
         if (!TryGetCardFromMenu(sender, out var card) || DataContext is not CorkboardViewModel vm)
             return;
 
-        var path = await PromptForTextAsync("Include existing chapter", "Enter the existing chapter path:", string.Empty);
+        var path = await PromptForTextAsync("Include existing file", "Enter the path of the file to include:", string.Empty);
         if (string.IsNullOrWhiteSpace(path))
             return;
 
@@ -627,14 +627,13 @@ public partial class CorkboardView : UserControl
             || DataContext is not CorkboardViewModel vm)
             return;
 
-        var unit = vm.Profile.UnitNoun;
-        var partNoun = vm.Profile.PartNoun;
+        var unit = vm.Profile.SubunitNoun;
         var flyout = new MenuFlyout
         {
             Items =
             {
-                new MenuItem { Header = $"New {unit} in {partNoun}", Tag = ("chapter", part) },
-                new MenuItem { Header = $"New {unit} in {partNoun} (advanced)…", Tag = ("chapter-advanced", part) },
+                new MenuItem { Header = $"New {unit} in {part.Title}", Tag = ("chapter", part) },
+                new MenuItem { Header = $"New {unit} in {part.Title} (advanced)…", Tag = ("chapter-advanced", part) },
                 new MenuItem { Header = "Include Existing File…", Tag = ("include", part) }
             }
         };
@@ -682,13 +681,14 @@ public partial class CorkboardView : UserControl
             ? "new-chapter.md"
             : BuildSuggestedNewChapterPath(part.RelativePath);
 
+        var noun = part == null ? vm.Profile.UnitNoun : vm.Profile.SubunitNoun;
         var dialogResult = await NewChapterDialog.ShowAsync(
             TopLevel.GetTopLevel(this) as Window ?? throw new InvalidOperationException("No window owner."),
             NewManuscriptEntryKind.Chapter,
-            $"New {vm.Profile.UnitNoun}",
+            $"New {noun}",
             part == null
-                ? $"Enter the new {vm.Profile.UnitNoun.ToLowerInvariant()} path relative to the manuscript root."
-                : $"Enter the new {vm.Profile.UnitNoun.ToLowerInvariant()} path for {part.Title}.",
+                ? $"Enter the new {noun.ToLowerInvariant()} path relative to the manuscript root."
+                : $"Enter the new {noun.ToLowerInvariant()} path for {part.Title}.",
             suggestedPath);
 
         if (dialogResult is null)
@@ -828,8 +828,8 @@ public partial class CorkboardView : UserControl
             return;
 
         var confirmed = await ConfirmAsync(
-            "Delete chapter file",
-            $"Delete the chapter file for '{card.RelativePath}'? This cannot be undone.");
+            "Delete file",
+            $"Delete the file '{card.RelativePath}'? This cannot be undone.");
 
         if (!confirmed)
             return;

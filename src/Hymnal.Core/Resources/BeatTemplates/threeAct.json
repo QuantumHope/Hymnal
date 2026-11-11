@@ -23,5 +23,12 @@
       "title": "Resolution",
       "note": "Show what has changed for the character now that the conflict is settled."
     }
+  ],
+  "shape": [
+    0.2,
+    0.45,
+    0.7,
+    1.0,
+    0.25
   ]
 }

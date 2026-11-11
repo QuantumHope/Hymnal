@@ -188,8 +188,14 @@ public sealed class CorkboardViewModel : ViewModelBase, IDisposable
                 {
                     this.RaisePropertyChanged(nameof(Profile));
                     this.RaisePropertyChanged(nameof(IsAnthology));
+                    this.RaisePropertyChanged(nameof(AddButtonTip));
+                    this.RaisePropertyChanged(nameof(EmptyBoardText));
+                    this.RaisePropertyChanged(nameof(OpenCardHint));
                     foreach (var item in _items)
+                    {
                         item.ShowsBeatsAction = CanShowBeats(item);
+                        item.Noun = NounFor(item);
+                    }
                 }));
 
         Disposables.Add(_openChapterRequested);
@@ -326,6 +332,7 @@ public sealed class CorkboardViewModel : ViewModelBase, IDisposable
         CancelInlineCreate();
 
         var item = new InlineCreateItemViewModel(bookTxtInsertIndex, part?.RelativePath, part);
+        item.Noun = NounFor(item);
         _activeInlineCreate = item;
         InsertInlineCreateAtIndex(item, bookTxtInsertIndex);
     }
@@ -520,6 +527,7 @@ public sealed class CorkboardViewModel : ViewModelBase, IDisposable
                      ShowExcludedFiles))
         {
             item.ShowsBeatsAction = CanShowBeats(item);
+            item.Noun = NounFor(item);
             _items.Add(item);
         }
 
@@ -599,6 +607,35 @@ public sealed class CorkboardViewModel : ViewModelBase, IDisposable
             _beatsRequested.OnNext(story);
         return Task.CompletedTask;
     }
+
+    /// <summary>
+    /// The noun an item shows: a Part counts and adds its subunit (scenes in an anthology story), and so do
+    /// the items inside it; a top-level item is a unit (a story in an anthology).
+    /// </summary>
+    private string NounFor(CorkboardItemViewModel item) => item switch
+    {
+        PartDividerItemViewModel => Profile.SubunitNoun,
+        _ when !string.IsNullOrEmpty(item.OwningPartPath) => Profile.SubunitNoun,
+        _ => Profile.UnitNoun
+    };
+
+    /// <summary>Tooltip of the board's + button.</summary>
+    public string AddButtonTip => Profile.Kind == ProjectKind.Novel
+        ? "Add chapter or part"
+        : $"Add a {Profile.UnitNoun.ToLowerInvariant()}";
+
+    /// <summary>What an empty board says, in the project's own words.</summary>
+    public string EmptyBoardText => Profile.Kind switch
+    {
+        ProjectKind.Anthology => "No stories in this collection yet. Use + to add your first story.",
+        ProjectKind.Story => "No scenes yet. Use + to add one.",
+        _ => "No chapters in this board yet. Open Book.txt or add chapters to see Plan mode cards."
+    };
+
+    /// <summary>What double-clicking a card does here: an anthology story opens its beats.</summary>
+    public string OpenCardHint => IsAnthology
+        ? "Double-click a story to plan its beats"
+        : "Double-click a card to open in Write mode";
 
     /// <summary>True when <paramref name="item"/> offers a Beats action: in an anthology, for a story that is in the book.</summary>
     public bool CanShowBeats(CorkboardItemViewModel? item) =>

@@ -94,6 +94,13 @@ public class ProjectProfileTests
     }
 
     [Theory]
+    [InlineData(ProjectKind.Novel, "Chapter")]
+    [InlineData(ProjectKind.Story, "Scene")]
+    [InlineData(ProjectKind.Anthology, "Scene")]
+    public void Subunit_noun_names_what_a_part_holds(ProjectKind kind, string subunit) =>
+        Assert.Equal(subunit, ForKind(kind).SubunitNoun);
+
+    [Theory]
     [InlineData(ProjectKind.Novel, "Chapter", "Part", "Book", "Chapter Info", "BOOK STATS", "BY PART", "PART STATS", "BY CHAPTER", true, false)]
     [InlineData(ProjectKind.Story, "Scene", "Part", "Story", "Story Info", "", "", "", "", false, false)]
     [InlineData(ProjectKind.Anthology, "Story", "Story with scenes", "Collection", "Story Info", "COLLECTION STATS", "BY STORY", "STORY STATS", "BY SCENE", true, true)]

@@ -88,9 +88,18 @@ public sealed class BeatBoardViewModel : ViewModelBase, IDisposable
             .ToProperty(this, x => x.CanEdit);
         Disposables.Add(_canEdit);
 
-        _showsTemplatePicker = this.WhenAnyValue(x => x.CanEdit, x => x.IsEmpty, (edit, empty) => edit && empty)
+        _showsTemplatePicker = this.WhenAnyValue(x => x.CanEdit, x => x.IsEmpty, x => x.IsChoosingTemplate,
+                (edit, empty, choosing) => edit && (empty || choosing))
             .ToProperty(this, x => x.ShowsTemplatePicker);
         Disposables.Add(_showsTemplatePicker);
+
+        _showsBeats = this.WhenAnyValue(x => x.IsEmpty, x => x.ShowsTemplatePicker, (empty, picker) => !empty && !picker)
+            .ToProperty(this, x => x.ShowsBeats);
+        Disposables.Add(_showsBeats);
+
+        _showsSceneLinks = this.WhenAnyValue(x => x.SceneOptions, options => options.Count > 1)
+            .ToProperty(this, x => x.ShowsSceneLinks);
+        Disposables.Add(_showsSceneLinks);
 
         var canEdit = this.WhenAnyValue(x => x.CanEdit);
         var canDelete = this.WhenAnyValue(x => x.CanEdit, x => x.Selected, (edit, selected) => edit && selected != null);
@@ -102,9 +111,13 @@ public sealed class BeatBoardViewModel : ViewModelBase, IDisposable
         ApplyTemplateCommand = ReactiveCommand.CreateFromTask<ApplyTemplateRequest>(ApplyTemplateAsync, canEdit);
         LinkSceneCommand = ReactiveCommand.CreateFromTask<(string BeatId, string? RelativePath)>(
             l => LinkSceneAsync(l.BeatId, l.RelativePath), canEdit);
+        ChooseTemplateCommand = ReactiveCommand.Create(() => { IsChoosingTemplate = true; },
+            this.WhenAnyValue(x => x.CanEdit, x => x.IsEmpty, (edit, empty) => edit && !empty));
+        CancelTemplateChoiceCommand = ReactiveCommand.Create(() => { IsChoosingTemplate = false; });
 
         foreach (var command in new IHandleObservableErrors[]
-                     { AddBeatCommand, DeleteSelectedCommand, DeleteBeatCommand, MoveBeatCommand, ApplyTemplateCommand, LinkSceneCommand })
+                     { AddBeatCommand, DeleteSelectedCommand, DeleteBeatCommand, MoveBeatCommand, ApplyTemplateCommand, LinkSceneCommand,
+                       ChooseTemplateCommand, CancelTemplateChoiceCommand })
             Disposables.Add(command.ThrownExceptions.Subscribe(ex => _notifications.ShowError(ex.Message)));
 
         Disposables.Add(
@@ -159,8 +172,33 @@ public sealed class BeatBoardViewModel : ViewModelBase, IDisposable
     public bool CanEdit => _canEdit.Value;
 
     private readonly ObservableAsPropertyHelper<bool> _showsTemplatePicker;
-    /// <summary>True when a writable board has no beats, so the template picker is shown inline.</summary>
+    /// <summary>
+    /// True when the template gallery is shown in place of the beats: a writable board with no beats, or
+    /// one whose author chose Apply template.
+    /// </summary>
     public bool ShowsTemplatePicker => _showsTemplatePicker.Value;
+
+    private readonly ObservableAsPropertyHelper<bool> _showsBeats;
+    /// <summary>True when the beat cards are shown: the board has beats and the gallery isn't open.</summary>
+    public bool ShowsBeats => _showsBeats.Value;
+
+    private bool _isChoosingTemplate;
+    /// <summary>
+    /// True while the author picks a template to add to (or replace) a board that already has beats.
+    /// Cleared when a template is applied, the choice is cancelled, or the board changes.
+    /// </summary>
+    public bool IsChoosingTemplate
+    {
+        get => _isChoosingTemplate;
+        private set => this.RaiseAndSetIfChanged(ref _isChoosingTemplate, value);
+    }
+
+    private readonly ObservableAsPropertyHelper<bool> _showsSceneLinks;
+    /// <summary>
+    /// True when the story has two or more scene files, so a beat can say which one it happens in. A story
+    /// told in one file has nothing to choose between.
+    /// </summary>
+    public bool ShowsSceneLinks => _showsSceneLinks.Value;
 
     private BeatCardViewModel? _selected;
     public BeatCardViewModel? Selected
@@ -194,6 +232,10 @@ public sealed class BeatBoardViewModel : ViewModelBase, IDisposable
     public ReactiveCommand<ApplyTemplateRequest, Unit> ApplyTemplateCommand { get; }
     /// <summary>Links a beat to a scene in scope; a null path unlinks it.</summary>
     public ReactiveCommand<(string BeatId, string? RelativePath), Unit> LinkSceneCommand { get; }
+    /// <summary>Shows the template gallery over a board that has beats, to add or replace them.</summary>
+    public ReactiveCommand<Unit, Unit> ChooseTemplateCommand { get; }
+    /// <summary>Closes the template gallery and goes back to the beats.</summary>
+    public ReactiveCommand<Unit, Unit> CancelTemplateChoiceCommand { get; }
 
     // ── Opening and closing ───────────────────────────────────────────────────
 
@@ -344,6 +386,7 @@ public sealed class BeatBoardViewModel : ViewModelBase, IDisposable
         BoardKey = null;
         BoardTitle = "";
         IsReadOnly = false;
+        IsChoosingTemplate = false;
         SceneOptions = [];
     }
 
@@ -446,6 +489,7 @@ public sealed class BeatBoardViewModel : ViewModelBase, IDisposable
 
         var updated = BeatBoardOperations.ApplyTemplate(Snapshot(), templateBeats, request.Mode);
         SetCards(updated);
+        IsChoosingTemplate = false;
         await SaveNowAsync();
     }
 

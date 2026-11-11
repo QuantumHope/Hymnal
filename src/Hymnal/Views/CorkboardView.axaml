@@ -261,7 +261,7 @@
                             BorderThickness="1"
                             CornerRadius="6"
                             Foreground="{DynamicResource Cora.Accent.Store}"
-                            ToolTip.Tip="Add chapter or part"
+                            ToolTip.Tip="{Binding AddButtonTip}"
                             Click="BoardAddButton_Click" />
                 </StackPanel>
 
@@ -301,7 +301,7 @@
                               IsChecked="{Binding ShowExcludedFiles, Mode=TwoWay}"
                               FontSize="10"
                               Foreground="{DynamicResource Cora.Text.Secondary}" />
-                    <TextBlock Text="Double-click a card to open in Write mode"
+                    <TextBlock Text="{Binding OpenCardHint}"
                                FontSize="10"
                                Foreground="{DynamicResource Cora.Text.Secondary}"
                                VerticalAlignment="Center" />
@@ -311,7 +311,7 @@
 
         <Grid Grid.Row="1">
             <TextBlock x:Name="EmptyBoardState"
-                       Text="No chapters in this board yet. Open Book.txt or add chapters to see Plan mode cards."
+                       Text="{Binding EmptyBoardText}"
                        IsVisible="{Binding !HasItems}"
                        Margin="24"
                        VerticalAlignment="Center"
@@ -362,7 +362,7 @@
                     Loaded="PartHeader_Loaded"
                     DoubleTapped="PartHeader_DoubleTapped"
                     Click="PartHeader_Click"
-                    ToolTip.Tip="Click to show or hide chapters in this part">
+                    ToolTip.Tip="{Binding ToggleTip}">
                 <Grid ColumnDefinitions="Auto,*,Auto,Auto"
                       ColumnSpacing="12">
                     <Border Grid.Column="0"
@@ -404,7 +404,7 @@
                             BorderThickness="1"
                             CornerRadius="6"
                             Foreground="{DynamicResource Cora.Accent.Store}"
-                            ToolTip.Tip="Add chapter to this part"
+                            ToolTip.Tip="{Binding AddTip}"
                             Tag="{Binding}"
                             Click="PartAddButton_Click" />
                 </Grid>
@@ -437,13 +437,13 @@
                         HorizontalAlignment="Left"
                         Margin="0,0,12,12">
                     <StackPanel Spacing="6">
-                        <TextBlock Classes="caps" Text="NEW CHAPTER"
+                        <TextBlock Text="{Binding Heading}"
                                    FontSize="9"
                                    FontWeight="SemiBold"
                                    LetterSpacing="1.5"
                                    Foreground="{DynamicResource Cora.Accent.Store}" />
                         <TextBox Text="{Binding TitleText, Mode=TwoWay}"
-                                 PlaceholderText="Chapter title..."
+                                 PlaceholderText="{Binding TitlePlaceholder}"
                                  Background="Transparent"
                                  BorderThickness="0,0,0,1"
                                  BorderBrush="{DynamicResource Cora.Accent.Store}"
@@ -511,12 +511,12 @@
                                   Click="RenameCard_Click" />
                         <MenuItem Header="{Binding DataContext.Profile.UnitNoun, ElementName=Root, StringFormat='New {0}…'}"
                                   Click="NewChapter_Click" />
-                        <MenuItem Header="Include Existing Chapter…"
+                        <MenuItem Header="Include Existing File…"
                                   Click="IncludeExistingChapter_Click" />
                         <Separator />
-                        <MenuItem Header="Remove from Book"
+                        <MenuItem Header="{Binding DataContext.Profile.CollectionNoun, ElementName=Root, StringFormat='Remove from {0}'}"
                                   Click="RemoveFromBook_Click" />
-                        <MenuItem Header="Delete Chapter File…"
+                        <MenuItem Header="Delete File…"
                                   Click="DeleteChapter_Click" />
                     </ContextMenu>
                 </Button.ContextMenu>

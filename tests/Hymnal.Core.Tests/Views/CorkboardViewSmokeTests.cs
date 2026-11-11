@@ -81,7 +81,7 @@ public sealed class CorkboardViewSmokeTests
         Assert.Contains("Loaded=\"EmptyPartHint_Loaded\"", xaml, StringComparison.Ordinal);
         Assert.Contains("StringFormat='New {0}…'", xaml, StringComparison.Ordinal);
         Assert.Contains("Click=\"NewChapter_Click\"", xaml, StringComparison.Ordinal);
-        Assert.Contains("Header=\"Remove from Book\"", xaml, StringComparison.Ordinal);
+        Assert.Contains("StringFormat='Remove from {0}'", xaml, StringComparison.Ordinal);
         Assert.Contains("Header=\"Include in Book\"", xaml, StringComparison.Ordinal);
         Assert.Contains("Text=\"EXCLUDED\"", xaml, StringComparison.Ordinal);
         Assert.Contains("Excluded from Book.txt. Right-click to include it again.", xaml, StringComparison.Ordinal);

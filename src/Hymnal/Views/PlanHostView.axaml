@@ -40,7 +40,7 @@
         <!-- Short Story with several scene files: the file Corkboard, for reordering scenes -->
         <Expander x:Name="FilesStrip"
                   Grid.Row="2"
-                  Header="Files"
+                  Header="Scene files"
                   HorizontalAlignment="Stretch"
                   IsVisible="{Binding ShowFilesStrip}"
                   IsExpanded="{Binding IsFilesStripExpanded, Mode=TwoWay}">

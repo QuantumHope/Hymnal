@@ -1,6 +1,7 @@
 <UserControl xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:vm="using:Hymnal.ViewModels"
+             xmlns:controls="using:Hymnal.Views.Controls"
              x:Class="Hymnal.Views.BeatBoardView"
              x:Name="Root"
              x:DataType="vm:BeatBoardViewModel"
@@ -39,10 +40,34 @@
             <Setter Property="Background" Value="{DynamicResource Cora.Surface.Panel}" />
             <Setter Property="BorderBrush" Value="{DynamicResource Cora.Border.Subtle}" />
             <Setter Property="BorderThickness" Value="1" />
-            <Setter Property="CornerRadius" Value="12" />
-            <Setter Property="Padding" Value="14,12" />
-            <Setter Property="Width" Value="260" />
-            <Setter Property="Margin" Value="0,0,12,12" />
+            <Setter Property="CornerRadius" Value="14" />
+            <Setter Property="Padding" Value="0" />
+            <Setter Property="Width" Value="300" />
+            <Setter Property="Margin" Value="0,0,16,16" />
+            <Setter Property="ClipToBounds" Value="True" />
+        </Style>
+        <Style Selector="Border.template-card:pointerover">
+            <Setter Property="BorderBrush" Value="{DynamicResource Cora.Accent.Store}" />
+        </Style>
+        <Style Selector="Border.template-thumbnail">
+            <Setter Property="Height" Value="120" />
+            <Setter Property="Background" Value="{DynamicResource Cora.Surface.Panel}" />
+            <Setter Property="BorderBrush" Value="{DynamicResource Cora.Border.Subtle}" />
+            <Setter Property="BorderThickness" Value="0,0,0,1" />
+        </Style>
+        <Style Selector="Border.beat-count">
+            <Setter Property="Background" Value="{DynamicResource Cora.Border.Subtle}" />
+            <Setter Property="CornerRadius" Value="9" />
+            <Setter Property="Padding" Value="8,2" />
+            <Setter Property="VerticalAlignment" Value="Center" />
+        </Style>
+        <Style Selector="Button.template-primary">
+            <Setter Property="Padding" Value="14,6" />
+            <Setter Property="Background" Value="{DynamicResource Cora.Accent.Store}" />
+            <Setter Property="Foreground" Value="{DynamicResource Cora.Text}" />
+            <Setter Property="BorderThickness" Value="0" />
+            <Setter Property="CornerRadius" Value="6" />
+            <Setter Property="FontWeight" Value="SemiBold" />
         </Style>
         <Style Selector="TextBlock.field-label">
             <Setter Property="FontSize" Value="10" />
@@ -86,59 +111,18 @@
                         DockPanel.Dock="Right"
                         Classes="beat-action"
                         Margin="8,0,0,0"
-                        IsEnabled="{Binding CanEdit}"
-                        IsVisible="{Binding !IsEmpty}">
+                        ToolTip.Tip="Add a template's beats to this board, or replace them"
+                        Command="{Binding ChooseTemplateCommand}"
+                        IsVisible="{Binding ShowsBeats}">
                     <TextBlock Text="Apply template…" />
-                    <Button.Flyout>
-                        <Flyout Placement="BottomEdgeAlignedRight">
-                            <ScrollViewer MaxHeight="480">
-                                <ItemsControl ItemsSource="{Binding TemplateOptions}">
-                                    <ItemsControl.ItemTemplate>
-                                        <DataTemplate DataType="vm:BeatTemplateOptionViewModel">
-                                            <Grid ColumnDefinitions="*,Auto,Auto,Auto"
-                                                  ColumnSpacing="8"
-                                                  Margin="0,0,0,8"
-                                                  MinWidth="420">
-                                                <StackPanel Grid.Column="0" Spacing="2">
-                                                    <TextBlock Text="{Binding Name}"
-                                                               FontWeight="SemiBold"
-                                                               Foreground="{DynamicResource Cora.Text}" />
-                                                    <TextBlock Text="{Binding Description}"
-                                                               FontSize="11"
-                                                               TextWrapping="Wrap"
-                                                               MaxWidth="260"
-                                                               Foreground="{DynamicResource Cora.Text.Disabled}" />
-                                                </StackPanel>
-                                                <ComboBox Grid.Column="1"
-                                                          VerticalAlignment="Center"
-                                                          IsVisible="{Binding HasParameter}"
-                                                          ItemsSource="{Binding ParameterOptions}"
-                                                          SelectedItem="{Binding SelectedParameter, Mode=TwoWay}" />
-                                                <Button Grid.Column="2"
-                                                        Classes="beat-action"
-                                                        VerticalAlignment="Center"
-                                                        Content="Append"
-                                                        IsEnabled="{Binding CanAppend}"
-                                                        ToolTip.Tip="Add this template's beats after the current ones"
-                                                        Command="{Binding $parent[ItemsControl].DataContext.ApplyTemplateCommand}"
-                                                        CommandParameter="{Binding AppendRequest}"
-                                                        Click="ApplyTemplateMenu_Click" />
-                                                <Button Grid.Column="3"
-                                                        Classes="beat-action"
-                                                        VerticalAlignment="Center"
-                                                        Content="Replace"
-                                                        ToolTip.Tip="Replace every beat on this board (asks first)"
-                                                        Command="{Binding $parent[ItemsControl].DataContext.ApplyTemplateCommand}"
-                                                        CommandParameter="{Binding ReplaceRequest}"
-                                                        Click="ApplyTemplateMenu_Click" />
-                                            </Grid>
-                                        </DataTemplate>
-                                    </ItemsControl.ItemTemplate>
-                                </ItemsControl>
-                            </ScrollViewer>
-                        </Flyout>
-                    </Button.Flyout>
                 </Button>
+                <Button x:Name="BackToBeatsButton"
+                        DockPanel.Dock="Right"
+                        Classes="beat-action"
+                        Margin="8,0,0,0"
+                        Content="← Back to beats"
+                        Command="{Binding CancelTemplateChoiceCommand}"
+                        IsVisible="{Binding IsChoosingTemplate}" />
                 <Button DockPanel.Dock="Right"
                         Content="+ Add beat"
                         Padding="12,4"
@@ -146,6 +130,7 @@
                         Foreground="{DynamicResource Cora.IconInk}"
                         BorderThickness="0"
                         ToolTip.Tip="Add a beat after the selected one"
+                        IsVisible="{Binding !IsChoosingTemplate}"
                         Command="{Binding AddBeatCommand}" />
             </DockPanel>
         </Border>
@@ -161,16 +146,32 @@
                        Foreground="{DynamicResource Cora.Accent.Unknown}" />
         </Border>
 
-        <!-- Empty board: pick a template to start from -->
+        <!-- Template gallery: an empty board starts from one; Apply template adds to or replaces the beats -->
         <ScrollViewer x:Name="TemplatePickerPanel"
                       Grid.Row="2"
-                      Padding="16"
+                      Padding="20,16"
                       IsVisible="{Binding ShowsTemplatePicker}">
-            <StackPanel Spacing="12">
-                <TextBlock Text="Start this board from a template"
-                           FontSize="15"
-                           FontWeight="SemiBold"
-                           Foreground="{DynamicResource Cora.Text}" />
+            <StackPanel Spacing="16">
+                <StackPanel Spacing="4" IsVisible="{Binding !IsChoosingTemplate}">
+                    <TextBlock Text="How will this story unfold?"
+                               FontSize="20"
+                               FontWeight="SemiBold"
+                               Foreground="{DynamicResource Cora.Text}" />
+                    <TextBlock Text="Pick a shape to start from. You can rename, rewrite, reorder or delete every beat later."
+                               FontSize="13"
+                               TextWrapping="Wrap"
+                               Foreground="{DynamicResource Cora.Text.Disabled}" />
+                </StackPanel>
+                <StackPanel Spacing="4" IsVisible="{Binding IsChoosingTemplate}">
+                    <TextBlock Text="Apply a template"
+                               FontSize="20"
+                               FontWeight="SemiBold"
+                               Foreground="{DynamicResource Cora.Text}" />
+                    <TextBlock Text="Add a template's beats after the ones you have, or replace them all."
+                               FontSize="13"
+                               TextWrapping="Wrap"
+                               Foreground="{DynamicResource Cora.Text.Disabled}" />
+                </StackPanel>
                 <ItemsControl x:Name="TemplatePicker"
                               ItemsSource="{Binding TemplateOptions}">
                     <ItemsControl.ItemsPanel>
@@ -181,30 +182,92 @@
                     <ItemsControl.ItemTemplate>
                         <DataTemplate DataType="vm:BeatTemplateOptionViewModel">
                             <Border Classes="template-card">
-                                <StackPanel Spacing="8">
-                                    <TextBlock Text="{Binding Name}"
-                                               FontSize="14"
-                                               FontWeight="SemiBold"
-                                               Foreground="{DynamicResource Cora.Text}" />
-                                    <TextBlock Text="{Binding Description}"
-                                               FontSize="12"
-                                               TextWrapping="Wrap"
-                                               Foreground="{DynamicResource Cora.Text.Disabled}" />
-                                    <StackPanel Orientation="Horizontal"
-                                                Spacing="8"
-                                                IsVisible="{Binding HasParameter}">
-                                        <TextBlock Text="Thread"
-                                                   VerticalAlignment="Center"
+                                <StackPanel>
+                                    <Border Classes="template-thumbnail">
+                                        <controls:BeatShapeThumbnail Levels="{Binding Shape}" />
+                                    </Border>
+                                    <StackPanel Margin="16,12,16,16" Spacing="10">
+                                        <Grid ColumnDefinitions="*,Auto" ColumnSpacing="8">
+                                            <TextBlock Grid.Column="0"
+                                                       Text="{Binding Name}"
+                                                       FontSize="16"
+                                                       FontWeight="SemiBold"
+                                                       TextWrapping="Wrap"
+                                                       Foreground="{DynamicResource Cora.Text}" />
+                                            <Border Grid.Column="1" Classes="beat-count">
+                                                <TextBlock Text="{Binding BeatCountLabel}"
+                                                           FontSize="10"
+                                                           FontWeight="SemiBold"
+                                                           Foreground="{DynamicResource Cora.Text}" />
+                                            </Border>
+                                        </Grid>
+                                        <TextBlock Text="{Binding Description}"
                                                    FontSize="12"
+                                                   TextWrapping="Wrap"
                                                    Foreground="{DynamicResource Cora.Text.Disabled}" />
-                                        <ComboBox ItemsSource="{Binding ParameterOptions}"
-                                                  SelectedItem="{Binding SelectedParameter, Mode=TwoWay}" />
+                                        <ItemsControl ItemsSource="{Binding BeatPreview}"
+                                                      IsVisible="{Binding CanAppend}">
+                                            <ItemsControl.ItemTemplate>
+                                                <DataTemplate>
+                                                    <TextBlock Text="{Binding}"
+                                                               FontSize="11"
+                                                               Margin="0,1"
+                                                               TextTrimming="CharacterEllipsis"
+                                                               Foreground="{DynamicResource Cora.Text.Secondary}" />
+                                                </DataTemplate>
+                                            </ItemsControl.ItemTemplate>
+                                        </ItemsControl>
+                                        <StackPanel Orientation="Horizontal"
+                                                    Spacing="8"
+                                                    IsVisible="{Binding HasParameter}">
+                                            <TextBlock Text="{Binding ParameterLabel}"
+                                                       VerticalAlignment="Center"
+                                                       FontSize="12"
+                                                       Foreground="{DynamicResource Cora.Text.Disabled}" />
+                                            <ComboBox ItemsSource="{Binding ParameterOptions}"
+                                                      SelectedItem="{Binding SelectedParameter, Mode=TwoWay}" />
+                                        </StackPanel>
+
+                                        <!-- Starting an empty board -->
+                                        <StackPanel Orientation="Horizontal"
+                                                    Spacing="8"
+                                                    IsVisible="{Binding !DataContext.IsChoosingTemplate, ElementName=Root}">
+                                            <Button Classes="template-primary"
+                                                    Content="Use this template"
+                                                    IsVisible="{Binding CanAppend}"
+                                                    Command="{Binding DataContext.ApplyTemplateCommand, ElementName=Root}"
+                                                    CommandParameter="{Binding AppendRequest}" />
+                                            <Button Classes="template-primary"
+                                                    Content="Start blank"
+                                                    ToolTip.Tip="Start with one empty beat"
+                                                    IsVisible="{Binding IsBlank}"
+                                                    Command="{Binding DataContext.AddBeatCommand, ElementName=Root}" />
+                                        </StackPanel>
+
+                                        <!-- Applying to a board that already has beats -->
+                                        <StackPanel Orientation="Horizontal"
+                                                    Spacing="8"
+                                                    IsVisible="{Binding DataContext.IsChoosingTemplate, ElementName=Root}">
+                                            <Button Classes="template-primary"
+                                                    Content="Add to end"
+                                                    ToolTip.Tip="Add this template's beats after the current ones"
+                                                    IsVisible="{Binding CanAppend}"
+                                                    Command="{Binding DataContext.ApplyTemplateCommand, ElementName=Root}"
+                                                    CommandParameter="{Binding AppendRequest}" />
+                                            <Button Classes="beat-action"
+                                                    Content="Replace all"
+                                                    ToolTip.Tip="Replace every beat on this board (asks first)"
+                                                    IsVisible="{Binding CanAppend}"
+                                                    Command="{Binding DataContext.ApplyTemplateCommand, ElementName=Root}"
+                                                    CommandParameter="{Binding ReplaceRequest}" />
+                                            <Button Classes="beat-action"
+                                                    Content="Clear all beats"
+                                                    ToolTip.Tip="Delete every beat on this board (asks first)"
+                                                    IsVisible="{Binding IsBlank}"
+                                                    Command="{Binding DataContext.ApplyTemplateCommand, ElementName=Root}"
+                                                    CommandParameter="{Binding ReplaceRequest}" />
+                                        </StackPanel>
                                     </StackPanel>
-                                    <Button Classes="beat-action"
-                                            Content="Use template"
-                                            IsEnabled="{Binding CanAppend}"
-                                            Command="{Binding $parent[ItemsControl].DataContext.ApplyTemplateCommand}"
-                                            CommandParameter="{Binding AppendRequest}" />
                                 </StackPanel>
                             </Border>
                         </DataTemplate>
@@ -218,7 +281,7 @@
                  Grid.Row="2"
                  Padding="16"
                  Background="Transparent"
-                 IsVisible="{Binding !IsEmpty}"
+                 IsVisible="{Binding ShowsBeats}"
                  ItemsSource="{Binding Beats}"
                  SelectedItem="{Binding Selected, Mode=TwoWay}">
             <ListBox.ItemTemplate>
@@ -248,7 +311,9 @@
                                          AcceptsReturn="True"
                                          TextWrapping="Wrap"
                                          MinHeight="48" />
-                                <StackPanel Orientation="Horizontal" Spacing="8">
+                                <StackPanel Orientation="Horizontal"
+                                            Spacing="8"
+                                            IsVisible="{Binding DataContext.ShowsSceneLinks, ElementName=Root}">
                                     <TextBlock Classes="field-label"
                                                Text="SCENE"
                                                VerticalAlignment="Center" />

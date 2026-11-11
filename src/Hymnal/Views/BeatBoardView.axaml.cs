@@ -10,7 +10,7 @@ using Hymnal.ViewModels;
 namespace Hymnal.Views;
 
 /// <summary>
-/// A story's beat board. Code-behind only opens confirmation dialogs, closes the template flyout, and
+/// A story's beat board. Code-behind only opens confirmation dialogs and
 /// turns drag gestures and focus into <see cref="BeatBoardViewModel"/> calls.
 /// </summary>
 public partial class BeatBoardView : UserControl
@@ -33,9 +33,6 @@ public partial class BeatBoardView : UserControl
                 : Task.FromResult(false);
         };
     }
-
-    private void ApplyTemplateMenu_Click(object? sender, RoutedEventArgs e) =>
-        ApplyTemplateButton.Flyout?.Hide();
 
     // ── Selection and drag-to-reorder ─────────────────────────────────────────
 

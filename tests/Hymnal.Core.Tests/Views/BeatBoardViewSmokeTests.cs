@@ -56,6 +56,16 @@ public sealed class BeatBoardViewSmokeTests
                 Assert.True(beats.IsVisible);
                 Assert.Equal(5, beats.ItemCount);
                 Assert.False(view.FindControl<Border>("ReadOnlyBanner")!.IsVisible);
+
+                // Apply template shows the same gallery in place of the beats.
+                var apply = view.FindControl<Button>("ApplyTemplateButton")!;
+                Assert.True(apply.IsVisible);
+                await Within(context.Board.ChooseTemplateCommand.Execute().ToTask());
+                LayoutView(view);
+                Assert.True(picker.IsVisible);
+                Assert.False(beats.IsVisible);
+                Assert.False(apply.IsVisible);
+                Assert.True(view.FindControl<Button>("BackToBeatsButton")!.IsVisible);
             });
         }
         finally { DeleteFolder(root); }
@@ -107,7 +117,10 @@ public sealed class BeatBoardViewSmokeTests
         Assert.Contains("Command=\"{Binding AddBeatCommand}\"", axaml);
         Assert.Contains("Loaded=\"BeatCard_Loaded\"", axaml);
         Assert.Contains("Text=\"Apply template…\"", axaml);
-        Assert.Contains("IsEnabled=\"{Binding CanAppend}\"", axaml);
+        Assert.Contains("Command=\"{Binding ChooseTemplateCommand}\"", axaml);
+        Assert.Contains("IsVisible=\"{Binding CanAppend}\"", axaml);
+        Assert.Contains("<controls:BeatShapeThumbnail Levels=\"{Binding Shape}\" />", axaml);
+        Assert.DoesNotContain("<Button.Flyout>", axaml);
     }
 
     [Fact]
