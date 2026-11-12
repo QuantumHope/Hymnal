@@ -10,6 +10,7 @@ using System.Threading.Tasks;
 using Avalonia;
 using Avalonia.Threading;
 using Hymnal.Core.Interfaces;
+using Hymnal.Core.Markua;
 using Hymnal.Core.Models;
 using Hymnal.Core.Services;
 using ReactiveUI;
@@ -213,6 +214,49 @@ public class EditorViewModel : ViewModelBase, IDisposable, IOpenStoryBuffer
     private readonly ObservableAsPropertyHelper<int> _liveWordCount;
     public int LiveWordCount => _liveWordCount.Value;
 
+    // ── Markua preview ──────────────────────────────────────────────────────
+
+    private EditorViewMode _viewMode = EditorViewMode.Write;
+    /// <summary>Write (source only), Split (source + preview) or Preview (rendered only). Kept across files.</summary>
+    public EditorViewMode ViewMode
+    {
+        get => _viewMode;
+        set => this.RaiseAndSetIfChanged(ref _viewMode, value);
+    }
+
+    private readonly ObservableAsPropertyHelper<bool> _isPreviewAvailable;
+    /// <summary>True when the open file can be previewed: any chapter or doc, but not Book.txt.</summary>
+    public bool IsPreviewAvailable => _isPreviewAvailable.Value;
+
+    private readonly ObservableAsPropertyHelper<bool> _showSourcePane;
+    /// <summary>True when the Markua source editor is shown (always, unless Preview mode hides it).</summary>
+    public bool ShowSourcePane => _showSourcePane.Value;
+
+    private readonly ObservableAsPropertyHelper<bool> _showPreviewPane;
+    /// <summary>True when the rendered preview is shown (Split or Preview mode on a previewable file).</summary>
+    public bool ShowPreviewPane => _showPreviewPane.Value;
+
+    private readonly ObservableAsPropertyHelper<bool> _isSplitView;
+    /// <summary>True when source and preview are shown side by side.</summary>
+    public bool IsSplitView => _isSplitView.Value;
+
+    private readonly ObservableAsPropertyHelper<MarkuaDocument> _previewDocument;
+    /// <summary>
+    /// <see cref="Text"/> parsed as Markua, refreshed shortly after typing pauses. Only parsed while the
+    /// preview is shown, so the Write mode pays nothing for it.
+    /// </summary>
+    public MarkuaDocument PreviewDocument => _previewDocument.Value;
+
+    private readonly ObservableAsPropertyHelper<string?> _previewBaseDirectory;
+    /// <summary>Folder of the open file; the preview resolves relative image paths against it.</summary>
+    public string? PreviewBaseDirectory => _previewBaseDirectory.Value;
+
+    /// <summary>Switches the Write pane to the given mode.</summary>
+    public ReactiveCommand<EditorViewMode, Unit> SetViewModeCommand { get; }
+
+    /// <summary>Cycles Write → Split → Preview → Write (F6).</summary>
+    public ReactiveCommand<Unit, Unit> CycleViewModeCommand { get; }
+
     // ── Saved signal ─────────────────────────────────────────────────────────
 
     private readonly Subject<Unit> _savedSubject = new();
@@ -324,6 +368,52 @@ public class EditorViewModel : ViewModelBase, IDisposable, IOpenStoryBuffer
             .ObserveOn(AvaloniaScheduler.Instance)
             .ToProperty(this, x => x.LiveWordCount, out _liveWordCount);
         Disposables.Add(_liveWordCount);
+
+        // Markua preview: available for any open file except Book.txt; parsed only while it is on screen.
+        _isPreviewAvailable = this.WhenAnyValue(x => x.ShowEditor, x => x.IsBookSelected,
+                (show, isBook) => show && !isBook)
+            .ToProperty(this, x => x.IsPreviewAvailable);
+        Disposables.Add(_isPreviewAvailable);
+
+        _showPreviewPane = this.WhenAnyValue(x => x.IsPreviewAvailable, x => x.ViewMode,
+                (available, mode) => available && mode != EditorViewMode.Write)
+            .ToProperty(this, x => x.ShowPreviewPane);
+        Disposables.Add(_showPreviewPane);
+
+        _showSourcePane = this.WhenAnyValue(x => x.ShowEditor, x => x.IsPreviewAvailable, x => x.ViewMode,
+                (show, available, mode) => show && !(available && mode == EditorViewMode.Preview))
+            .ToProperty(this, x => x.ShowSourcePane);
+        Disposables.Add(_showSourcePane);
+
+        _isSplitView = this.WhenAnyValue(x => x.ShowSourcePane, x => x.ShowPreviewPane, (source, preview) => source && preview)
+            .ToProperty(this, x => x.IsSplitView);
+        Disposables.Add(_isSplitView);
+
+        _previewDocument = this.WhenAnyValue(x => x.Text, x => x.ShowPreviewPane)
+            .Where(t => t.Item2)
+            .Select(t => t.Item1)
+            .DistinctUntilChanged()
+            .Throttle(TimeSpan.FromMilliseconds(200), TaskPoolScheduler.Default)
+            .Select(MarkuaParser.Parse)
+            .ObserveOn(AvaloniaScheduler.Instance)
+            .ToProperty(this, x => x.PreviewDocument, MarkuaDocument.Empty);
+        Disposables.Add(_previewDocument);
+
+        _previewBaseDirectory = this.WhenAnyValue(x => x.ActiveFilePath)
+            .Select(path => path is null ? null : Path.GetDirectoryName(path))
+            .ToProperty(this, x => x.PreviewBaseDirectory);
+        Disposables.Add(_previewBaseDirectory);
+
+        SetViewModeCommand = ReactiveCommand.Create<EditorViewMode>(mode => ViewMode = mode);
+        CycleViewModeCommand = ReactiveCommand.Create(() =>
+        {
+            ViewMode = ViewMode switch
+            {
+                EditorViewMode.Write => EditorViewMode.Split,
+                EditorViewMode.Split => EditorViewMode.Preview,
+                _ => EditorViewMode.Write,
+            };
+        });
 
         // Register watcher teardown with the composite disposable.
         Disposables.Add(Disposable.Create(StopWatcher));

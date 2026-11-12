@@ -2,6 +2,8 @@
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:vm="using:Hymnal.ViewModels"
              xmlns:avedit="using:AvaloniaEdit"
+             xmlns:editor="using:Hymnal.Views.Editor"
+             xmlns:conv="using:Hymnal.Views.Converters"
              xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
              mc:Ignorable="d"
@@ -13,7 +15,29 @@
         <KeyBinding Gesture="Ctrl+S" Command="{Binding SaveCommand}" />
     </UserControl.KeyBindings>
 
-    <Grid RowDefinitions="Auto,Auto,*">
+    <UserControl.Styles>
+        <Style Selector="ToggleButton.view-mode">
+            <Setter Property="Background" Value="Transparent" />
+            <Setter Property="Foreground" Value="{DynamicResource OnSurfaceDimBrush}" />
+            <Setter Property="BorderThickness" Value="0" />
+            <Setter Property="CornerRadius" Value="4" />
+            <Setter Property="Padding" Value="10,3" />
+            <Setter Property="MinHeight" Value="0" />
+            <Setter Property="FontSize" Value="10.5" />
+            <Setter Property="FontWeight" Value="SemiBold" />
+            <Setter Property="LetterSpacing" Value="0.8" />
+        </Style>
+        <Style Selector="ToggleButton.view-mode:pointerover /template/ ContentPresenter#PART_ContentPresenter">
+            <Setter Property="Background" Value="{DynamicResource SurfaceHighBrush}" />
+            <Setter Property="Foreground" Value="{DynamicResource OnSurfaceBrush}" />
+        </Style>
+        <Style Selector="ToggleButton.view-mode:checked /template/ ContentPresenter#PART_ContentPresenter">
+            <Setter Property="Background" Value="#2D1B5E" />
+            <Setter Property="Foreground" Value="#E9D5FF" />
+        </Style>
+    </UserControl.Styles>
+
+    <Grid RowDefinitions="Auto,Auto,Auto,*">
 
         <!-- Conflict strip: visible when an external file change conflicts with dirty buffer -->
         <Border Grid.Row="0"
@@ -61,9 +85,42 @@
             </StackPanel>
         </Border>
 
-        <Grid Grid.Row="2">
+        <!-- Write / Split / Preview switch (F6 cycles). Hidden for Book.txt. -->
+        <Border Grid.Row="2"
+                IsVisible="{Binding IsPreviewAvailable}"
+                BorderBrush="{DynamicResource BorderSubtleBrush}"
+                BorderThickness="0,0,0,1"
+                Padding="8,4">
+            <StackPanel Orientation="Horizontal"
+                        HorizontalAlignment="Right"
+                        Spacing="2"
+                        ToolTip.Tip="Preview the chapter as Leanpub sets it (F6 cycles)">
+                <ToggleButton x:Name="PART_WriteModeButton"
+                              Classes="view-mode"
+                              Content="WRITE"
+                              Command="{Binding SetViewModeCommand}"
+                              CommandParameter="{x:Static vm:EditorViewMode.Write}"
+                              IsChecked="{Binding ViewMode, Mode=OneWay, Converter={x:Static conv:ShellModeEqualsConverter.Instance}, ConverterParameter=Write}" />
+                <ToggleButton x:Name="PART_SplitModeButton"
+                              Classes="view-mode"
+                              Content="SPLIT"
+                              Command="{Binding SetViewModeCommand}"
+                              CommandParameter="{x:Static vm:EditorViewMode.Split}"
+                              IsChecked="{Binding ViewMode, Mode=OneWay, Converter={x:Static conv:ShellModeEqualsConverter.Instance}, ConverterParameter=Split}" />
+                <ToggleButton x:Name="PART_PreviewModeButton"
+                              Classes="view-mode"
+                              Content="PREVIEW"
+                              Command="{Binding SetViewModeCommand}"
+                              CommandParameter="{x:Static vm:EditorViewMode.Preview}"
+                              IsChecked="{Binding ViewMode, Mode=OneWay, Converter={x:Static conv:ShellModeEqualsConverter.Instance}, ConverterParameter=Preview}" />
+            </StackPanel>
+        </Border>
+
+        <Grid Grid.Row="3">
+          <Grid x:Name="PART_PaneGrid" ColumnDefinitions="*,Auto,0">
             <avedit:TextEditor x:Name="PART_Editor"
-                               IsVisible="{Binding ShowEditor}"
+                               Grid.Column="0"
+                               IsVisible="{Binding ShowSourcePane}"
                                FontFamily="{DynamicResource EditorFont}"
                                FontSize="14"
                                WordWrap="True"
@@ -73,6 +130,20 @@
                                HorizontalScrollBarVisibility="Disabled"
                                VerticalScrollBarVisibility="Auto"
                                Padding="16,12" />
+
+            <GridSplitter x:Name="PART_PreviewSplitter"
+                          Grid.Column="1"
+                          Width="4"
+                          IsVisible="{Binding IsSplitView}"
+                          ResizeDirection="Columns"
+                          Background="{DynamicResource BorderSubtleBrush}" />
+
+            <editor:MarkuaPreviewView x:Name="PART_Preview"
+                                      Grid.Column="2"
+                                      IsVisible="{Binding ShowPreviewPane}"
+                                      Document="{Binding PreviewDocument}"
+                                      BaseDirectory="{Binding PreviewBaseDirectory}" />
+          </Grid>
 
             <Border IsVisible="{Binding ShowWorkspacePrompt}"
                     Background="{DynamicResource SurfaceBaseBrush}">

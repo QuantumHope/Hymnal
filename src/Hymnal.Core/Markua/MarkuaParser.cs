@@ -422,7 +422,7 @@ public static class MarkuaParser
         while (i < lines.Count)
         {
             var marker = ListItemRegex.Match(lines[i]);
-            if (!marker.Success || IndentWidth(marker.Groups[1].Value) != indent
+            if (!marker.Success || SceneBreakRegex.IsMatch(lines[i]) || IndentWidth(marker.Groups[1].Value) != indent
                 || char.IsDigit(marker.Groups[2].Value[0]) != ordered)
                 break;
 
@@ -482,7 +482,8 @@ public static class MarkuaParser
             if (peek < lines.Count && peek != i)
             {
                 var nextMarker = ListItemRegex.Match(lines[peek]);
-                if (nextMarker.Success && IndentWidth(nextMarker.Groups[1].Value) == indent
+                if (nextMarker.Success && !SceneBreakRegex.IsMatch(lines[peek])
+                    && IndentWidth(nextMarker.Groups[1].Value) == indent
                     && char.IsDigit(nextMarker.Groups[2].Value[0]) == ordered)
                     i = peek;
             }

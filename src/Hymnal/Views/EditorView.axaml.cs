@@ -29,6 +29,7 @@ public partial class EditorView : UserControl
 {
     private CompositeDisposable _viewDisposables = new();
     private IDisposable? _vmTextSub;
+    private IDisposable? _vmLayoutSub;
     private bool _highlightingLoaded;
     private MarkuaColorizingTransformer? _markuaColorizer;
     private ValidationMargin? _validationMargin;
@@ -92,6 +93,13 @@ public partial class EditorView : UserControl
             PART_Editor.TextChanged -= OnEditorTextChanged;
         }));
 
+        // Split view: keep the preview scrolled to the same place as the source.
+        PART_Editor.TextArea.TextView.ScrollOffsetChanged += OnEditorScrolled;
+        _viewDisposables.Add(Disposable.Create(() =>
+        {
+            PART_Editor.TextArea.TextView.ScrollOffsetChanged -= OnEditorScrolled;
+        }));
+
         // VM → Editor: initial sync + react to DataContext changes.
         SubscribeToVmText();
         DataContextChanged += OnDataContextChanged;
@@ -100,6 +108,8 @@ public partial class EditorView : UserControl
             DataContextChanged -= OnDataContextChanged;
             _vmTextSub?.Dispose();
             _vmTextSub = null;
+            _vmLayoutSub?.Dispose();
+            _vmLayoutSub = null;
         }));
     }
 
@@ -128,6 +138,49 @@ public partial class EditorView : UserControl
         SubscribeToVmText();
     }
 
+    // ── Write / Split / Preview layout ───────────────────────────────────────
+
+    /// <summary>
+    /// Sizes the source and preview columns for the current mode: source only, half and half, or preview only.
+    /// Re-entering Split resets a splitter drag to an even split.
+    /// </summary>
+    private void SubscribeToVmLayout()
+    {
+        _vmLayoutSub?.Dispose();
+        _vmLayoutSub = null;
+        if (DataContext is not EditorViewModel vm) return;
+
+        _vmLayoutSub = vm.WhenAnyValue(x => x.ShowSourcePane, x => x.ShowPreviewPane)
+            .ObserveOn(AvaloniaScheduler.Instance)
+            .Subscribe(panes => ApplyPaneLayout(panes.Item1, panes.Item2));
+    }
+
+    internal void ApplyPaneLayout(bool showSource, bool showPreview)
+    {
+        var columns = PART_PaneGrid.ColumnDefinitions;
+        var star = new GridLength(1, GridUnitType.Star);
+        var none = new GridLength(0);
+
+        columns[0].Width = showSource || !showPreview ? star : none;
+        columns[2].Width = showPreview ? star : none;
+
+        if (showSource && showPreview)
+            PART_Preview.ScrollToRatio(EditorScrollRatio());
+    }
+
+    private void OnEditorScrolled(object? sender, EventArgs e)
+    {
+        if (DataContext is EditorViewModel { IsSplitView: true })
+            PART_Preview.ScrollToRatio(EditorScrollRatio());
+    }
+
+    private double EditorScrollRatio()
+    {
+        var view = PART_Editor.TextArea.TextView;
+        var scrollable = view.DocumentHeight - view.Bounds.Height;
+        return scrollable > 0 ? view.ScrollOffset.Y / scrollable : 0;
+    }
+
     /// <summary>
     /// Observes <c>EditorViewModel.Text</c> and updates <c>PART_Editor.Text</c> when it changes
     /// (handles initial load and external-reload scenarios). The equality guard breaks the
@@ -135,6 +188,7 @@ public partial class EditorView : UserControl
     /// </summary>
     private void SubscribeToVmText()
     {
+        SubscribeToVmLayout();
         if (DataContext is not EditorViewModel vm) return;
 
         _vmTextSub = vm.WhenAnyValue(x => x.Text)
