@@ -43,9 +43,43 @@ public partial class EditorView : UserControl
         set => SetValue(HasWorkspaceProperty, value);
     }
 
+    /// <summary>
+    /// Shown at the left of the editor's header row, beside the Write / Split / Preview switch (the Write
+    /// surface puts the chapter status bar here, so the editor has one header row rather than two).
+    /// </summary>
+    public static readonly StyledProperty<Control?> HeaderContentProperty =
+        AvaloniaProperty.Register<EditorView, Control?>(nameof(HeaderContent));
+
+    public Control? HeaderContent
+    {
+        get => GetValue(HeaderContentProperty);
+        set => SetValue(HeaderContentProperty, value);
+    }
+
+    /// <summary>Below this header width the mode buttons drop their labels and show icons only.</summary>
+    internal const double CompactHeaderWidth = 640;
+
+    private IDisposable? _headerContentVisibilitySub;
+
     public EditorView()
     {
         InitializeComponent();
+        PART_HeaderRow.SizeChanged += (_, e) => UpdateHeaderCompact(e.NewSize.Width);
+    }
+
+    internal void UpdateHeaderCompact(double width) =>
+        PART_HeaderRow.Classes.Set("compact", width > 0 && width < CompactHeaderWidth);
+
+    /// <summary>
+    /// The header row shows when it has something to show: the mode switch (any previewable file) or a visible
+    /// header control. The divider only separates the two when both are present.
+    /// </summary>
+    private void UpdateHeaderRow()
+    {
+        var hasSwitch = DataContext is EditorViewModel { IsPreviewAvailable: true };
+        var hasHeader = HeaderContent is { IsVisible: true };
+        PART_HeaderRow.IsVisible = hasSwitch || hasHeader;
+        PART_HeaderDivider.IsVisible = hasSwitch && hasHeader;
     }
 
     protected override void OnPropertyChanged(AvaloniaPropertyChangedEventArgs change)
@@ -54,6 +88,14 @@ public partial class EditorView : UserControl
 
         if (change.Property == HasWorkspaceProperty && DataContext is EditorViewModel vm)
             vm.HasWorkspace = change.GetNewValue<bool>();
+
+        if (change.Property == HeaderContentProperty)
+        {
+            _headerContentVisibilitySub?.Dispose();
+            _headerContentVisibilitySub = HeaderContent?.GetObservable(IsVisibleProperty)
+                .Subscribe(_ => UpdateHeaderRow());
+            UpdateHeaderRow();
+        }
     }
 
     protected override void OnAttachedToVisualTree(VisualTreeAttachmentEventArgs e)
@@ -150,9 +192,13 @@ public partial class EditorView : UserControl
         _vmLayoutSub = null;
         if (DataContext is not EditorViewModel vm) return;
 
-        _vmLayoutSub = vm.WhenAnyValue(x => x.ShowSourcePane, x => x.ShowPreviewPane)
-            .ObserveOn(AvaloniaScheduler.Instance)
-            .Subscribe(panes => ApplyPaneLayout(panes.Item1, panes.Item2));
+        _vmLayoutSub = new CompositeDisposable(
+            vm.WhenAnyValue(x => x.ShowSourcePane, x => x.ShowPreviewPane)
+                .ObserveOn(AvaloniaScheduler.Instance)
+                .Subscribe(panes => ApplyPaneLayout(panes.Item1, panes.Item2)),
+            vm.WhenAnyValue(x => x.IsPreviewAvailable)
+                .ObserveOn(AvaloniaScheduler.Instance)
+                .Subscribe(_ => UpdateHeaderRow()));
     }
 
     internal void ApplyPaneLayout(bool showSource, bool showPreview)
