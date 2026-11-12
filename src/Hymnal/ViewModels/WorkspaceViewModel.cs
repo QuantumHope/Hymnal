@@ -36,6 +36,7 @@ public class WorkspaceViewModel : ViewModelBase
     private readonly WordCountHistoryService _historyService;
     private readonly IExclusionManifestService _exclusionManifestService;
     private readonly IOrphanFileDiscoveryService _orphanFileDiscoveryService;
+    private readonly CollectionService _collections;
     private readonly ProjectSettingsService? _projectSettings;
     private readonly ProjectInitializer? _projectInitializer;
     private readonly IProjectInitPrompt? _initPrompt;
@@ -180,12 +181,29 @@ public class WorkspaceViewModel : ViewModelBase
         return Profile.NounFor(node.Node.Kind, insidePart);
     }
     /// <summary>Profile of the open workspace's project kind (Novel when none is open).</summary>
+    private string _collectionTitle = "";
+    /// <summary>The open collection's (or book's, or story's) title; empty when it has none.</summary>
+    public string CollectionTitle
+    {
+        get => _collectionTitle;
+        set
+        {
+            this.RaiseAndSetIfChanged(ref _collectionTitle, value ?? "");
+            this.RaisePropertyChanged(nameof(CollectionDisplayName));
+        }
+    }
+
+    /// <summary>The title when there is one, otherwise the project's noun (Book, Story, Collection).</summary>
+    public string CollectionDisplayName =>
+        string.IsNullOrWhiteSpace(CollectionTitle) ? Profile.CollectionNoun : CollectionTitle;
+
     public ProjectProfile Profile
     {
         get => _profile;
         private set
         {
             this.RaiseAndSetIfChanged(ref _profile, value);
+            this.RaisePropertyChanged(nameof(CollectionDisplayName));
             _editor.Profile = value;
             if (!value.SupportsStoryFocus && _focusedStoryUuid != null)
             {
@@ -427,8 +445,10 @@ public class WorkspaceViewModel : ViewModelBase
         ProjectInitializer? projectInitializer = null,
         IProjectInitPrompt? initPrompt = null,
         INotesService? notesService = null,
-        IBeatBoardService? beatBoards = null)
+        IBeatBoardService? beatBoards = null,
+        CollectionService? collections = null)
     {
+        _collections = collections ?? new CollectionService(new MetadataStore());
         _manuscriptService = manuscriptService;
         _structureService = structureService;
         _filePicker = filePicker;
@@ -781,7 +801,7 @@ public class WorkspaceViewModel : ViewModelBase
     /// </summary>
     private async Task<Result<Unit>> ReloadWorkspaceAsync(string workspaceRoot, string bookTxtPath, bool reselectBook = true)
     {
-        var result = await _manuscriptService.LoadWorkspaceAsync(workspaceRoot);
+        var result = await LoadManuscriptAsync(workspaceRoot);
         if (!result.IsSuccess)
         {
             _notificationService.ShowError($"Failed to reload workspace: {result.Error}");
@@ -813,7 +833,7 @@ public class WorkspaceViewModel : ViewModelBase
         ErrorMessage = null;
         try
         {
-            var result = await _manuscriptService.LoadWorkspaceAsync(path);
+            var result = await LoadManuscriptAsync(path);
             if (!result.IsSuccess)
             {
                 ErrorMessage = result.Error;
@@ -867,11 +887,36 @@ public class WorkspaceViewModel : ViewModelBase
     /// Loads project.json for <paramref name="workspaceRoot"/> into <see cref="Profile"/>.
     /// Missing settings service or file → Novel; unreadable file → Novel plus an info notice.
     /// </summary>
+    /// <summary>Loads the project kind, then the open collection's title.</summary>
     private async Task LoadProfileAsync(string workspaceRoot)
+    {
+        await LoadProjectKindAsync(workspaceRoot);
+        CollectionTitle = await _collections.GetActiveTitleAsync(workspaceRoot) ?? "";
+    }
+
+    /// <summary>
+    /// Finishes a collection switch that was interrupted (so Book.txt is the open collection's list), then
+    /// reads Book.txt.
+    /// </summary>
+    private async Task<Result<ManuscriptModel>> LoadManuscriptAsync(string folder)
+    {
+        try
+        {
+            await _collections.RecoverAsync(folder);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            _notificationService.ShowError($"An interrupted collection switch couldn't be finished: {ex.Message}");
+        }
+        return await _manuscriptService.LoadWorkspaceAsync(folder);
+    }
+
+    private async Task LoadProjectKindAsync(string workspaceRoot)
     {
         if (_projectSettings == null)
         {
             Profile = ProjectProfile.Novel;
+        CollectionTitle = "";
             return;
         }
 
@@ -884,6 +929,7 @@ public class WorkspaceViewModel : ViewModelBase
 
         _notificationService.ShowInfo($"Couldn't read project settings ({result.Error}). Opening as a novel.");
         Profile = ProjectProfile.Novel;
+        CollectionTitle = "";
     }
 
     /// <summary>
@@ -939,6 +985,7 @@ public class WorkspaceViewModel : ViewModelBase
         HasWorkspace = false;
         WorkspaceName = null;
         Profile = ProjectProfile.Novel;
+        CollectionTitle = "";
         this.RaisePropertyChanged(nameof(WorkspaceRoot));
         this.RaisePropertyChanged(nameof(BookTxtPath));
         _workspaceChanged.OnNext(Unit.Default);
@@ -962,7 +1009,7 @@ public class WorkspaceViewModel : ViewModelBase
         IsLoading = true;
         try
         {
-            var result = await _manuscriptService.LoadWorkspaceAsync(lastPath);
+            var result = await LoadManuscriptAsync(lastPath);
             if (!result.IsSuccess) return;
 
             await LoadProfileAsync(result.Value!.WorkspaceRoot);

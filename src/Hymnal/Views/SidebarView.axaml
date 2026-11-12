@@ -132,7 +132,7 @@
                 <!-- 3-column grid matching the list items so word counts align -->
                 <Grid ColumnDefinitions="*,60,30">
                     <TextBlock Grid.Column="0"
-                               Text="{Binding Profile.CollectionNoun}"
+                               Text="{Binding CollectionDisplayName}"
                                Foreground="{DynamicResource Cora.Accent.Merge}"
                                FontSize="14"
                                FontWeight="Bold"

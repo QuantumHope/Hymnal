@@ -143,6 +143,9 @@ public sealed class ProjectProfile
     /// </summary>
     public bool SupportsStoryFocus => Kind == ProjectKind.Anthology;
 
+    /// <summary>True when one workspace can hold several collections over one folder of stories.</summary>
+    public bool SupportsMultipleCollections => Kind == ProjectKind.Anthology;
+
     /// <summary>The sidebar list of the book's contents: CHAPTERS, SCENES, STORIES.</summary>
     public string ContentsTitle => UnitPlural.ToUpperInvariant();
 

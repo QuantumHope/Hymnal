@@ -442,6 +442,88 @@ public partial class MainWindow : Window
         _ = vm.PersistWriteLayoutAsync(captured);
     }
 
+    // ── Collection menu ───────────────────────────────────────────────────────
+    // Name the open collection (book, story), open another collection, add a story that is in no collection,
+    // publish to LeanPub.
+
+    private async void CollectionButton_Click(object? sender, RoutedEventArgs e)
+    {
+        if (sender is not Button button
+            || DataContext is not MainWindowViewModel { CollectionsViewModel: { } collections } mainVm
+            || !mainVm.WorkspaceViewModel.HasWorkspace)
+            return;
+
+        var workspace = mainVm.WorkspaceViewModel;
+        var noun = workspace.Profile.CollectionNoun.ToLowerInvariant();
+        await collections.RefreshAsync();
+
+        var flyout = new MenuFlyout();
+        flyout.Items.Add(new MenuItem { Header = workspace.CollectionDisplayName, IsEnabled = false });
+        flyout.Items.Add(new Separator());
+        flyout.Items.Add(CollectionMenuItem(
+            collections.IsOpenCollectionNamed ? $"Rename this {noun}…" : $"Name this {noun}…",
+            () => NameOpenCollectionAsync(collections, workspace)));
+
+        if (collections.SupportsMultiple)
+        {
+            foreach (var other in collections.Collections.Where(c => !c.IsActive).ToList())
+                flyout.Items.Add(CollectionMenuItem($"Open “{other.Title}”",
+                    () => OpenCollectionAsync(collections, workspace, other.Slug)));
+            flyout.Items.Add(CollectionMenuItem("New collection…", () => NewCollectionAsync(collections, workspace)));
+
+            var unassigned = await collections.UnassignedAsync();
+            if (unassigned.Count > 0)
+            {
+                var add = new MenuItem { Header = $"Add a story in no collection ({unassigned.Count})" };
+                foreach (var path in unassigned)
+                    add.Items.Add(CollectionMenuItem(path, () => collections.AddToOpenAsync(path)));
+                flyout.Items.Add(add);
+            }
+        }
+
+        flyout.Items.Add(new Separator());
+        flyout.Items.Add(CollectionMenuItem("Publish to LeanPub…",
+            () => PublishDialog.ShowAsync(this, collections, workspace.CollectionDisplayName)));
+        flyout.ShowAt(button);
+    }
+
+    private static MenuItem CollectionMenuItem(string header, Func<Task> action)
+    {
+        var item = new MenuItem { Header = header };
+        item.Click += async (_, _) => await action();
+        return item;
+    }
+
+    private async Task<bool> NameOpenCollectionAsync(CollectionsViewModel collections, WorkspaceViewModel workspace,
+        string? prompt = null)
+    {
+        var noun = workspace.Profile.CollectionNoun.ToLowerInvariant();
+        var title = await FileNameDialog.ShowAsync(this, $"Name this {noun}",
+            prompt ?? $"The {noun}'s title, shown in Hymnal's sidebar, Plan and Schedule.",
+            collections.IsOpenCollectionNamed ? workspace.CollectionTitle : workspace.WorkspaceName);
+        return title != null && await collections.RenameOpenAsync(title);
+    }
+
+    private async Task OpenCollectionAsync(CollectionsViewModel collections, WorkspaceViewModel workspace, string slug)
+    {
+        // The open list needs a folder of its own before another collection takes its place.
+        if (!collections.IsOpenCollectionNamed
+            && !await NameOpenCollectionAsync(collections, workspace,
+                "Name this collection first, so its list of stories is kept when you open another."))
+            return;
+        await collections.OpenAsync(slug);
+    }
+
+    private async Task NewCollectionAsync(CollectionsViewModel collections, WorkspaceViewModel workspace)
+    {
+        var title = await FileNameDialog.ShowAsync(this, "New collection",
+            "Its title. It starts empty: add stories from the shared folder once it is open.", "");
+        if (title == null || await collections.CreateAsync(title) is not { } slug)
+            return;
+        if (await ConfirmDialog.ShowAsync(this, "New collection", $"Open “{title}” now?", "Open"))
+            await OpenCollectionAsync(collections, workspace, slug);
+    }
+
     // ── Chapter add button ────────────────────────────────────────────────────
 
     private async void AddChapterButton_Click(object? sender, RoutedEventArgs e)

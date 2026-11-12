@@ -50,6 +50,9 @@ public class MainWindowViewModel : ViewModelBase
     /// <summary>Write mode's Beats panel (story/anthology); null when the shell has none.</summary>
     public WriteBeatsViewModel? WriteBeatsViewModel { get; }
 
+    /// <summary>Naming, switching and publishing collections; null when the shell has none.</summary>
+    public CollectionsViewModel? CollectionsViewModel { get; }
+
     // ── Settings overlay ──────────────────────────────────────────────────────
 
     private bool _isSettingsOpen;
@@ -325,8 +328,10 @@ public class MainWindowViewModel : ViewModelBase
         IdeasViewModel? ideasViewModel = null,
         PlanHostViewModel? planHostViewModel = null,
         Hymnal.Audio.SoundPreferences? soundPreferences = null,
-        WriteBeatsViewModel? writeBeatsViewModel = null)
+        WriteBeatsViewModel? writeBeatsViewModel = null,
+        CollectionsViewModel? collectionsViewModel = null)
     {
+        CollectionsViewModel = collectionsViewModel;
         _settingsStore = settingsStore;
         _workspaceVm = workspaceViewModel;
         _supplementalDocsVm = supplementalDocsViewModel;

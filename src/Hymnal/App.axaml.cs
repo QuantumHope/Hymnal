@@ -175,7 +175,8 @@ public partial class App : Application
                 sp.GetRequiredService<ProjectInitializer>(),
                 sp.GetRequiredService<IProjectInitPrompt>(),
                 sp.GetRequiredService<INotesService>(),
-                sp.GetRequiredService<IBeatBoardService>()));
+                sp.GetRequiredService<IBeatBoardService>(),
+                sp.GetRequiredService<CollectionService>()));
 
         services.AddSingleton<NotesViewModel>(sp =>
             new NotesViewModel(
@@ -245,6 +246,22 @@ public partial class App : Application
             new BeatBoardViewModel(
                 sp.GetRequiredService<WorkspaceViewModel>(),
                 sp.GetRequiredService<INotificationService>()));
+
+        services.AddSingleton<CollectionService>(sp => new CollectionService(sp.GetRequiredService<IMetadataStore>()));
+        services.AddSingleton<CollectionsViewModel>(sp =>
+            new CollectionsViewModel(
+                sp.GetRequiredService<WorkspaceViewModel>(),
+                sp.GetRequiredService<CollectionService>(),
+                sp.GetRequiredService<INotificationService>(),
+                async () =>
+                {
+                    var notes = await sp.GetRequiredService<NotesViewModel>().FlushAsync();
+                    var schedule = await sp.GetRequiredService<ChapterInfoViewModel>().FlushScheduleAsync();
+                    var beats = await sp.GetRequiredService<PlanHostViewModel>().FlushAsync();
+                    var writeBeats = await sp.GetRequiredService<WriteBeatsViewModel>().FlushAsync();
+                    return notes && schedule && beats && writeBeats;
+                },
+                sp.GetRequiredService<EditorViewModel>()));
 
         // Write mode's Beats panel has its own board, so it never changes the one Plan shows.
         services.AddSingleton<WriteBeatsViewModel>(sp =>
@@ -325,7 +342,8 @@ public partial class App : Application
                 sp.GetRequiredService<IdeasViewModel>(),
                 sp.GetRequiredService<PlanHostViewModel>(),
                 sp.GetRequiredService<SoundPreferences>(),
-                sp.GetRequiredService<WriteBeatsViewModel>()));
+                sp.GetRequiredService<WriteBeatsViewModel>(),
+                sp.GetRequiredService<CollectionsViewModel>()));
 
         _serviceProvider = services.BuildServiceProvider();
         Services = _serviceProvider;

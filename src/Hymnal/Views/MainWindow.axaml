@@ -368,7 +368,7 @@
                                 <Border Grid.Row="0"
                                         BorderBrush="{DynamicResource Cora.Border.Subtle}"
                                         BorderThickness="0,0,0,1">
-                                    <Grid ColumnDefinitions="48,*,Auto">
+                                    <Grid ColumnDefinitions="48,*,Auto,Auto">
                                         <Button Grid.Column="0"
                                                 Classes="nav-icon"
                                                 Command="{Binding WorkspaceViewModel.ToggleChaptersPaneCommand}"
@@ -389,6 +389,24 @@
                                                    LetterSpacing="1.5"
                                                    Foreground="{DynamicResource Cora.Text.Secondary}" />
                                         <Button Grid.Column="2"
+                                                x:Name="CollectionButton"
+                                                Content="⋯"
+                                                Margin="0,0,4,0"
+                                                Padding="8,2"
+                                                MinWidth="28"
+                                                MinHeight="24"
+                                                FontSize="14"
+                                                FontWeight="Bold"
+                                                VerticalAlignment="Center"
+                                                Background="Transparent"
+                                                BorderBrush="{DynamicResource Cora.Border.Subtle}"
+                                                BorderThickness="1"
+                                                CornerRadius="4"
+                                                Foreground="{DynamicResource Cora.Accent.Store}"
+                                                IsVisible="{Binding WorkspaceViewModel.HasWorkspace}"
+                                                ToolTip.Tip="{Binding WorkspaceViewModel.Profile.CollectionNoun, StringFormat='{}{0}: name, switch, publish to LeanPub'}"
+                                                Click="CollectionButton_Click" />
+                                        <Button Grid.Column="3"
                                                 x:Name="AddChapterButton"
                                                 Content="+"
                                                 Margin="0,0,8,0"

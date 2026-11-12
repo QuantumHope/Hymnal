@@ -171,7 +171,7 @@ public sealed class GanttViewModel : ViewModelBase
         Disposables.Add(_phaseSubscriptions);
         Disposables.Add(Disposable.Create(() => _rowEditRequested.OnCompleted()));
         Disposables.Add(_rowEditRequested.Subscribe(OpenEditForRow));
-        Disposables.Add(workspace.WhenAnyValue(x => x.FocusedStory)
+        Disposables.Add(workspace.WhenAnyValue(x => x.FocusedStory, x => x.CollectionTitle, (s, t) => (s, t))
             .Skip(1)
             .Subscribe(_ => RequestRebuild()));
         Disposables.Add(workspace.WhenAnyValue(x => x.Profile)
@@ -745,7 +745,8 @@ public sealed class GanttViewModel : ViewModelBase
             .ToList();
         var profile = _workspace.Profile;
         var bookRowData = BuildBookRollup(allChapters, profile,
-            _workspace.FocusedStory?.Node.Title.ToUpperInvariant());
+            _workspace.FocusedStory?.Node.Title.ToUpperInvariant()
+            ?? (string.IsNullOrWhiteSpace(_workspace.CollectionTitle) ? null : _workspace.CollectionTitle.ToUpperInvariant()));
         _rows.Add(new GanttRowViewModel(bookRowData, profile));
 
         for (int i = 0; i < nodes.Count; i++)

@@ -70,6 +70,8 @@ public sealed class PlanHostViewModel : ViewModelBase, IDisposable
         Disposables.Add(BackToCollectionCommand.ThrownExceptions.Subscribe(ex => _notifications?.ShowError(ex.Message)));
 
         Disposables.Add(corkboard.BeatsRequested.Subscribe(OpenStory));
+        Disposables.Add(workspace.WhenAnyValue(x => x.CollectionDisplayName)
+            .Subscribe(_ => this.RaisePropertyChanged(nameof(BreadcrumbParent))));
 
         // Profile, workspace and book changes are coalesced into one refresh after the change settles:
         // a reload clears the node list before refilling it, and the board must not follow the gap.
@@ -101,7 +103,8 @@ public sealed class PlanHostViewModel : ViewModelBase, IDisposable
         private set => this.RaiseAndSetIfChanged(ref _showBreadcrumb, value);
     }
 
-    public string BreadcrumbParent => CollectionBreadcrumb;
+    /// <summary>The breadcrumb back to the collection: its title, or "Collection".</summary>
+    public string BreadcrumbParent => _workspace.CollectionDisplayName;
 
     private bool _showFilesStrip;
     /// <summary>True for a Short Story with two or more scene files.</summary>

@@ -1,0 +1,104 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:models="using:Hymnal.Core.Models"
+        x:Class="Hymnal.Views.PublishDialog"
+        Title="Publish to LeanPub"
+        Width="560" Height="560"
+        MinWidth="420" MinHeight="360"
+        ShowInTaskbar="False"
+        WindowStartupLocation="CenterOwner"
+        Background="{DynamicResource Cora.Surface.Panel}"
+        FontFamily="{DynamicResource Cora.Font.Persona}">
+
+    <Border BorderBrush="{DynamicResource Cora.Border.Subtle}" BorderThickness="1" Padding="16">
+        <DockPanel>
+            <StackPanel DockPanel.Dock="Top" Spacing="6" Margin="0,0,0,12">
+                <TextBlock x:Name="HeadingText"
+                           Classes="heading"
+                           FontSize="18"
+                           FontWeight="SemiBold"
+                           TextWrapping="Wrap"
+                           Foreground="{DynamicResource Cora.Text}" />
+                <TextBlock Text="LeanPub reads manuscript/Book.txt. Publishing copies this list and its files there (without Hymnal's own data); commit and push, then preview or publish on LeanPub. The book's title is set on LeanPub."
+                           FontSize="12"
+                           TextWrapping="Wrap"
+                           Foreground="{DynamicResource Cora.Text.Secondary}" />
+            </StackPanel>
+
+            <StackPanel DockPanel.Dock="Bottom" Spacing="10" Margin="0,12,0,0">
+                <TextBlock x:Name="BlockedText"
+                           IsVisible="False"
+                           TextWrapping="Wrap"
+                           FontSize="12"
+                           Foreground="{DynamicResource Cora.Accent.Error}" />
+                <ItemsControl x:Name="ProblemList">
+                    <ItemsControl.ItemTemplate>
+                        <DataTemplate x:DataType="x:String">
+                            <TextBlock Text="{Binding}"
+                                       TextWrapping="Wrap"
+                                       FontSize="12"
+                                       Foreground="{DynamicResource Cora.Accent.Unknown}" />
+                        </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                </ItemsControl>
+                <TextBlock x:Name="ResultText"
+                           IsVisible="False"
+                           TextWrapping="Wrap"
+                           FontSize="12"
+                           Foreground="{DynamicResource Cora.Accent.Success}" />
+                <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Spacing="8">
+                    <Button x:Name="PublishButton"
+                            Content="Publish to manuscript/"
+                            Padding="12,6"
+                            Background="{DynamicResource Cora.Accent.Store}"
+                            Foreground="{DynamicResource Cora.IconInk}"
+                            BorderThickness="0"
+                            Click="PublishButton_Click" />
+                    <Button Content="Close"
+                            IsCancel="True"
+                            Padding="12,6"
+                            Click="CloseButton_Click" />
+                </StackPanel>
+            </StackPanel>
+
+            <Border BorderBrush="{DynamicResource Cora.Border.Subtle}"
+                    BorderThickness="1"
+                    CornerRadius="6"
+                    Background="{DynamicResource Cora.Surface.Void}">
+                <ScrollViewer HorizontalScrollBarVisibility="Disabled">
+                    <ItemsControl x:Name="EntryList" Margin="10,8">
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate x:DataType="models:PublishEntry">
+                                <Grid ColumnDefinitions="*,Auto" Margin="0,3">
+                                    <StackPanel Grid.Column="0" Spacing="1">
+                                        <StackPanel Orientation="Horizontal" Spacing="6">
+                                            <TextBlock Text="divider"
+                                                       IsVisible="{Binding IsPart}"
+                                                       FontSize="10"
+                                                       VerticalAlignment="Center"
+                                                       Foreground="{DynamicResource Cora.Accent.Store}" />
+                                            <TextBlock Text="{Binding Title}"
+                                                       FontSize="13"
+                                                       TextTrimming="CharacterEllipsis"
+                                                       Foreground="{DynamicResource Cora.Text}" />
+                                        </StackPanel>
+                                        <TextBlock Text="{Binding RelativePath}"
+                                                   FontSize="11"
+                                                   TextTrimming="CharacterEllipsis"
+                                                   Foreground="{DynamicResource Cora.Text.Disabled}" />
+                                    </StackPanel>
+                                    <TextBlock Grid.Column="1"
+                                               VerticalAlignment="Center"
+                                               FontSize="11"
+                                               Text="missing"
+                                               IsVisible="{Binding !Exists}"
+                                               Foreground="{DynamicResource Cora.Accent.Unknown}" />
+                                </Grid>
+                            </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+                </ScrollViewer>
+            </Border>
+        </DockPanel>
+    </Border>
+</Window>
