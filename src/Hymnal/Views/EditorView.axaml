@@ -106,7 +106,7 @@
                       Width="18" Height="18"
                       Stretch="Uniform"
                       VerticalAlignment="Center" />
-                <TextBlock Text="Editing Book.txt — this file defines the chapter list. Save (Ctrl+S) to refresh the sidebar."
+                <TextBlock Text="Editing Book.txt — this file sets what the sidebar lists, in order. Save (Ctrl+S) to refresh the sidebar."
                            Foreground="{DynamicResource Cora.Text.Secondary}"
                            FontSize="12"
                            VerticalAlignment="Center" />
@@ -220,7 +220,7 @@
                                HorizontalAlignment="Center"
                                FontSize="22"
                                FontWeight="SemiBold" />
-                    <TextBlock Text="Use File > Open Workspace or the sidebar button to load a manuscript."
+                    <TextBlock Text="Use File > Open Workspace or the sidebar button to open a project."
                                TextWrapping="Wrap"
                                TextAlignment="Center"
                                Foreground="{DynamicResource Cora.Text.Secondary}" />
@@ -241,11 +241,11 @@
                                              Text="Rite of Composition|The page awaits" />
                     </Panel>
                     <TextBlock Classes="heading"
-                               Text="No chapter open"
+                               Text="{Binding Profile.NothingOpenTitle}"
                                HorizontalAlignment="Center"
                                FontSize="22"
                                FontWeight="SemiBold" />
-                    <TextBlock Text="Select a chapter in the sidebar to load its Markua content here."
+                    <TextBlock Text="{Binding Profile.NothingOpenHint}"
                                TextWrapping="Wrap"
                                TextAlignment="Center"
                                Foreground="{DynamicResource Cora.Text.Secondary}" />
@@ -280,7 +280,7 @@
                           Width="40" Height="40"
                           Stretch="Uniform"
                           HorizontalAlignment="Center" />
-                    <TextBlock Text="Chapter not found on disk"
+                    <TextBlock Text="File not found on disk"
                                FontSize="18"
                                FontWeight="SemiBold"
                                HorizontalAlignment="Center"

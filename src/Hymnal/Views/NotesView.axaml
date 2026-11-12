@@ -8,7 +8,7 @@
     <Panel>
 
         <!-- Empty state: shown when no chapter is active -->
-        <TextBlock Text="Open a chapter to start taking notes."
+        <TextBlock Text="{Binding EmptyStateText}"
                    IsVisible="{Binding ChapterTitle, Converter={x:Static ObjectConverters.IsNull}}"
                    VerticalAlignment="Center"
                    HorizontalAlignment="Center"

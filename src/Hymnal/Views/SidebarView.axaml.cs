@@ -59,10 +59,11 @@ public partial class SidebarView : UserControl
         if (!CanRenameFromSidebar(chapter.Node))
             return;
 
-        var dialogTitle = chapter.Node.Kind == NodeKind.Part ? "Rename part" : "Rename chapter";
+        var noun = vm.NounFor(chapter).ToLowerInvariant();
+        var dialogTitle = $"Rename {noun}";
         var prompt = chapter.Node.Kind == NodeKind.Part
-            ? "Enter the new sidebar title for this Part:"
-            : "Enter the new sidebar title for this chapter:";
+            ? $"Enter the new sidebar title for this {noun}:"
+            : $"Enter the new sidebar title for this {noun}:";
 
         var replacementTitle = await PromptForTextAsync(dialogTitle, prompt, chapter.Node.Title);
         if (string.IsNullOrWhiteSpace(replacementTitle))

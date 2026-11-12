@@ -38,7 +38,7 @@
                            FontWeight="SemiBold"
                            Foreground="{DynamicResource Cora.Text}"
                            TextWrapping="Wrap" />
-                <TextBlock Classes="caps" Text="Chapter Details"
+                <TextBlock Classes="caps" Text="Details"
                            FontSize="10"
                            LetterSpacing="1.5"
                            Foreground="{DynamicResource Cora.Text.Secondary}" />

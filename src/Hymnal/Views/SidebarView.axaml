@@ -182,10 +182,10 @@
                                               IsVisible="{Binding CanSetTarget}"
                                               Command="{Binding OpenTargetFlyoutCommand}" />
                                     <Separator IsVisible="{Binding Node.Kind, Converter={StaticResource NodeKindIsChapterConverter}}" />
-                                    <MenuItem Header="Include in book"
+                                    <MenuItem Header="{Binding Profile.IncludeInCollectionLabel}"
                                               IsVisible="{Binding Node.IsExcluded}"
                                               Click="IncludeInBook_Click" />
-                                    <MenuItem Header="Exclude from book"
+                                    <MenuItem Header="{Binding Profile.ExcludeFromCollectionLabel}"
                                               Click="ExcludeFromBook_Click">
                                         <MenuItem.IsVisible>
                                             <MultiBinding Converter="{StaticResource NodeKindIsChapterAndPresentConverter}">

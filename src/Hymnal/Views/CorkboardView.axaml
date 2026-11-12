@@ -753,7 +753,7 @@
                     Tag="{Binding}">
                 <Button.ContextMenu>
                     <ContextMenu>
-                        <MenuItem Header="Include in Book"
+                        <MenuItem Header="Include again"
                                   Click="IncludeExcludedCard_Click" />
                     </ContextMenu>
                 </Button.ContextMenu>

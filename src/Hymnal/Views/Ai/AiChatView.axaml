@@ -53,7 +53,7 @@
                 <StackPanel Grid.Column="2"
                             Orientation="Horizontal"
                             Spacing="2">
-                    <Button Content="CH"
+                    <Button Content="{Binding Profile.AiScopeUnitLabel}"
                             FontSize="10"
                             Padding="4,1"
                             Command="{Binding SetScopeCommand}"
@@ -61,7 +61,7 @@
                             Background="{DynamicResource Cora.Surface.Elevated}"
                             Foreground="{DynamicResource Cora.Text.Secondary}"
                             BorderThickness="0" />
-                    <Button Content="PART"
+                    <Button Content="{Binding Profile.AiScopePartLabel}"
                             FontSize="10"
                             Padding="4,1"
                             Command="{Binding SetScopeCommand}"
@@ -69,7 +69,7 @@
                             Background="{DynamicResource Cora.Surface.Elevated}"
                             Foreground="{DynamicResource Cora.Text.Secondary}"
                             BorderThickness="0" />
-                    <Button Content="BOOK"
+                    <Button Content="{Binding Profile.AiScopeAllLabel}"
                             FontSize="10"
                             Padding="4,1"
                             Command="{Binding SetScopeCommand}"
@@ -94,7 +94,7 @@
 
                     <!-- Empty state -->
                     <TextBlock IsVisible="{Binding Messages.Count, Converter={x:Static ObjectConverters.IsNull}}"
-                               Text="Start a conversation. Your message is sent with the current chapter as context."
+                               Text="{Binding EmptyStateText}"
                                Foreground="{DynamicResource Cora.Text.Disabled}"
                                TextWrapping="Wrap"
                                TextAlignment="Center"

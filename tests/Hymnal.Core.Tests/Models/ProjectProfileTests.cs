@@ -102,7 +102,7 @@ public class ProjectProfileTests
 
     [Theory]
     [InlineData(ProjectKind.Novel, "Chapter", "Part", "Book", "Chapter Info", "BOOK STATS", "BY PART", "PART STATS", "BY CHAPTER", true, false)]
-    [InlineData(ProjectKind.Story, "Scene", "Part", "Story", "Story Info", "", "", "", "", false, false)]
+    [InlineData(ProjectKind.Story, "Scene", "Section", "Story", "Story Info", "", "", "", "", false, false)]
     [InlineData(ProjectKind.Anthology, "Story", "Story with scenes", "Collection", "Story Info", "COLLECTION STATS", "BY STORY", "STORY STATS", "BY SCENE", true, true)]
     public void Labels_per_kind(ProjectKind kind, string unit, string part, string collection, string info,
         string bookTitle, string bookBar, string partTitle, string partBar, bool showsBook, bool partTargets)

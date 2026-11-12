@@ -76,6 +76,9 @@ public sealed class GanttViewModel : ViewModelBase
     /// <summary>Statuses visible in the workspace profile.</summary>
     public IReadOnlyList<StatusOption> AvailableStatuses => _workspace.Profile.VisibleStatuses;
 
+    /// <summary>The open project's profile, for the schedule's own wording.</summary>
+    public ProjectProfile Profile => _workspace.Profile;
+
     /// <summary>Legend entries: one per Gantt phase of the workspace profile.</summary>
     public IReadOnlyList<GanttLegendItem> LegendItems => _workspace.Profile.GanttPhases
         .Select(name => Enum.Parse<ChapterStatus>(name))
@@ -173,6 +176,7 @@ public sealed class GanttViewModel : ViewModelBase
             .Subscribe(_ =>
             {
                 this.RaisePropertyChanged(nameof(AvailableStatuses));
+                this.RaisePropertyChanged(nameof(Profile));
                 this.RaisePropertyChanged(nameof(LegendItems));
             }));
 
@@ -266,7 +270,7 @@ public sealed class GanttViewModel : ViewModelBase
 
         if (chapterVm == null)
         {
-            _notificationService.ShowError($"Could not find chapter '{row.Title}'.");
+            _notificationService.ShowError($"Could not find '{row.Title}'.");
             return null;
         }
 
@@ -287,7 +291,7 @@ public sealed class GanttViewModel : ViewModelBase
 
         if (chapterVm == null)
         {
-            _notificationService.ShowError($"Could not find chapter '{row.Title}' to mark complete.");
+            _notificationService.ShowError($"Could not find '{row.Title}' to mark complete.");
             return;
         }
 
@@ -496,7 +500,7 @@ public sealed class GanttViewModel : ViewModelBase
 
         if (chapterVm == null)
         {
-            _notificationService.ShowError($"Could not find chapter '{row.Title}' to save edits.");
+            _notificationService.ShowError($"Could not find '{row.Title}' to save edits.");
             return;
         }
 
@@ -633,7 +637,7 @@ public sealed class GanttViewModel : ViewModelBase
 
         if (chapterVm == null)
         {
-            _notificationService.ShowError($"Could not find chapter '{row.Title}' to save edits.");
+            _notificationService.ShowError($"Could not find '{row.Title}' to save edits.");
             return;
         }
 
@@ -853,7 +857,7 @@ public sealed class GanttViewModel : ViewModelBase
 
         return new GanttRowData(
             RelativePath: "__book__",
-            Title: "BOOK",
+            Title: profile.ScheduleRollupLabel,
             Kind: NodeKind.Part,
             Status: ChapterStatus.Outlining,
             StartDate: minStart,

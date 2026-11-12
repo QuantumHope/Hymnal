@@ -15,6 +15,7 @@ using Avalonia.VisualTree;
 using Hymnal.Core.Models;
 using Hymnal.Theming;
 using Hymnal.ViewModels;
+using ReactiveUI;
 
 namespace Hymnal.Views;
 
@@ -35,7 +36,28 @@ public partial class GanttView : UserControl
         ChapterGrid.AddHandler(PointerMovedEvent, ChapterGrid_PointerMoved, RoutingStrategies.Tunnel);
         ChapterGrid.AddHandler(PointerReleasedEvent, ChapterGrid_PointerReleased, RoutingStrategies.Tunnel);
         ChapterGrid.AddHandler(PointerCaptureLostEvent, ChapterGrid_PointerCaptureLost, RoutingStrategies.Tunnel);
+
+        // A DataGrid column header can't bind to the view-model; it follows the project's noun from here.
+        DataContextChanged += (_, _) =>
+        {
+            _profileSubscription?.Dispose();
+            _profileSubscription = null;
+            if (DataContext is GanttViewModel vm)
+                _profileSubscription = vm.WhenAnyValue(x => x.Profile)
+                    .Subscribe(profile =>
+                    {
+                        if (ChapterGrid.Columns.Count > 0)
+                            ChapterGrid.Columns[0].Header = profile.ScheduleItemHeader;
+                    });
+        };
+        DetachedFromVisualTree += (_, _) =>
+        {
+            _profileSubscription?.Dispose();
+            _profileSubscription = null;
+        };
     }
+
+    private IDisposable? _profileSubscription;
 
     private void DatePicker_GotFocus(object? sender, RoutedEventArgs e)
     {

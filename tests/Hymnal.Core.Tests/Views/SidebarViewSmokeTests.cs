@@ -20,9 +20,9 @@ public sealed class SidebarViewSmokeTests
         Assert.Contains("<MenuItem Name=\"RenameMenuItem\"", xaml, StringComparison.Ordinal);
         Assert.Contains("Header=\"Rename…\"", xaml, StringComparison.Ordinal);
         Assert.Contains("Click=\"RenameNode_Click\"", xaml, StringComparison.Ordinal);
-        Assert.Contains("<MenuItem Header=\"Include in book\"", xaml, StringComparison.Ordinal);
+        Assert.Contains("<MenuItem Header=\"{Binding Profile.IncludeInCollectionLabel}\"", xaml, StringComparison.Ordinal);
         Assert.Contains("IsVisible=\"{Binding Node.IsExcluded}\"", xaml, StringComparison.Ordinal);
-        Assert.Contains("<MenuItem Header=\"Exclude from book\"", xaml, StringComparison.Ordinal);
+        Assert.Contains("<MenuItem Header=\"{Binding Profile.ExcludeFromCollectionLabel}\"", xaml, StringComparison.Ordinal);
         Assert.Contains("<Binding Path=\"Node.IsExcluded\" />", xaml, StringComparison.Ordinal);
         Assert.Contains("Converter=\"{StaticResource NodeKindIsChapterAndPresentConverter}\"", xaml, StringComparison.Ordinal);
         Assert.Contains("Converter=\"{StaticResource NodeKindAndMissingToForegroundConverter}\"", xaml, StringComparison.Ordinal);

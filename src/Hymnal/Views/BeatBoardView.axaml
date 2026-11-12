@@ -341,7 +341,7 @@
                                            FontSize="11"
                                            TextWrapping="Wrap"
                                            Foreground="{DynamicResource Cora.Accent.Unknown}"
-                                           Text="{Binding SceneTitle, StringFormat='Linked scene {0} is no longer in the book. Choose None to unlink it.'}" />
+                                           Text="{Binding SceneTitle, StringFormat='Linked scene {0} is no longer in the story. Choose None to unlink it.'}" />
                             </StackPanel>
                             <Button Grid.Column="2"
                                     Classes="beat-action"

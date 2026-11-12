@@ -275,6 +275,7 @@
                               Background="{DynamicResource Cora.Surface.Void}">
                     <views:GanttCanvas x:Name="TimelineCanvas"
                                        Rows="{Binding Rows}"
+                                       ItemHeader="{Binding Profile.ScheduleItemHeader}"
                                        ShowTable="False"
                                        RowReorderRequested="TimelineCanvas_RowReorderRequested"
                                        HorizontalAlignment="Stretch"

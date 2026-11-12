@@ -678,8 +678,8 @@ public partial class CorkboardView : UserControl
     private async Task CreateBoardChapterAsync(CorkboardViewModel vm, PartDividerItemViewModel? part)
     {
         var suggestedPath = part == null
-            ? "new-chapter.md"
-            : BuildSuggestedNewChapterPath(part.RelativePath);
+            ? $"{vm.Profile.NewFileStem}.md"
+            : BuildSuggestedNewChapterPath(part.RelativePath, vm.Profile.NewFileStem);
 
         var noun = part == null ? vm.Profile.UnitNoun : vm.Profile.SubunitNoun;
         var dialogResult = await NewChapterDialog.ShowAsync(
@@ -687,7 +687,7 @@ public partial class CorkboardView : UserControl
             NewManuscriptEntryKind.Chapter,
             $"New {noun}",
             part == null
-                ? $"Enter the new {noun.ToLowerInvariant()} path relative to the manuscript root."
+                ? $"Enter the new {noun.ToLowerInvariant()} path relative to the project folder."
                 : $"Enter the new {noun.ToLowerInvariant()} path for {part.Title}.",
             suggestedPath);
 
@@ -713,7 +713,7 @@ public partial class CorkboardView : UserControl
             NewManuscriptEntryKind.Part,
             $"New {vm.Profile.PartNoun}",
             $"Enter the {vm.Profile.PartNoun.ToLowerInvariant()} divider path and title.",
-            "part-two/part.md");
+            vm.Profile.NewPartPath);
 
         if (dialogResult is null || string.IsNullOrWhiteSpace(dialogResult.Title))
             return;
@@ -857,12 +857,12 @@ public partial class CorkboardView : UserControl
         _dragOperationStarted = false;
     }
 
-    private static string BuildSuggestedNewChapterPath(string relativePath)
+    private static string BuildSuggestedNewChapterPath(string relativePath, string stem)
     {
         var directory = Path.GetDirectoryName(relativePath)?.Replace('\\', '/') ?? string.Empty;
         return string.IsNullOrWhiteSpace(directory)
-            ? "new-chapter.md"
-            : $"{directory}/new-chapter.md";
+            ? $"{stem}.md"
+            : $"{directory}/{stem}.md";
     }
 
     private async Task<string?> PromptForTextAsync(string title, string prompt, string initialValue)

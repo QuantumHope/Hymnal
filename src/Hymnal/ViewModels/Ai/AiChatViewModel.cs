@@ -123,6 +123,14 @@ public class AiChatViewModel : ViewModelBase, IDisposable
     public ReactiveCommand<ChatMessageViewModel, Unit> RegenerateCommand { get; }
     public ReactiveCommand<ConversationScope, Unit> SetScopeCommand { get; }
 
+    private readonly ObservableAsPropertyHelper<ProjectProfile> _profile;
+    /// <summary>The open project's profile: the scope buttons and empty state use its words.</summary>
+    public ProjectProfile Profile => _profile.Value;
+
+    private readonly ObservableAsPropertyHelper<string> _emptyStateText;
+    /// <summary>What an empty conversation says it will send as context.</summary>
+    public string EmptyStateText => _emptyStateText.Value;
+
     // ── Constructor ──────────────────────────────────────────────────────────
 
     public AiChatViewModel(
@@ -147,6 +155,17 @@ public class AiChatViewModel : ViewModelBase, IDisposable
         _planContextBuilder = planContextBuilder;
         _manageContextBuilder = manageContextBuilder;
         _conversationList = conversationList;
+
+        _profile = workspace.WhenAnyValue(x => x.Profile)
+            .ToProperty(this, x => x.Profile, initialValue: workspace.Profile);
+        _emptyStateText = workspace.WhenAnyValue(x => x.Profile)
+            .Select(p => p.Kind switch
+            {
+                ProjectKind.Story => "Start a conversation. Your message is sent with the open scene as context.",
+                ProjectKind.Anthology => "Start a conversation. Your message is sent with the open story or scene as context.",
+                _ => "Start a conversation. Your message is sent with the current chapter as context."
+            })
+            .ToProperty(this, x => x.EmptyStateText);
 
         _selectedRole = _roleProvider.GetDefaultRole("Write");
         IsProviderConfigured = _chatService.IsProviderConfigured;

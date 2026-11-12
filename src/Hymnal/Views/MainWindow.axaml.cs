@@ -500,8 +500,8 @@ public partial class MainWindow : Window
             this,
             NewManuscriptEntryKind.Chapter,
             $"New {workspace.Profile.UnitNoun}",
-            $"Enter the new {workspace.Profile.UnitNoun.ToLowerInvariant()} path relative to the manuscript root.",
-            "new-chapter.md");
+            $"Enter the new {workspace.Profile.UnitNoun.ToLowerInvariant()} path relative to the project folder.",
+            $"{workspace.Profile.NewFileStem}.md");
 
         if (dialogResult is null)
             return;
@@ -522,7 +522,7 @@ public partial class MainWindow : Window
             NewManuscriptEntryKind.Part,
             $"New {workspace.Profile.PartNoun}",
             $"Enter the {workspace.Profile.PartNoun.ToLowerInvariant()} divider path and title.",
-            "part-two/part.md");
+            workspace.Profile.NewPartPath);
 
         if (dialogResult is null || string.IsNullOrWhiteSpace(dialogResult.Title))
             return;

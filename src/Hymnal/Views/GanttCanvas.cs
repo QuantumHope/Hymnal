@@ -143,6 +143,18 @@ public sealed class GanttCanvas : Control
     // Rollup % labels sit over both the track and the fill, so they use body text rather than icon ink.
     private static IBrush RollupLabelBrush     => ThemeBrush("Cora.Text", "#FFFFFF");
 
+    // ── AvaloniaProperty: ItemHeader ──────────────────────────────────────────
+
+    /// <summary>The first column's header: CHAPTER, SCENE or STORY (the project's profile).</summary>
+    public static readonly StyledProperty<string> ItemHeaderProperty =
+        AvaloniaProperty.Register<GanttCanvas, string>(nameof(ItemHeader), "CHAPTER");
+
+    public string ItemHeader
+    {
+        get => GetValue(ItemHeaderProperty);
+        set => SetValue(ItemHeaderProperty, value);
+    }
+
     // ── AvaloniaProperty: Rows ────────────────────────────────────────────────
 
     public static readonly StyledProperty<IReadOnlyList<GanttRowViewModel>?> RowsProperty =
@@ -331,12 +343,12 @@ public sealed class GanttCanvas : Control
                 transformScope = ctx.PushTransform(Matrix.CreateTranslation(-TimelineLeft, 0));
 
             if (showTable)
-                DrawColumnHeaders(ctx);
+                DrawColumnHeaders(ctx, ItemHeader);
 
             if (rows == null || rows.Count == 0)
             {
                 transformScope?.Dispose();
-                DrawEmptyState(ctx, w, h, "No chapters loaded.");
+                DrawEmptyState(ctx, w, h, "Nothing to schedule yet.");
                 return;
             }
 
@@ -401,11 +413,11 @@ public sealed class GanttCanvas : Control
         }
     }
 
-    private static void DrawColumnHeaders(DrawingContext ctx)
+    private static void DrawColumnHeaders(DrawingContext ctx, string itemHeader)
     {
         try
         {
-            DrawHeaderText(ctx, "CHAPTER", 8);
+            DrawHeaderText(ctx, itemHeader, 8);
             DrawHeaderText(ctx, "STATUS", StatusColumnLeft + 6);
             DrawHeaderText(ctx, "START", StartColumnLeft + 6);
             DrawHeaderText(ctx, "END", EndColumnLeft + 6);
@@ -626,7 +638,7 @@ public sealed class GanttCanvas : Control
                 new Point(0, rowY + RowHeight),
                 new Point(TimelineLeft + chartWidth, rowY + RowHeight));
 
-            var ft = MakeFormattedText("BOOK", 10.0,
+            var ft = MakeFormattedText(row.Title, 10.0,
                 ThemeBrush("Cora.Accent.Store.Hot", "#C4B5FD"));
             ctx.DrawText(ft, new Point(8, rowY + (RowHeight - ft.Height) / 2));
 

@@ -64,11 +64,41 @@ public class WorkspaceViewModel : ViewModelBase
     }
 
     private ProjectProfile _profile = ProjectProfile.Novel;
+
+    /// <summary>The project's word for a book file in messages: chapter, scene, story.</summary>
+    private string UnitWord => Profile.UnitNoun.ToLowerInvariant();
+
+    /// <summary>The project's word for a divider in messages: part, section, story with scenes.</summary>
+    private string PartWord => Profile.PartNoun.ToLowerInvariant();
+
+    private static string Capital(string word) =>
+        word.Length == 0 ? word : char.ToUpperInvariant(word[0]) + word[1..];
+
+    /// <summary>
+    /// What <paramref name="node"/> is called in this project: a chapter or part in a novel, a scene or
+    /// section in a short story, a story or one of its scenes in an anthology.
+    /// </summary>
+    public string NounFor(ChapterViewModel node)
+    {
+        var insidePart = false;
+        foreach (var n in _nodes)
+        {
+            if (ReferenceEquals(n, node))
+                break;
+            if (n.Node.Kind == NodeKind.Part)
+                insidePart = true;
+        }
+        return Profile.NounFor(node.Node.Kind, insidePart);
+    }
     /// <summary>Profile of the open workspace's project kind (Novel when none is open).</summary>
     public ProjectProfile Profile
     {
         get => _profile;
-        private set => this.RaiseAndSetIfChanged(ref _profile, value);
+        private set
+        {
+            this.RaiseAndSetIfChanged(ref _profile, value);
+            _editor.Profile = value;
+        }
     }
 
     private bool _hasWorkspace;
@@ -1523,7 +1553,7 @@ public class WorkspaceViewModel : ViewModelBase
     private async Task CreateChapterAsync(CreateChapterRequest request)
     {
         await ExecuteStructuralOperationAsync(
-            "Create chapter",
+            $"Create {UnitWord}",
             request.ChapterPath,
             () => _structureService.CreateNewChapterAsync(BookTxtPath, request.ChapterPath, request.Content, request.Index))
             .ConfigureAwait(false);
@@ -1532,7 +1562,7 @@ public class WorkspaceViewModel : ViewModelBase
     private async Task CreatePartAsync(CreatePartRequest request)
     {
         await ExecuteStructuralOperationAsync(
-            "Create part",
+            $"Create {PartWord}",
             request.PartPath,
             () => _structureService.CreateNewPartAsync(BookTxtPath, request.PartPath, request.Title, request.Index))
             .ConfigureAwait(false);
@@ -1585,7 +1615,7 @@ public class WorkspaceViewModel : ViewModelBase
         var result = await _structureService.ExcludeEntryAsync(_model.BookTxtPath, chapterPath).ConfigureAwait(false);
         if (!result.IsSuccess)
         {
-            _notificationService.ShowError($"Failed to remove chapter: {result.Error}");
+            _notificationService.ShowError($"Failed to remove {UnitWord}: {result.Error}");
             return;
         }
         await ReloadWorkspaceAsync(_model.WorkspaceRoot, _model.BookTxtPath, reselectBook: false).ConfigureAwait(false);
@@ -1594,7 +1624,7 @@ public class WorkspaceViewModel : ViewModelBase
     private async Task RemoveMissingEntryAsync(string chapterPath)
     {
         await ExecuteStructuralOperationAsync(
-            "Remove chapter",
+            $"Remove {UnitWord}",
             chapterPath,
             () => _structureService.RemoveEntryAsync(BookTxtPath, chapterPath)).ConfigureAwait(false);
     }
@@ -1608,7 +1638,7 @@ public class WorkspaceViewModel : ViewModelBase
         }
 
         await ExecuteRenameOperationAsync(
-            "Rename chapter",
+            $"Rename {UnitWord}",
             request.ExistingPath,
             replacementPath!,
             () => _structureService.RenameEntryAsync(BookTxtPath, request.ExistingPath, replacementPath!))
@@ -1624,7 +1654,7 @@ public class WorkspaceViewModel : ViewModelBase
         }
 
         await ExecuteRenameOperationAsync(
-            "Rename part",
+            $"Rename {PartWord}",
             request.ExistingPath,
             replacementPath!,
             () => _structureService.RenameEntryAsync(BookTxtPath, request.ExistingPath, replacementPath!))
@@ -1639,12 +1669,12 @@ public class WorkspaceViewModel : ViewModelBase
         replacementPath = null;
         error = null;
 
-        if (!TryResolveRenameSource("Rename chapter", request.ExistingPath, NodeKind.Chapter, out var node, out error))
+        if (!TryResolveRenameSource($"Rename {UnitWord}", request.ExistingPath, NodeKind.Chapter, out var node, out error))
             return false;
 
-        if (!TryBuildSafePathSegment(request.NewTitle, "chapter title", out var segment, out error))
+        if (!TryBuildSafePathSegment(request.NewTitle, $"{UnitWord} title", out var segment, out error))
         {
-            error = $"Rename chapter for '{request.ExistingPath}' in '{BookTxtPath}': {error}";
+            error = $"Rename {UnitWord} for '{request.ExistingPath}' in '{BookTxtPath}': {error}";
             return false;
         }
 
@@ -1666,19 +1696,19 @@ public class WorkspaceViewModel : ViewModelBase
         replacementPath = null;
         error = null;
 
-        if (!TryResolveRenameSource("Rename part", request.ExistingPath, NodeKind.Part, out var node, out error))
+        if (!TryResolveRenameSource($"Rename {PartWord}", request.ExistingPath, NodeKind.Part, out var node, out error))
             return false;
 
-        if (!TryBuildSafePathSegment(request.NewTitle, "part title", out var segment, out error))
+        if (!TryBuildSafePathSegment(request.NewTitle, $"{PartWord} title", out var segment, out error))
         {
-            error = $"Rename part for '{request.ExistingPath}' in '{BookTxtPath}': {error}";
+            error = $"Rename {PartWord} for '{request.ExistingPath}' in '{BookTxtPath}': {error}";
             return false;
         }
 
         var fileName = Path.GetFileName(node!.RelativePath);
         if (string.IsNullOrWhiteSpace(fileName))
         {
-            error = $"Rename part for '{request.ExistingPath}' in '{BookTxtPath}': Part path has no file name.";
+            error = $"Rename {PartWord} for '{request.ExistingPath}' in '{BookTxtPath}': {Capital(PartWord)} path has no file name.";
             return false;
         }
 
@@ -1688,7 +1718,7 @@ public class WorkspaceViewModel : ViewModelBase
         var parent = Path.GetDirectoryName(node.RelativePath.Replace('/', Path.DirectorySeparatorChar))?.Replace('\\', '/');
         if (string.IsNullOrWhiteSpace(parent))
         {
-            error = $"Rename part for '{request.ExistingPath}' in '{BookTxtPath}': Part entries must be inside a folder.";
+            error = $"Rename {PartWord} for '{request.ExistingPath}' in '{BookTxtPath}': {Capital(PartWord)} entries must be inside a folder.";
             return false;
         }
 
@@ -1808,13 +1838,13 @@ public class WorkspaceViewModel : ViewModelBase
 
         if (!_nodesByPath.TryGetValue(chapterPath, out var chapter))
         {
-            error = $"Include file for '{chapterPath}' in '{BookTxtPath}': chapter was not found in the sidebar.";
+            error = $"Include file for '{chapterPath}' in '{BookTxtPath}': {UnitWord} was not found in the sidebar.";
             return false;
         }
 
         if (chapter.Node.Kind != NodeKind.Chapter)
         {
-            error = $"Include file for '{chapterPath}' in '{BookTxtPath}': only chapters can be included.";
+            error = $"Include file for '{chapterPath}' in '{BookTxtPath}': only {Profile.UnitPlural.ToLowerInvariant()} can be included.";
             return false;
         }
 
@@ -1826,7 +1856,7 @@ public class WorkspaceViewModel : ViewModelBase
 
         if (!chapter.Node.IsExcluded)
         {
-            error = $"Include file for '{chapterPath}' in '{BookTxtPath}': chapter is already included.";
+            error = $"Include file for '{chapterPath}' in '{BookTxtPath}': {UnitWord} is already included.";
             return false;
         }
 
@@ -1929,7 +1959,7 @@ public class WorkspaceViewModel : ViewModelBase
         {
             if (target.Node.Kind != NodeKind.Part)
             {
-                error = $"Part '{source.Node.RelativePath}' can only be dropped on another Part divider, not chapter '{target.Node.RelativePath}'.";
+                error = $"{Capital(PartWord)} '{source.Node.RelativePath}' can only be dropped on another {Capital(PartWord)} divider, not {UnitWord} '{target.Node.RelativePath}'.";
                 return false;
             }
 
@@ -1938,7 +1968,7 @@ public class WorkspaceViewModel : ViewModelBase
                 var nextPartIndex = FindNextPartIndex(activeNodes, targetIndex + 1);
                 if (nextPartIndex < 0)
                 {
-                    error = $"Part '{source.Node.RelativePath}' cannot be dropped after last Part '{target.Node.RelativePath}' because Book.txt part block moves require a following Part target.";
+                    error = $"{Capital(PartWord)} '{source.Node.RelativePath}' cannot be dropped after last {Capital(PartWord)} '{target.Node.RelativePath}' because Book.txt part block moves require a following {Capital(PartWord)} target.";
                     return false;
                 }
 
@@ -1954,7 +1984,7 @@ public class WorkspaceViewModel : ViewModelBase
 
         if (target.Node.Kind != NodeKind.Chapter)
         {
-            error = $"Chapter '{source.Node.RelativePath}' can only be dropped on another chapter in the same Part section, not Part '{target.Node.RelativePath}'.";
+            error = $"{Capital(UnitWord)} '{source.Node.RelativePath}' can only be dropped on another {UnitWord} in the same {Capital(PartWord)} section, not {Capital(PartWord)} '{target.Node.RelativePath}'.";
             return false;
         }
 
@@ -1962,7 +1992,7 @@ public class WorkspaceViewModel : ViewModelBase
         var targetPart = FindContainingPartPath(activeNodes, targetIndex);
         if (!string.Equals(sourcePart, targetPart, StringComparison.OrdinalIgnoreCase))
         {
-            error = $"Chapter '{source.Node.RelativePath}' cannot be moved across Part sections from '{DisplayPartSection(sourcePart)}' to '{DisplayPartSection(targetPart)}'. Move chapters between Parts from the corkboard.";
+            error = $"{Capital(UnitWord)} '{source.Node.RelativePath}' cannot be moved across {Capital(PartWord)} sections from '{DisplayPartSection(sourcePart)}' to '{DisplayPartSection(targetPart)}'. Move {Profile.UnitPlural.ToLowerInvariant()} between {Capital(PartWord)}s {(Profile.Kind == ProjectKind.Novel ? "from the corkboard" : "in Plan mode")}.";
             return false;
         }
 
