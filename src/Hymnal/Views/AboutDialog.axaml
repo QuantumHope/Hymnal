@@ -2,7 +2,8 @@
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         x:Class="Hymnal.Views.AboutDialog"
         Title="About Hymnal"
-        Width="400" Height="240"
+        Width="400" Height="340"
+        Icon="/Assets/hymnal.ico"
         CanResize="False"
         ShowInTaskbar="False"
         WindowStartupLocation="CenterOwner"
@@ -26,6 +27,11 @@
                     HorizontalAlignment="Center"
                     Spacing="12"
                     Margin="32">
+
+            <Image Source="/Assets/hymnal-256.png"
+                   Width="88" Height="88"
+                   RenderOptions.BitmapInterpolationMode="HighQuality"
+                   HorizontalAlignment="Center" />
 
             <TextBlock Text="Hymnal"
                        FontSize="28"
