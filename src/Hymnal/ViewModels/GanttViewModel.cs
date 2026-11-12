@@ -171,6 +171,9 @@ public sealed class GanttViewModel : ViewModelBase
         Disposables.Add(_phaseSubscriptions);
         Disposables.Add(Disposable.Create(() => _rowEditRequested.OnCompleted()));
         Disposables.Add(_rowEditRequested.Subscribe(OpenEditForRow));
+        Disposables.Add(workspace.WhenAnyValue(x => x.FocusedStory)
+            .Skip(1)
+            .Subscribe(_ => RequestRebuild()));
         Disposables.Add(workspace.WhenAnyValue(x => x.Profile)
             .Skip(1)
             .Subscribe(_ =>
@@ -734,13 +737,15 @@ public sealed class GanttViewModel : ViewModelBase
         _rows.Clear();
 
         var phaseSubscriptions = new CompositeDisposable();
-        var nodes = _workspace.Nodes.ToList();
+        // Focused on one anthology story: only its rows, rolled up under its title.
+        var nodes = _workspace.Nodes.Where(_workspace.IsInFocus).ToList();
 
         var allChapters = nodes
             .Where(n => !n.Node.IsMissing && n.Node.Kind == NodeKind.Chapter)
             .ToList();
         var profile = _workspace.Profile;
-        var bookRowData = BuildBookRollup(allChapters, profile);
+        var bookRowData = BuildBookRollup(allChapters, profile,
+            _workspace.FocusedStory?.Node.Title.ToUpperInvariant());
         _rows.Add(new GanttRowViewModel(bookRowData, profile));
 
         for (int i = 0; i < nodes.Count; i++)
@@ -824,7 +829,8 @@ public sealed class GanttViewModel : ViewModelBase
             CompletionPercentage: completion);
     }
 
-    private static GanttRowData BuildBookRollup(IReadOnlyList<ChapterViewModel> chapters, ProjectProfile profile)
+    private static GanttRowData BuildBookRollup(IReadOnlyList<ChapterViewModel> chapters, ProjectProfile profile,
+        string? focusTitle = null)
     {
         DateOnly? minStart = null;
         DateOnly? maxEnd = null;
@@ -857,7 +863,7 @@ public sealed class GanttViewModel : ViewModelBase
 
         return new GanttRowData(
             RelativePath: "__book__",
-            Title: profile.ScheduleRollupLabel,
+            Title: focusTitle ?? profile.ScheduleRollupLabel,
             Kind: NodeKind.Part,
             Status: ChapterStatus.Outlining,
             StartDate: minStart,

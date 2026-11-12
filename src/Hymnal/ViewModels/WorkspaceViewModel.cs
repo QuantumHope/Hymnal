@@ -65,6 +65,95 @@ public class WorkspaceViewModel : ViewModelBase
 
     private ProjectProfile _profile = ProjectProfile.Novel;
 
+    // ── Story focus (anthology) ───────────────────────────────────────────────
+
+    /// <summary>Registry id of the story the author is focused on; kept across reloads while it exists.</summary>
+    private string? _focusedStoryUuid;
+
+    private ChapterViewModel? _focusedStory;
+    /// <summary>
+    /// Anthology: the story (a single-file story or a Part) the author is focused on. The sidebar, Plan and
+    /// Schedule show only it until <see cref="ShowWholeCollectionCommand"/>. Null when working on the whole
+    /// collection, and always null for other project kinds.
+    /// </summary>
+    public ChapterViewModel? FocusedStory
+    {
+        get => _focusedStory;
+        private set
+        {
+            this.RaiseAndSetIfChanged(ref _focusedStory, value);
+            this.RaisePropertyChanged(nameof(IsStoryFocused));
+            this.RaisePropertyChanged(nameof(FocusedStoryTitle));
+        }
+    }
+
+    public bool IsStoryFocused => FocusedStory != null;
+
+    public string FocusedStoryTitle => FocusedStory?.Node.Title ?? "";
+
+    /// <summary>Anthology: focus on the story the given file belongs to.</summary>
+    public ReactiveCommand<ChapterViewModel, System.Reactive.Unit> FocusStoryCommand { get; private set; } = null!;
+
+    /// <summary>Leaves the focused story for the whole collection.</summary>
+    public ReactiveCommand<System.Reactive.Unit, System.Reactive.Unit> ShowWholeCollectionCommand { get; private set; } = null!;
+
+    /// <summary>
+    /// Focuses on the story <paramref name="node"/> belongs to (anthology only). The editor moves into the
+    /// story when the open file is outside it.
+    /// </summary>
+    public void FocusStory(ChapterViewModel node)
+    {
+        if (!Profile.SupportsStoryFocus)
+            return;
+        var story = StoryStructure.AnthologyStoryOf(_nodes, node);
+        if (story == null)
+            return;
+
+        _focusedStoryUuid = story.Uuid;
+        FocusedStory = story;
+        UpdateVisibility();
+
+        if (SelectedNode == null || !IsInFocus(SelectedNode))
+        {
+            var first = story.Node.Kind == NodeKind.Chapter
+                ? story
+                : StoryStructure.StoryScenes(_nodes, story).FirstOrDefault();
+            if (first != null)
+                SelectedNode = first;
+        }
+    }
+
+    public void ShowWholeCollection()
+    {
+        if (_focusedStoryUuid == null && FocusedStory == null)
+            return;
+        _focusedStoryUuid = null;
+        FocusedStory = null;
+        UpdateVisibility();
+    }
+
+    /// <summary>True when <paramref name="node"/> is part of the focused story, or nothing is focused.</summary>
+    public bool IsInFocus(ChapterViewModel node) =>
+        FocusedStory == null || ReferenceEquals(StoryStructure.AnthologyStoryOf(_nodes, node), FocusedStory);
+
+    /// <summary>Re-finds the focused story after the node list was rebuilt; drops the focus when it is gone.</summary>
+    private void ResolveFocus()
+    {
+        if (_focusedStoryUuid == null)
+        {
+            if (FocusedStory != null)
+                FocusedStory = null;
+            return;
+        }
+        var story = Profile.SupportsStoryFocus
+            ? _nodes.FirstOrDefault(n => n.Uuid == _focusedStoryUuid && !n.Node.IsExcluded)
+            : null;
+        if (story == null)
+            _focusedStoryUuid = null;
+        if (!ReferenceEquals(story, FocusedStory))
+            FocusedStory = story;
+    }
+
     /// <summary>The project's word for a book file in messages: chapter, scene, story.</summary>
     private string UnitWord => Profile.UnitNoun.ToLowerInvariant();
 
@@ -98,6 +187,12 @@ public class WorkspaceViewModel : ViewModelBase
         {
             this.RaiseAndSetIfChanged(ref _profile, value);
             _editor.Profile = value;
+            if (!value.SupportsStoryFocus && _focusedStoryUuid != null)
+            {
+                _focusedStoryUuid = null;
+                FocusedStory = null;
+                UpdateVisibility();
+            }
         }
     }
 
@@ -367,6 +462,9 @@ public class WorkspaceViewModel : ViewModelBase
         OpenWorkspaceCommand = ReactiveCommand.CreateFromTask(OpenWorkspaceAsync);
         CloseWorkspaceCommand = ReactiveCommand.CreateFromTask(CloseWorkspaceAsync, this.WhenAnyValue(x => x.HasWorkspace));
         SelectBookCommand = ReactiveCommand.CreateFromTask(SelectBookAsync);
+        FocusStoryCommand = ReactiveCommand.Create<ChapterViewModel>(FocusStory);
+        ShowWholeCollectionCommand = ReactiveCommand.Create(ShowWholeCollection,
+            this.WhenAnyValue(x => x.IsStoryFocused));
 
         CreateChapterCommand = ReactiveCommand.CreateFromTask<CreateChapterRequest>(CreateChapterAsync,
             this.WhenAnyValue(x => x.HasWorkspace));
@@ -1417,10 +1515,20 @@ public class WorkspaceViewModel : ViewModelBase
 
     private void UpdateVisibility()
     {
+        ResolveFocus();
+        var focus = FocusedStory;
+
         bool partExpanded = true;
+        ChapterViewModel? currentPart = null;
         _visibleNodes.Clear();
         foreach (var vm in _nodes)
         {
+            if (vm.Node.Kind == NodeKind.Part)
+                currentPart = vm;
+            // While focused on one anthology story, only its own entries are listed.
+            if (focus != null && !ReferenceEquals(vm.Node.Kind == NodeKind.Part ? vm : currentPart ?? vm, focus))
+                continue;
+
             if (vm.Node.Kind == NodeKind.Part)
             {
                 partExpanded = vm.IsExpanded;

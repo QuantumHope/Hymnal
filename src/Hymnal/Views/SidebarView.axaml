@@ -79,6 +79,37 @@
         <!-- Workspace content: CHAPTERS header + chapter tree -->
         <DockPanel IsVisible="{Binding HasWorkspace}" LastChildFill="True">
 
+            <!-- Anthology story focus: where the author is, and the way back to the whole collection -->
+            <Border DockPanel.Dock="Top"
+                    IsVisible="{Binding IsStoryFocused}"
+                    Background="{DynamicResource Cora.Wash.Selected}"
+                    BorderBrush="{DynamicResource Cora.Accent.Store}"
+                    BorderThickness="0,0,0,1"
+                    Padding="8,6"
+                    Margin="4,4,4,0"
+                    CornerRadius="4">
+                <Grid ColumnDefinitions="Auto,*">
+                    <Button Grid.Column="0"
+                            Command="{Binding ShowWholeCollectionCommand}"
+                            Background="Transparent"
+                            BorderThickness="0"
+                            Padding="0,0,6,0"
+                            Cursor="Hand"
+                            ToolTip.Tip="Show every story in the collection">
+                        <TextBlock Text="‹ Collection"
+                                   FontSize="12"
+                                   Foreground="{DynamicResource Cora.Accent.Store}" />
+                    </Button>
+                    <TextBlock Grid.Column="1"
+                               Text="{Binding FocusedStoryTitle}"
+                               FontSize="12"
+                               FontWeight="SemiBold"
+                               TextTrimming="CharacterEllipsis"
+                               VerticalAlignment="Center"
+                               Foreground="{DynamicResource Cora.Text}" />
+                </Grid>
+            </Border>
+
             <!-- Book root row (selectable — opens Book.txt in editor) -->
             <Button DockPanel.Dock="Top"
                     Command="{Binding SelectBookCommand}"
@@ -171,6 +202,9 @@
                             <!-- Right-click context menu -->
                             <Grid.ContextMenu>
                                 <ContextMenu Opened="ChapterContextMenu_Opened">
+                                    <MenuItem Header="Focus on this story"
+                                              IsVisible="{Binding Profile.SupportsStoryFocus}"
+                                              Click="FocusStory_Click" />
                                     <MenuItem Name="RenameMenuItem"
                                               Header="Rename…"
                                               Click="RenameNode_Click" />

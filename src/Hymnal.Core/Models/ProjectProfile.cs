@@ -138,6 +138,11 @@ public sealed class ProjectProfile
         _ => UnitNoun
     };
 
+    /// <summary>
+    /// True when the author can focus on one story: an anthology narrows the sidebar, Plan and Schedule to it.
+    /// </summary>
+    public bool SupportsStoryFocus => Kind == ProjectKind.Anthology;
+
     /// <summary>The sidebar list of the book's contents: CHAPTERS, SCENES, STORIES.</summary>
     public string ContentsTitle => UnitPlural.ToUpperInvariant();
 

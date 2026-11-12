@@ -562,6 +562,16 @@ public class MainWindowViewModel : ViewModelBase
                     .Where(_ => ActiveMode == ShellMode.Plan)
                     .Subscribe(_ => this.RaisePropertyChanged(nameof(SecondaryCentreContent))));
 
+        // Focused on one anthology story: Plan opens on its beats rather than the whole collection.
+        if (planHostViewModel != null)
+            Disposables.Add(
+                Observable.CombineLatest(
+                        this.WhenAnyValue(x => x.ActiveMode),
+                        workspaceViewModel.WhenAnyValue(x => x.FocusedStory),
+                        (mode, story) => (mode, story))
+                    .Where(t => t.mode == ShellMode.Plan && t.story != null)
+                    .Subscribe(t => planHostViewModel.ShowStoryBoard(t.story!.Uuid)));
+
         // The Beats panel's "Plan this story" opens Plan mode on the story being written.
         if (writeBeatsViewModel != null)
             Disposables.Add(

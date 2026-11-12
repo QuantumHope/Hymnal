@@ -148,6 +148,9 @@ public sealed class PlanHostViewModel : ViewModelBase, IDisposable
     /// </summary>
     public void ShowStoryBoard(string storyUuid)
     {
+        // The host may not have caught up with a just-opened workspace yet; settle what it shows first.
+        if (_shownKind != ProjectKind.Anthology || _shownRoot != (_workspace.HasWorkspace ? _workspace.WorkspaceRoot : null))
+            Refresh();
         if (_shownKind != ProjectKind.Anthology || !BeatBoardService.IsValidBoardKey(storyUuid))
             return;
         _drilledStoryUuid = storyUuid;

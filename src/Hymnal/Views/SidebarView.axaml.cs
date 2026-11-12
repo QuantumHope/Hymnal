@@ -103,6 +103,12 @@ public partial class SidebarView : UserControl
         }
     }
 
+    private void FocusStory_Click(object? sender, RoutedEventArgs e)
+    {
+        if (DataContext is WorkspaceViewModel vm && sender is MenuItem { DataContext: ChapterViewModel chapter })
+            vm.FocusStory(chapter);
+    }
+
     private async void IncludeInBook_Click(object? sender, RoutedEventArgs e)
     {
         if (DataContext is not WorkspaceViewModel vm) return;
