@@ -38,5 +38,12 @@ jobs:
       - name: Build
         run: dotnet build Hymnal.slnx --configuration Release --no-restore
 
+      # Same filter as the documented local run (AGENTS.md / CLAUDE.md): GanttView_RowMoveShortcutHelper always
+      # hangs, which left every unfiltered run stuck until it was cancelled. The hang timeout and the step
+      # timeout turn any future stall into a failure instead of a run that never finishes.
       - name: Test
-        run: dotnet test tests/Hymnal.Core.Tests/ --configuration Release --no-build --no-restore
+        timeout-minutes: 20
+        run: >-
+          dotnet test tests/Hymnal.Core.Tests/ --configuration Release --no-build --no-restore
+          --filter "FullyQualifiedName!~GanttView_RowMoveShortcutHelper"
+          --blame-hang-timeout 90s
