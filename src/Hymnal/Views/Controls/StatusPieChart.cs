@@ -8,6 +8,8 @@ using Avalonia.Controls.Shapes;
 using Avalonia.Layout;
 using Avalonia.Media;
 using Hymnal.Core.Models;
+using Hymnal.Theming;
+using Hymnal.Views.Converters;
 
 namespace Hymnal.Views.Controls;
 
@@ -28,6 +30,9 @@ public class StatusPieChart : Control
         SegmentsProperty.Changed.AddClassHandler<StatusPieChart>((c, _) => c.UpdateTooltip());
     }
 
+    // The theme brushes recolour in place; redraw too when a theme switch swaps the app's resources.
+    public StatusPieChart() => ResourcesChanged += (_, _) => InvalidateVisual();
+
     private void UpdateTooltip()
     {
         var segments = Segments;
@@ -39,12 +44,10 @@ public class StatusPieChart : Control
         foreach (var s in segments.OrderByDescending(s => s.Count))
         {
             int pct = (int)Math.Round(s.Count * 100.0 / total);
-            var color = StatusColors.TryGetValue(s.Status, out var c) ? c : Colors.Gray;
-
             var dot = new Ellipse
             {
                 Width = 10, Height = 10,
-                Fill = new SolidColorBrush(color),
+                Fill = StatusBrush(s.Status),
                 VerticalAlignment = VerticalAlignment.Center
             };
 
@@ -52,13 +55,13 @@ public class StatusPieChart : Control
             {
                 Text = s.DisplayLabel,
                 Width = 76,
-                Foreground = new SolidColorBrush(Color.Parse("#EDE8F5"))
+                Foreground = ThemeBrushes.Get("Cora.Text", "#EDE8F5")
             };
 
             var countLabel = new TextBlock
             {
                 Text = $"{s.Count}  ({pct}%)",
-                Foreground = new SolidColorBrush(Color.Parse("#9589B0"))
+                Foreground = ThemeBrushes.Get("Cora.Text.Secondary", "#9589B0")
             };
 
             var row = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8 };
@@ -71,16 +74,11 @@ public class StatusPieChart : Control
         ToolTip.SetTip(this, panel);
     }
 
-    private static readonly Dictionary<ChapterStatus, Color> StatusColors = new()
-    {
-        [ChapterStatus.Planned]   = Color.Parse("#FF6B35"),
-        [ChapterStatus.Outlining] = Color.Parse("#9589B0"),
-        [ChapterStatus.Drafting]  = Color.Parse("#38BDF8"),
-        [ChapterStatus.Editing]   = Color.Parse("#9D4EDD"),
-        [ChapterStatus.Polishing] = Color.Parse("#F5C842"),
-        [ChapterStatus.Reviewing] = Color.Parse("#E91E8C"),
-        [ChapterStatus.Done]      = Color.Parse("#22D3A0"),
-    };
+    /// <summary>The theme's colour for a status (the same keys as the status dots); unknown statuses get the chart's "other" colour.</summary>
+    private static IBrush StatusBrush(ChapterStatus status) =>
+        StatusToBrushConverter.KeyFor(status) is { } k
+            ? ThemeBrushes.Get(k.Key, k.Fallback)
+            : ThemeBrushes.Get("Cora.Viz.Other", "#808080");
 
     public override void Render(DrawingContext context)
     {
@@ -99,8 +97,7 @@ public class StatusPieChart : Control
 
         if (segments.Count == 1)
         {
-            var color = StatusColors.TryGetValue(segments[0].Status, out var c) ? c : Colors.Gray;
-            context.DrawEllipse(new SolidColorBrush(color), null, new Point(cx, cy), r, r);
+            context.DrawEllipse(StatusBrush(segments[0].Status), null, new Point(cx, cy), r, r);
             return;
         }
 
@@ -110,8 +107,7 @@ public class StatusPieChart : Control
             double sweepAngle = (segment.Count / total) * 2 * Math.PI;
             double endAngle = startAngle + sweepAngle;
 
-            var color = StatusColors.TryGetValue(segment.Status, out var sc) ? sc : Colors.Gray;
-            var brush = new SolidColorBrush(color);
+            var brush = StatusBrush(segment.Status);
 
             var x0 = cx + r * Math.Cos(startAngle);
             var y0 = cy + r * Math.Sin(startAngle);

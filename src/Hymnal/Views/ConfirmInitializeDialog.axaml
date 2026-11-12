@@ -6,20 +6,20 @@
         CanResize="False"
         ShowInTaskbar="False"
         WindowStartupLocation="CenterOwner"
-        Background="#120932"
-        FontFamily="{DynamicResource InterFont}">
+        Background="{DynamicResource Cora.Surface.Panel}"
+        FontFamily="{DynamicResource Cora.Font.Persona}">
 
-    <Border BorderBrush="#2D1B5E" BorderThickness="1" Padding="16">
+    <Border BorderBrush="{DynamicResource Cora.Border.Subtle}" BorderThickness="1" Padding="16">
         <StackPanel Spacing="16">
             <TextBlock Text="This folder isn't a Hymnal project yet. Initialize it?"
-                       Foreground="{DynamicResource OnSurfaceBrush}"
+                       Foreground="{DynamicResource Cora.Text}"
                        TextWrapping="Wrap" />
             <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Spacing="8">
                 <Button Content="Initialize"
                         IsDefault="True"
                         Padding="12,6"
-                        Background="{DynamicResource SynthwavePurpleBrush}"
-                        Foreground="{DynamicResource OnSurfaceBrush}"
+                        Background="{DynamicResource Cora.Accent.Store}"
+                        Foreground="{DynamicResource Cora.Text}"
                         BorderThickness="0"
                         Click="InitializeButton_Click" />
                 <Button Content="Cancel"

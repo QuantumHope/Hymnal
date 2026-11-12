@@ -79,7 +79,7 @@ public sealed class GanttViewModel : ViewModelBase
     /// <summary>Legend entries: one per Gantt phase of the workspace profile.</summary>
     public IReadOnlyList<GanttLegendItem> LegendItems => _workspace.Profile.GanttPhases
         .Select(name => Enum.Parse<ChapterStatus>(name))
-        .Select(s => new GanttLegendItem(_workspace.Profile.LabelFor(s), GanttRowViewModel.StatusToColorHex(s)))
+        .Select(s => new GanttLegendItem(_workspace.Profile.LabelFor(s), s))
         .ToList();
 
     private string _editingPhaseName = string.Empty;
@@ -865,4 +865,11 @@ public sealed class GanttViewModel : ViewModelBase
 }
 
 /// <summary>One Gantt legend swatch: phase label and its colour.</summary>
-public sealed record GanttLegendItem(string Label, string ColorHex);
+public sealed record GanttLegendItem(string Label, ChapterStatus Status)
+{
+    /// <summary>The status colour in the current theme, as <c>#RRGGBB</c>.</summary>
+    public string ColorHex => GanttRowViewModel.StatusToColorHex(Status);
+
+    /// <summary>The status colour as a theme brush that follows theme changes (what the legend swatch binds to).</summary>
+    public Avalonia.Media.IBrush Brush => GanttRowViewModel.StatusBrush(Status);
+}

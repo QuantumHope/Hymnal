@@ -1,0 +1,204 @@
+<!-- Imported from OneRing f378709 (src/OneRing.Desktop/Themes/Mordor.Dark.axaml) by tools/OneRingThemeImport. Re-run it rather than editing this file. -->
+<!--
+  "Scriptorium of the Eye": Mordor's ember and obsidian, a monastery scriptorium's vellum, gold leaf and lapis,
+  and the Adeptus Mechanicus' crimson, brass and purity seals. Same keys as Cora.Dark.axaml, so every view and
+  style works unchanged. Accents keep their operation meanings (§17.1), recoloured:
+  Store = ember of the Eye, Create = gold leaf, Merge = lapis, Retrieve = verdigris, Success = sacred green,
+  Error = Mechanicus crimson, Unknown = bronze.
+  Ornaments (seals, rivets, the Eye) are switched on by Mordor.Controls.axaml, which loads with this file.
+-->
+<ResourceDictionary xmlns="https://github.com/avaloniaui"
+                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+
+  <!-- Surfaces: obsidian, forge iron, charred oak -->
+  <Color x:Key="Cora.Surface.Void.Color">#0B0807</Color>
+  <Color x:Key="Cora.Surface.Panel.Color">#1A1411</Color>
+  <Color x:Key="Cora.Surface.Elevated.Color">#272019</Color>
+  <Color x:Key="Cora.Surface.Header.Color">#200C08</Color>
+  <Color x:Key="Cora.Surface.HeaderEnd.Color">#2E120B</Color>
+  <Color x:Key="Cora.Surface.Sidebar.Color">#0E0A08</Color>
+  <Color x:Key="Cora.Surface.Live.Color">#FF7A2E</Color>
+
+  <!-- Text: vellum, faded ink, brass -->
+  <Color x:Key="Cora.Text.Color">#EADCBA</Color>
+  <Color x:Key="Cora.Text.Secondary.Color">#B4A07C</Color>
+  <Color x:Key="Cora.Text.Machine.Color">#A8946A</Color>
+  <Color x:Key="Cora.Text.Disabled.Color">#5C4B3A</Color>
+  <Color x:Key="Cora.IconInk.Color">#1A0C07</Color>
+
+  <!-- Borders: gold leaf and bronze -->
+  <Color x:Key="Cora.Border.Header.Color">#80C9A04A</Color>
+  <Color x:Key="Cora.Border.Subtle.Color">#2EC9A04A</Color>
+  <Color x:Key="Cora.Border.Input.Color">#998A6A3E</Color>
+  <Color x:Key="Cora.Border.Focus.Color">#E6E8B04A</Color>
+
+  <!-- Accents -->
+  <Color x:Key="Cora.Accent.Store.Color">#FF7A2E</Color>
+  <Color x:Key="Cora.Accent.Create.Color">#E3B94B</Color>
+  <Color x:Key="Cora.Accent.Merge.Color">#7B98E6</Color>
+  <Color x:Key="Cora.Accent.Retrieve.Color">#62B5A3</Color>
+  <Color x:Key="Cora.Accent.Success.Color">#9CC46A</Color>
+  <Color x:Key="Cora.Accent.Error.Color">#E5483C</Color>
+  <Color x:Key="Cora.Accent.Unknown.Color">#C98B4F</Color>
+
+  <!-- Seal and ornament colours (used only by the ornaments) -->
+  <Color x:Key="Mordor.Wax.Color">#9A1C16</Color>
+  <Color x:Key="Mordor.WaxDeep.Color">#5A0C09</Color>
+  <Color x:Key="Mordor.Parchment.Color">#DCC79A</Color>
+  <Color x:Key="Mordor.ParchmentShade.Color">#B39B6A</Color>
+  <Color x:Key="Mordor.Ink.Color">#3A1A10</Color>
+  <Color x:Key="Mordor.Gold.Color">#D9AE4E</Color>
+  <Color x:Key="Mordor.GoldDeep.Color">#7A5620</Color>
+  <Color x:Key="Mordor.Iron.Color">#3A302A</Color>
+  <Color x:Key="Mordor.Rubric.Color">#8E1A14</Color>
+
+  <SolidColorBrush x:Key="Cora.Surface.Void" Color="{StaticResource Cora.Surface.Void.Color}" />
+  <!-- Plates of forge iron, lit faintly from above -->
+  <LinearGradientBrush x:Key="Cora.Surface.Panel" StartPoint="0%,0%" EndPoint="0%,100%">
+    <GradientStop Offset="0" Color="#211913" />
+    <GradientStop Offset="1" Color="#16110E" />
+  </LinearGradientBrush>
+  <LinearGradientBrush x:Key="Cora.Surface.Elevated" StartPoint="0%,0%" EndPoint="0%,100%">
+    <GradientStop Offset="0" Color="#30261E" />
+    <GradientStop Offset="1" Color="#221A15" />
+  </LinearGradientBrush>
+  <SolidColorBrush x:Key="Cora.Surface.Header" Color="{StaticResource Cora.Surface.Header.Color}" />
+  <SolidColorBrush x:Key="Cora.Surface.Sidebar" Color="{StaticResource Cora.Surface.Sidebar.Color}" />
+  <SolidColorBrush x:Key="Cora.Surface.Live" Color="{StaticResource Cora.Surface.Live.Color}" />
+  <!-- The Eye's glow on the horizon behind everything -->
+  <RadialGradientBrush x:Key="Cora.Surface.Window" Center="62%,-8%" GradientOrigin="62%,-8%" RadiusX="85%" RadiusY="75%">
+    <GradientStop Offset="0" Color="#4A1A0B" />
+    <GradientStop Offset="0.35" Color="#22100A" />
+    <GradientStop Offset="1" Color="#0B0807" />
+  </RadialGradientBrush>
+  <SolidColorBrush x:Key="Cora.Scrim" Color="#CC0B0807" />
+  <SolidColorBrush x:Key="Cora.Terminal.Background" Color="{StaticResource Cora.Surface.Void.Color}" />
+  <SolidColorBrush x:Key="Cora.Terminal.Text" Color="{StaticResource Cora.Text.Color}" />
+  <SolidColorBrush x:Key="Cora.Surface" Color="{StaticResource Cora.Surface.Panel.Color}" />
+  <SolidColorBrush x:Key="Cora.Text" Color="{StaticResource Cora.Text.Color}" />
+  <SolidColorBrush x:Key="Cora.Text.Secondary" Color="{StaticResource Cora.Text.Secondary.Color}" />
+  <SolidColorBrush x:Key="Cora.Text.Machine" Color="{StaticResource Cora.Text.Machine.Color}" />
+  <SolidColorBrush x:Key="Cora.Text.Disabled" Color="{StaticResource Cora.Text.Disabled.Color}" />
+  <SolidColorBrush x:Key="Cora.IconInk" Color="{StaticResource Cora.IconInk.Color}" />
+  <SolidColorBrush x:Key="Cora.Border.Header" Color="{StaticResource Cora.Border.Header.Color}" />
+  <SolidColorBrush x:Key="Cora.Border.Subtle" Color="{StaticResource Cora.Border.Subtle.Color}" />
+  <SolidColorBrush x:Key="Cora.Border.Input" Color="{StaticResource Cora.Border.Input.Color}" />
+  <SolidColorBrush x:Key="Cora.Border.Focus" Color="{StaticResource Cora.Border.Focus.Color}" />
+  <SolidColorBrush x:Key="Cora.Accent.Store" Color="{StaticResource Cora.Accent.Store.Color}" />
+  <SolidColorBrush x:Key="Cora.Accent.Create" Color="{StaticResource Cora.Accent.Create.Color}" />
+  <SolidColorBrush x:Key="Cora.Accent.Merge" Color="{StaticResource Cora.Accent.Merge.Color}" />
+  <SolidColorBrush x:Key="Cora.Accent.Retrieve" Color="{StaticResource Cora.Accent.Retrieve.Color}" />
+  <SolidColorBrush x:Key="Cora.Accent.Success" Color="{StaticResource Cora.Accent.Success.Color}" />
+  <SolidColorBrush x:Key="Cora.Accent.Error" Color="{StaticResource Cora.Accent.Error.Color}" />
+  <SolidColorBrush x:Key="Cora.Accent.Unknown" Color="{StaticResource Cora.Accent.Unknown.Color}" />
+
+  <SolidColorBrush x:Key="Mordor.Wax" Color="{StaticResource Mordor.Wax.Color}" />
+  <SolidColorBrush x:Key="Mordor.WaxDeep" Color="{StaticResource Mordor.WaxDeep.Color}" />
+  <SolidColorBrush x:Key="Mordor.Parchment" Color="{StaticResource Mordor.Parchment.Color}" />
+  <SolidColorBrush x:Key="Mordor.ParchmentShade" Color="{StaticResource Mordor.ParchmentShade.Color}" />
+  <SolidColorBrush x:Key="Mordor.Ink" Color="{StaticResource Mordor.Ink.Color}" />
+  <SolidColorBrush x:Key="Mordor.Gold" Color="{StaticResource Mordor.Gold.Color}" />
+  <SolidColorBrush x:Key="Mordor.GoldDeep" Color="{StaticResource Mordor.GoldDeep.Color}" />
+  <SolidColorBrush x:Key="Mordor.Iron" Color="{StaticResource Mordor.Iron.Color}" />
+  <SolidColorBrush x:Key="Mordor.Rubric" Color="{StaticResource Mordor.Rubric.Color}" />
+  <LinearGradientBrush x:Key="Mordor.GoldLeaf" StartPoint="0%,0%" EndPoint="100%,100%">
+    <GradientStop Offset="0" Color="#F6DA8A" />
+    <GradientStop Offset="0.45" Color="#D9AE4E" />
+    <GradientStop Offset="1" Color="#8A6222" />
+  </LinearGradientBrush>
+  <LinearGradientBrush x:Key="Mordor.RubricTile" StartPoint="0%,0%" EndPoint="100%,100%">
+    <GradientStop Offset="0" Color="#B0281D" />
+    <GradientStop Offset="1" Color="#5E0F0A" />
+  </LinearGradientBrush>
+  <LinearGradientBrush x:Key="Mordor.EmberButton" StartPoint="0%,0%" EndPoint="0%,100%">
+    <GradientStop Offset="0" Color="#FF9248" />
+    <GradientStop Offset="1" Color="#D9541A" />
+  </LinearGradientBrush>
+  <LinearGradientBrush x:Key="Mordor.EmberButtonHot" StartPoint="0%,0%" EndPoint="0%,100%">
+    <GradientStop Offset="0" Color="#FFB070" />
+    <GradientStop Offset="1" Color="#F06A24" />
+  </LinearGradientBrush>
+  <LinearGradientBrush x:Key="Mordor.IronButton" StartPoint="0%,0%" EndPoint="0%,100%">
+    <GradientStop Offset="0" Color="#3A2F27" />
+    <GradientStop Offset="1" Color="#241C17" />
+  </LinearGradientBrush>
+  <LinearGradientBrush x:Key="Mordor.IronButtonHot" StartPoint="0%,0%" EndPoint="0%,100%">
+    <GradientStop Offset="0" Color="#4A3C30" />
+    <GradientStop Offset="1" Color="#2E241D" />
+  </LinearGradientBrush>
+
+  <!-- Tinted washes -->
+  <SolidColorBrush x:Key="Cora.Wash.Store" Color="#29FF7A2E" />
+  <SolidColorBrush x:Key="Cora.Wash.Error" Color="#33E5483C" />
+  <SolidColorBrush x:Key="Cora.Wash.Merge" Color="#297B98E6" />
+  <SolidColorBrush x:Key="Cora.Wash.Warning" Color="#33C98B4F" />
+  <SolidColorBrush x:Key="Cora.Wash.Hover" Color="#14E3B94B" />
+  <LinearGradientBrush x:Key="Cora.Wash.Selected" StartPoint="0%,0%" EndPoint="100%,0%">
+    <GradientStop Offset="0" Color="#448E1A14" />
+    <GradientStop Offset="1" Color="#108E1A14" />
+  </LinearGradientBrush>
+
+  <!-- Status bar: a crimson Mechanicus litany strip -->
+  <LinearGradientBrush x:Key="Cora.Gradient.Header" StartPoint="0%,0%" EndPoint="100%,0%">
+    <GradientStop Offset="0" Color="#3A0E09" />
+    <GradientStop Offset="0.5" Color="#200C08" />
+    <GradientStop Offset="1" Color="#3A0E09" />
+  </LinearGradientBrush>
+  <!-- Rail: a column of soot-dark oak -->
+  <LinearGradientBrush x:Key="Cora.Gradient.Sidebar" StartPoint="0%,0%" EndPoint="0%,100%">
+    <GradientStop Offset="0" Color="#24150F" />
+    <GradientStop Offset="0.4" Color="#140D0A" />
+    <GradientStop Offset="1" Color="#0B0807" />
+  </LinearGradientBrush>
+
+  <!-- Typography: cogitator mono for telemetry, a manuscript face for prose, carved capitals for headings,
+       blackletter for the brand and illuminated initials. Bundled under Assets/Fonts (all OFL). -->
+  <FontFamily x:Key="Cora.Font.Machine">avares://Hymnal/Assets/Fonts#Share Tech Mono, DejaVu Sans Mono, monospace</FontFamily>
+  <FontFamily x:Key="Cora.Font.Persona">avares://Hymnal/Assets/Fonts#IM FELL English, Georgia, DejaVu Serif, serif</FontFamily>
+  <FontFamily x:Key="Cora.Font.Heading">avares://Hymnal/Assets/Fonts#Cinzel, Georgia, DejaVu Serif, serif</FontFamily>
+  <FontFamily x:Key="Cora.Font.Caps">avares://Hymnal/Assets/Fonts#Cinzel, Georgia, DejaVu Serif, serif</FontFamily>
+  <FontFamily x:Key="Cora.Font.Display">avares://Hymnal/Assets/Fonts#UnifrakturMaguntia, Georgia, DejaVu Serif, serif</FontFamily>
+  <x:Double x:Key="Cora.Type.Display">30</x:Double>
+  <x:Double x:Key="Cora.Type.Heading">22</x:Double>
+  <x:Double x:Key="Cora.Type.Subheading">16</x:Double>
+  <x:Double x:Key="Cora.Type.Body">15</x:Double>
+  <x:Double x:Key="Cora.Type.Label">13</x:Double>
+  <x:Double x:Key="Cora.Type.Micro">10.5</x:Double>
+  <x:Double x:Key="Cora.Type.Machine">12.5</x:Double>
+
+  <x:Double x:Key="Cora.Space.Xs">4</x:Double>
+  <x:Double x:Key="Cora.Space.Sm">8</x:Double>
+  <x:Double x:Key="Cora.Space.Md">16</x:Double>
+  <x:Double x:Key="Cora.Space.Lg">24</x:Double>
+  <x:Double x:Key="Cora.Space.Xl">32</x:Double>
+  <CornerRadius x:Key="Cora.Radius">1</CornerRadius>
+  <CornerRadius x:Key="Cora.Radius.Pill">2</CornerRadius>
+
+
+  <!-- The primary button under the pointer: a step lighter (dark themes) or darker (light) than Store -->
+  <SolidColorBrush x:Key="Cora.Accent.Store.Hot" Color="#FF9A5C" />
+
+  <!-- The status-bar motto and signature chrome are CORA's; this theme draws its own -->
+  <x:String x:Key="Theme.Text.Motto">&#160;</x:String>
+  <x:String x:Key="Theme.Chrome">none</x:String>
+
+  <!-- Fluent palette: tints the built-in controls (check boxes, combo boxes, focus rings) -->
+  <Color x:Key="Fluent.Accent">#FF7A2E</Color>
+  <Color x:Key="Fluent.Region">#0B0807</Color>
+  <Color x:Key="Fluent.BaseHigh">#EADCBA</Color>
+  <Color x:Key="Fluent.ChromeMedium">#272019</Color>
+  <Color x:Key="Fluent.ChromeMediumLow">#1A1411</Color>
+  <Color x:Key="Fluent.ChromeLow">#200C08</Color>
+  <Color x:Key="Fluent.ErrorText">#E5483C</Color>
+
+  <!-- Chart series, after CORA's viz tokens: separate from the accents, which carry operation meanings. Assigned in
+       order and never cycled; past the last slot a series folds into Other. Stepped per variant, not reused. -->
+  <SolidColorBrush x:Key="Cora.Viz.Series1" Color="#3987E5" />
+  <SolidColorBrush x:Key="Cora.Viz.Series2" Color="#D95926" />
+  <SolidColorBrush x:Key="Cora.Viz.Series3" Color="#199E70" />
+  <SolidColorBrush x:Key="Cora.Viz.Series4" Color="#C98500" />
+  <SolidColorBrush x:Key="Cora.Viz.Series5" Color="#D55181" />
+  <SolidColorBrush x:Key="Cora.Viz.Series6" Color="#008300" />
+  <SolidColorBrush x:Key="Cora.Viz.Series7" Color="#9085E9" />
+  <SolidColorBrush x:Key="Cora.Viz.Other" Color="#6E6C80" />
+</ResourceDictionary>

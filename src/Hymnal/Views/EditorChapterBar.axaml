@@ -10,7 +10,7 @@
     <Grid ColumnDefinitions="Auto,*,Auto"
           Margin="12,0">
         <Border Grid.Column="0"
-                Background="#1A1235"
+                Background="{DynamicResource Cora.Surface.Elevated}"
                 CornerRadius="4"
                 Padding="8,3"
                 VerticalAlignment="Center">
@@ -34,22 +34,22 @@
                     Margin="16,0,0,0"
                     VerticalAlignment="Center">
             <TextBlock FontSize="11"
-                       Foreground="#94A3B8"
+                       Foreground="{DynamicResource Cora.Text.Secondary}"
                        VerticalAlignment="Center">
                 <Run Text="Start " />
-                <Run Text="{Binding CurrentPhaseStartDisplay}" Foreground="#CBD5E1" />
+                <Run Text="{Binding CurrentPhaseStartDisplay}" Foreground="{DynamicResource Cora.Text}" />
             </TextBlock>
             <TextBlock FontSize="11"
-                       Foreground="#94A3B8"
+                       Foreground="{DynamicResource Cora.Text.Secondary}"
                        VerticalAlignment="Center">
                 <Run Text="End " />
-                <Run Text="{Binding CurrentPhaseEndDisplay}" Foreground="#CBD5E1" />
+                <Run Text="{Binding CurrentPhaseEndDisplay}" Foreground="{DynamicResource Cora.Text}" />
             </TextBlock>
             <TextBlock FontSize="11"
-                       Foreground="#94A3B8"
+                       Foreground="{DynamicResource Cora.Text.Secondary}"
                        VerticalAlignment="Center">
                 <Run Text="% " />
-                <Run Text="{Binding CurrentPhaseProgressDisplay}" Foreground="#CBD5E1" />
+                <Run Text="{Binding CurrentPhaseProgressDisplay}" Foreground="{DynamicResource Cora.Text}" />
             </TextBlock>
         </StackPanel>
 
@@ -61,9 +61,9 @@
                 FontSize="11"
                 FontWeight="SemiBold"
                 CornerRadius="4"
-                Background="#2D1B5E"
-                Foreground="#E9D5FF"
-                BorderBrush="#9D4EDD"
+                Background="{DynamicResource Cora.Wash.Store}"
+                Foreground="{DynamicResource Cora.Text}"
+                BorderBrush="{DynamicResource Cora.Accent.Store}"
                 BorderThickness="1"
                 VerticalAlignment="Center" />
     </Grid>

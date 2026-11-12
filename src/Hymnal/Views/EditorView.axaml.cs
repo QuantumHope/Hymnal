@@ -12,6 +12,7 @@ using AvaloniaEdit.Highlighting.Xshd;
 using AvaloniaEdit.Rendering;
 using Hymnal.Audio;
 using Hymnal.Infrastructure;
+using Hymnal.Theming;
 using Hymnal.Views.Editor;
 using Hymnal.ViewModels;
 using Microsoft.Extensions.DependencyInjection;
@@ -145,8 +146,17 @@ public partial class EditorView : UserControl
             _validationMargin = null;
         }
 
-        // Apply dark-theme colors directly to the AvaloniaEdit rendering surface.
+        // Apply the theme's colours directly to the AvaloniaEdit rendering surface, and again whenever the theme
+        // changes: switching themes swaps the application's resource dictionaries (ResourcesChanged) and, between
+        // a dark and a light theme, the theme variant.
         ApplyEditorTheme();
+        ResourcesChanged += OnThemeResourcesChanged;
+        ActualThemeVariantChanged += OnThemeVariantChanged;
+        _viewDisposables.Add(Disposable.Create(() =>
+        {
+            ResourcesChanged -= OnThemeResourcesChanged;
+            ActualThemeVariantChanged -= OnThemeVariantChanged;
+        }));
 
         // Editor → VM: fire on every text edit in the AvaloniaEdit surface.
         PART_Editor.TextChanged += OnEditorTextChanged;
@@ -308,27 +318,41 @@ public partial class EditorView : UserControl
 
     // ── Syntax styling ───────────────────────────────────────────────────────
 
+    private void OnThemeResourcesChanged(object? sender, ResourcesChangedEventArgs e) => RefreshEditorTheme();
+
+    private void OnThemeVariantChanged(object? sender, EventArgs e) => RefreshEditorTheme();
+
+    /// <summary>
+    /// Re-reads the theme colours and redraws the text, so the Markua highlighting and the advisory gutter
+    /// (which use <see cref="ThemeBrushes"/>) pick up the new theme too.
+    /// </summary>
+    private void RefreshEditorTheme()
+    {
+        ApplyEditorTheme();
+        PART_Editor.TextArea.TextView.Redraw();
+    }
+
     private void ApplyEditorTheme()
     {
         var theme = Application.Current?.ActualThemeVariant ?? ThemeVariant.Dark;
 
-        var surfaceBrush = TryGetResource("SurfaceBaseBrush", theme, out var surface)
+        var surfaceBrush = TryGetResource("Cora.Surface.Void", theme, out var surface)
             ? surface as IBrush
             : null;
-        var textBrush = TryGetResource("OnSurfaceBrush", theme, out var text)
+        var textBrush = TryGetResource("Cora.Text", theme, out var text)
             ? text as IBrush
             : null;
-        var accentBrush = TryGetResource("SynthwavePurpleBrush", theme, out var accent)
+        var accentBrush = TryGetResource("Cora.Accent.Store", theme, out var accent)
             ? accent as IBrush
             : null;
 
-        var dimBrush = TryGetResource("OnSurfaceDimBrush", theme, out var dim)
+        var dimBrush = TryGetResource("Cora.Text.Secondary", theme, out var dim)
             ? dim as IBrush
             : null;
-        var borderBrush = TryGetResource("BorderDefaultBrush", theme, out var border)
+        var borderBrush = TryGetResource("Cora.Border.Input", theme, out var border)
             ? border as IBrush
             : null;
-        var currentLineBrush = TryGetResource("SurfaceHighBrush", theme, out var currentLine)
+        var currentLineBrush = TryGetResource("Cora.Wash.Selected", theme, out var currentLine)
             ? currentLine as IBrush
             : null;
 
@@ -349,7 +373,7 @@ public partial class EditorView : UserControl
         if (accentBrush != null)
             PART_Editor.TextArea.CaretBrush = accentBrush;
 
-        PART_Editor.TextArea.SelectionBrush = new SolidColorBrush(Color.FromArgb(0x66, 0x9D, 0x4E, 0xDD));
+        PART_Editor.TextArea.SelectionBrush = ThemeBrushes.Get(HymnalTokens.Selection, Color.FromArgb(0x66, 0x9D, 0x4E, 0xDD));
         PART_Editor.TextArea.SelectionForeground = textBrush ?? Brushes.White;
         PART_Editor.TextArea.SelectionBorder = borderBrush != null ? new Pen(borderBrush, 1) : null;
         PART_Editor.TextArea.SelectionCornerRadius = 2;
@@ -389,9 +413,10 @@ public partial class EditorView : UserControl
         private static readonly Regex BoldRegex = new(@"\*\*[^*\r\n]+\*\*", RegexOptions.Compiled | RegexOptions.CultureInvariant);
         private static readonly Regex ItalicRegex = new(@"(?<!\*)\*[^*\r\n]+\*(?!\*)", RegexOptions.Compiled | RegexOptions.CultureInvariant);
 
-        private readonly IBrush _headingBrush = new SolidColorBrush(Color.Parse("#C792EA"));
-        private readonly IBrush _boldBrush = new SolidColorBrush(Color.Parse("#EDE8F5"));
-        private readonly IBrush _italicBrush = new SolidColorBrush(Color.Parse("#A0A0B8"));
+        // Theme brushes are recoloured in place when the theme changes; EditorView redraws the text then.
+        private readonly IBrush _headingBrush = ThemeBrushes.Get("Cora.Accent.Store.Hot", "#C792EA");
+        private readonly IBrush _boldBrush = ThemeBrushes.Get("Cora.Text", "#EDE8F5");
+        private readonly IBrush _italicBrush = ThemeBrushes.Get("Cora.Text.Secondary", "#A0A0B8");
         private readonly Typeface _headingTypeface;
         private readonly Typeface _boldTypeface;
         private readonly Typeface _italicTypeface;

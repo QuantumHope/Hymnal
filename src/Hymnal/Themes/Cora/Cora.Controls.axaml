@@ -1,0 +1,13 @@
+<!--
+  Control styling shared by every theme imported from CORA (Themes/Cora/*.axaml, imported from OneRing by
+  tools/OneRingThemeImport). Hand-written, unlike the token files beside it, and never overwritten by the importer.
+  Loaded after App.axaml's base styles while a CORA theme is active.
+-->
+<Styles xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+
+  <!-- Headings take the display face in every theme (App.axaml); a CORA theme also lights them in its Store accent -->
+  <Style Selector="TextBlock.heading">
+    <Setter Property="Foreground" Value="{DynamicResource Cora.Accent.Store}" />
+  </Style>
+</Styles>

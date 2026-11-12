@@ -6,7 +6,7 @@
              x:Name="Root"
              x:DataType="vm:CorkboardViewModel"
              x:CompileBindings="False"
-             Background="#0B0820"
+             Background="{DynamicResource Cora.Surface.Void}"
              Focusable="True"
              KeyDown="Root_KeyDown">
 
@@ -19,8 +19,8 @@
 
     <UserControl.Styles>
         <Style Selector="Button.cork-card">
-            <Setter Property="Background" Value="{DynamicResource SurfaceElevatedBrush}" />
-            <Setter Property="BorderBrush" Value="{DynamicResource BorderSubtleBrush}" />
+            <Setter Property="Background" Value="{DynamicResource Cora.Surface.Panel}" />
+            <Setter Property="BorderBrush" Value="{DynamicResource Cora.Border.Subtle}" />
             <Setter Property="BorderThickness" Value="1" />
             <Setter Property="CornerRadius" Value="12" />
             <Setter Property="Padding" Value="14,12" />
@@ -68,7 +68,7 @@
             <Setter Property="FontWeight" Value="Medium" />
         </Style>
         <Style Selector="Button.cork-card.cork-card-missing">
-            <Setter Property="BorderBrush" Value="{DynamicResource OrangeBrush}" />
+            <Setter Property="BorderBrush" Value="{DynamicResource Cora.Accent.Unknown}" />
             <Setter Property="BorderThickness" Value="1,1,1,3" />
         </Style>
         <Style Selector="Button.cork-card.card-size-tiny TextBlock.cork-card-missing-text">
@@ -88,7 +88,7 @@
             <Setter Property="Width" Value="8" />
             <Setter Property="Height" Value="8" />
             <Setter Property="CornerRadius" Value="4" />
-            <Setter Property="Background" Value="{DynamicResource OrangeBrush}" />
+            <Setter Property="Background" Value="{DynamicResource Cora.Accent.Unknown}" />
             <Setter Property="HorizontalAlignment" Value="Right" />
             <Setter Property="VerticalAlignment" Value="Top" />
             <Setter Property="Margin" Value="0,2,2,0" />
@@ -104,7 +104,7 @@
         </Style>
         <Style Selector="TextBlock.cork-card-list-missing">
             <Setter Property="FontSize" Value="12" />
-            <Setter Property="Foreground" Value="{DynamicResource OrangeBrush}" />
+            <Setter Property="Foreground" Value="{DynamicResource Cora.Accent.Unknown}" />
             <Setter Property="VerticalAlignment" Value="Center" />
             <Setter Property="Width" Value="16" />
             <Setter Property="TextAlignment" Value="Center" />
@@ -121,40 +121,40 @@
             <Setter Property="Padding" Value="8,2" />
             <Setter Property="FontSize" Value="11" />
             <Setter Property="Background" Value="Transparent" />
-            <Setter Property="BorderBrush" Value="#2D1B5E" />
+            <Setter Property="BorderBrush" Value="{DynamicResource Cora.Border.Subtle}" />
             <Setter Property="BorderThickness" Value="1" />
             <Setter Property="CornerRadius" Value="6" />
-            <Setter Property="Foreground" Value="#9D4EDD" />
+            <Setter Property="Foreground" Value="{DynamicResource Cora.Accent.Store}" />
         </Style>
         <Style Selector="Button.cork-card:pointerover">
-            <Setter Property="Background" Value="{DynamicResource SurfaceHighBrush}" />
-            <Setter Property="BorderBrush" Value="{DynamicResource SynthwavePurpleBrush}" />
+            <Setter Property="Background" Value="{DynamicResource Cora.Wash.Selected}" />
+            <Setter Property="BorderBrush" Value="{DynamicResource Cora.Accent.Store}" />
         </Style>
         <Style Selector="Button.cork-card.selected">
-            <Setter Property="Background" Value="#191233" />
-            <Setter Property="BorderBrush" Value="{DynamicResource SynthwavePurpleBrush}" />
+            <Setter Property="Background" Value="{DynamicResource Cora.Surface.Elevated}" />
+            <Setter Property="BorderBrush" Value="{DynamicResource Cora.Accent.Store}" />
         </Style>
         <Style Selector="ToggleButton.cork-size-toggle">
             <Setter Property="Background" Value="Transparent" />
-            <Setter Property="BorderBrush" Value="#2D1B5E" />
+            <Setter Property="BorderBrush" Value="{DynamicResource Cora.Border.Subtle}" />
             <Setter Property="BorderThickness" Value="1" />
             <Setter Property="CornerRadius" Value="6" />
             <Setter Property="Padding" Value="10,4" />
             <Setter Property="FontSize" Value="10" />
-            <Setter Property="Foreground" Value="#94A3B8" />
+            <Setter Property="Foreground" Value="{DynamicResource Cora.Text.Secondary}" />
         </Style>
         <Style Selector="ToggleButton.cork-size-toggle:pointerover">
-            <Setter Property="Foreground" Value="{DynamicResource OnSurfaceBrush}" />
-            <Setter Property="BorderBrush" Value="{DynamicResource SynthwavePurpleBrush}" />
+            <Setter Property="Foreground" Value="{DynamicResource Cora.Text}" />
+            <Setter Property="BorderBrush" Value="{DynamicResource Cora.Accent.Store}" />
         </Style>
         <Style Selector="ToggleButton.cork-size-toggle:checked">
-            <Setter Property="Background" Value="#191233" />
-            <Setter Property="Foreground" Value="{DynamicResource OnSurfaceBrush}" />
-            <Setter Property="BorderBrush" Value="{DynamicResource SynthwavePurpleBrush}" />
+            <Setter Property="Background" Value="{DynamicResource Cora.Wash.Selected}" />
+            <Setter Property="Foreground" Value="{DynamicResource Cora.Text}" />
+            <Setter Property="BorderBrush" Value="{DynamicResource Cora.Accent.Store}" />
         </Style>
         <Style Selector="Button.cork-part-header">
-            <Setter Property="Background" Value="#15102A" />
-            <Setter Property="BorderBrush" Value="#2D1B5E" />
+            <Setter Property="Background" Value="{DynamicResource Cora.Surface.Panel}" />
+            <Setter Property="BorderBrush" Value="{DynamicResource Cora.Border.Subtle}" />
             <Setter Property="BorderThickness" Value="1" />
             <Setter Property="CornerRadius" Value="8" />
             <Setter Property="Padding" Value="12,10" />
@@ -169,32 +169,32 @@
             <Setter Property="Margin" Value="0,16,0,10" />
         </Style>
         <Style Selector="Button.cork-part-header:pointerover">
-            <Setter Property="Background" Value="#191233" />
-            <Setter Property="BorderBrush" Value="{DynamicResource SynthwavePurpleBrush}" />
+            <Setter Property="Background" Value="{DynamicResource Cora.Wash.Hover}" />
+            <Setter Property="BorderBrush" Value="{DynamicResource Cora.Accent.Store}" />
         </Style>
         <Style Selector="Button.cork-part-header:pointerover Border.cork-part-chevron-badge">
-            <Setter Property="Background" Value="#3A245D" />
-            <Setter Property="BorderBrush" Value="{DynamicResource SynthwavePurpleBrush}" />
+            <Setter Property="Background" Value="{DynamicResource Cora.Wash.Selected}" />
+            <Setter Property="BorderBrush" Value="{DynamicResource Cora.Accent.Store}" />
         </Style>
         <Style Selector="Border.cork-part-chevron-badge">
             <Setter Property="Width" Value="28" />
             <Setter Property="Height" Value="28" />
             <Setter Property="CornerRadius" Value="6" />
-            <Setter Property="Background" Value="#221640" />
-            <Setter Property="BorderBrush" Value="#4C2A85" />
+            <Setter Property="Background" Value="{DynamicResource Cora.Surface.Elevated}" />
+            <Setter Property="BorderBrush" Value="{DynamicResource Cora.Border.Input}" />
             <Setter Property="BorderThickness" Value="1" />
             <Setter Property="VerticalAlignment" Value="Center" />
         </Style>
         <Style Selector="TextBlock.cork-part-chevron">
             <Setter Property="FontSize" Value="16" />
             <Setter Property="FontWeight" Value="Bold" />
-            <Setter Property="Foreground" Value="#E9D5FF" />
+            <Setter Property="Foreground" Value="{DynamicResource Cora.Text}" />
             <Setter Property="HorizontalAlignment" Value="Center" />
             <Setter Property="VerticalAlignment" Value="Center" />
         </Style>
         <Style Selector="Border.cork-hint">
-            <Setter Property="Background" Value="#100D1F" />
-            <Setter Property="BorderBrush" Value="#3A245D" />
+            <Setter Property="Background" Value="{DynamicResource Cora.Surface.Panel}" />
+            <Setter Property="BorderBrush" Value="{DynamicResource Cora.Border.Subtle}" />
             <Setter Property="BorderThickness" Value="1" />
             <Setter Property="CornerRadius" Value="8" />
             <Setter Property="Padding" Value="12,10" />
@@ -202,8 +202,8 @@
             <Setter Property="Margin" Value="0,0,0,2" />
         </Style>
         <Style Selector="Button.cork-excluded-card">
-            <Setter Property="Background" Value="#0F1022" />
-            <Setter Property="BorderBrush" Value="#64748B" />
+            <Setter Property="Background" Value="{DynamicResource Cora.Surface.Panel}" />
+            <Setter Property="BorderBrush" Value="{DynamicResource Cora.Border.Input}" />
             <Setter Property="BorderThickness" Value="1,1,1,2" />
             <Setter Property="CornerRadius" Value="12" />
             <Setter Property="Padding" Value="14,12" />
@@ -216,13 +216,13 @@
             <Setter Property="Opacity" Value="0.82" />
         </Style>
         <Style Selector="Button.cork-excluded-card:pointerover">
-            <Setter Property="BorderBrush" Value="{DynamicResource SynthwavePurpleBrush}" />
-            <Setter Property="Background" Value="#151233" />
+            <Setter Property="BorderBrush" Value="{DynamicResource Cora.Accent.Store}" />
+            <Setter Property="Background" Value="{DynamicResource Cora.Wash.Hover}" />
             <Setter Property="Opacity" Value="1" />
         </Style>
         <Style Selector="Border.cork-excluded-badge">
-            <Setter Property="Background" Value="#1F2937" />
-            <Setter Property="BorderBrush" Value="#475569" />
+            <Setter Property="Background" Value="{DynamicResource Cora.Surface.Elevated}" />
+            <Setter Property="BorderBrush" Value="{DynamicResource Cora.Border.Input}" />
             <Setter Property="BorderThickness" Value="1" />
             <Setter Property="CornerRadius" Value="999" />
             <Setter Property="Padding" Value="8,2" />
@@ -231,8 +231,8 @@
 
     <Grid RowDefinitions="48,*">
         <Border Grid.Row="0"
-                Background="#120932"
-                BorderBrush="#2D1B5E"
+                Background="{DynamicResource Cora.Surface.Panel}"
+                BorderBrush="{DynamicResource Cora.Border.Subtle}"
                 BorderThickness="0,0,0,1">
             <Grid ColumnDefinitions="Auto,*,Auto"
                   Margin="16,0">
@@ -242,14 +242,14 @@
                             Spacing="10">
                     <TextBlock Text="▤"
                                FontSize="16"
-                               Foreground="#9D4EDD"
+                               Foreground="{DynamicResource Cora.Accent.Store}"
                                VerticalAlignment="Center"
                                Margin="0,0,0,1" />
-                    <TextBlock Text="PLAN"
+                    <TextBlock Classes="caps" Text="PLAN"
                                FontSize="10"
                                FontWeight="SemiBold"
                                LetterSpacing="2"
-                               Foreground="#94A3B8"
+                               Foreground="{DynamicResource Cora.Text.Secondary}"
                                VerticalAlignment="Center" />
                     <Button x:Name="BoardAddButton"
                             Content="+"
@@ -257,10 +257,10 @@
                             FontSize="12"
                             FontWeight="Bold"
                             Background="Transparent"
-                            BorderBrush="#2D1B5E"
+                            BorderBrush="{DynamicResource Cora.Border.Subtle}"
                             BorderThickness="1"
                             CornerRadius="6"
-                            Foreground="#9D4EDD"
+                            Foreground="{DynamicResource Cora.Accent.Store}"
                             ToolTip.Tip="Add chapter or part"
                             Click="BoardAddButton_Click" />
                 </StackPanel>
@@ -300,10 +300,10 @@
                     <CheckBox Content="Show excluded"
                               IsChecked="{Binding ShowExcludedFiles, Mode=TwoWay}"
                               FontSize="10"
-                              Foreground="#94A3B8" />
+                              Foreground="{DynamicResource Cora.Text.Secondary}" />
                     <TextBlock Text="Double-click a card to open in Write mode"
                                FontSize="10"
-                               Foreground="#94A3B8"
+                               Foreground="{DynamicResource Cora.Text.Secondary}"
                                VerticalAlignment="Center" />
                 </StackPanel>
             </Grid>
@@ -319,13 +319,13 @@
                        TextWrapping="Wrap"
                        TextAlignment="Center"
                        FontSize="12"
-                       Foreground="{DynamicResource OnSurfaceMutedBrush}" />
+                       Foreground="{DynamicResource Cora.Text.Disabled}" />
 
             <ScrollViewer x:Name="BoardScroll"
                           IsVisible="{Binding HasItems}"
                           VerticalScrollBarVisibility="Auto"
                           HorizontalScrollBarVisibility="Disabled"
-                          Background="#0B0820">
+                          Background="{DynamicResource Cora.Surface.Void}">
                 <Grid>
                     <ItemsControl x:Name="BoardItems"
                                   ItemsSource="{Binding Items}"
@@ -377,11 +377,11 @@
                         <TextBlock Text="{Binding Title}"
                                    FontSize="14"
                                    FontWeight="SemiBold"
-                                   Foreground="{DynamicResource OnSurfaceBrush}"
+                                   Foreground="{DynamicResource Cora.Text}"
                                    VerticalAlignment="Center" />
                         <TextBlock Text="{Binding ChapterCountInParens}"
                                    FontSize="10"
-                                   Foreground="#94A3B8"
+                                   Foreground="{DynamicResource Cora.Text.Secondary}"
                                    VerticalAlignment="Center" />
                     </StackPanel>
                     <Button Grid.Column="2"
@@ -400,10 +400,10 @@
                             FontWeight="Bold"
                             VerticalAlignment="Center"
                             Background="Transparent"
-                            BorderBrush="#2D1B5E"
+                            BorderBrush="{DynamicResource Cora.Border.Subtle}"
                             BorderThickness="1"
                             CornerRadius="6"
-                            Foreground="#9D4EDD"
+                            Foreground="{DynamicResource Cora.Accent.Store}"
                             ToolTip.Tip="Add chapter to this part"
                             Tag="{Binding}"
                             Click="PartAddButton_Click" />
@@ -419,7 +419,7 @@
                 <TextBlock Text="{Binding HintText}"
                            FontSize="11"
                            FontStyle="Italic"
-                           Foreground="#94A3B8" />
+                           Foreground="{DynamicResource Cora.Text.Secondary}" />
             </Border>
         </DataTemplate>
 
@@ -427,8 +427,8 @@
             <Panel Classes="cork-card-host"
                    Classes.card-size-list-host="{Binding DataContext.CardDisplaySize, ElementName=Root, Converter={StaticResource CardDisplaySizeEqualsConverter}, ConverterParameter=List}"
                    IsVisible="{Binding IsVisibleOnBoard}">
-                <Border Background="{DynamicResource SurfaceElevatedBrush}"
-                        BorderBrush="{DynamicResource SynthwavePurpleBrush}"
+                <Border Background="{DynamicResource Cora.Surface.Panel}"
+                        BorderBrush="{DynamicResource Cora.Accent.Store}"
                         BorderThickness="2"
                         CornerRadius="12"
                         Padding="14,12"
@@ -437,25 +437,25 @@
                         HorizontalAlignment="Left"
                         Margin="0,0,12,12">
                     <StackPanel Spacing="6">
-                        <TextBlock Text="NEW CHAPTER"
+                        <TextBlock Classes="caps" Text="NEW CHAPTER"
                                    FontSize="9"
                                    FontWeight="SemiBold"
                                    LetterSpacing="1.5"
-                                   Foreground="{DynamicResource SynthwavePurpleBrush}" />
+                                   Foreground="{DynamicResource Cora.Accent.Store}" />
                         <TextBox Text="{Binding TitleText, Mode=TwoWay}"
                                  PlaceholderText="Chapter title..."
                                  Background="Transparent"
                                  BorderThickness="0,0,0,1"
-                                 BorderBrush="{DynamicResource SynthwavePurpleBrush}"
+                                 BorderBrush="{DynamicResource Cora.Accent.Store}"
                                  FontSize="15"
                                  FontWeight="SemiBold"
-                                 Foreground="{DynamicResource OnSurfaceBrush}"
+                                 Foreground="{DynamicResource Cora.Text}"
                                  Padding="0,4"
                                  Loaded="InlineCreate_Loaded"
                                  KeyDown="InlineCreate_KeyDown" />
                         <TextBlock Text="Enter to create  ·  Escape to cancel"
                                    FontSize="9"
-                                   Foreground="{DynamicResource OnSurfaceMutedBrush}" />
+                                   Foreground="{DynamicResource Cora.Text.Disabled}" />
                     </StackPanel>
                 </Border>
             </Panel>
@@ -470,7 +470,7 @@
                         HorizontalAlignment="Left"
                         VerticalAlignment="Stretch"
                         Margin="-8,4,0,16"
-                        Background="{DynamicResource SynthwavePurpleBrush}"
+                        Background="{DynamicResource Cora.Accent.Store}"
                         CornerRadius="2"
                         IsVisible="False"
                         IsHitTestVisible="False" />
@@ -479,7 +479,7 @@
                         HorizontalAlignment="Right"
                         VerticalAlignment="Stretch"
                         Margin="0,4,4,16"
-                        Background="{DynamicResource SynthwavePurpleBrush}"
+                        Background="{DynamicResource Cora.Accent.Store}"
                         CornerRadius="2"
                         IsVisible="False"
                         IsHitTestVisible="False" />
@@ -536,7 +536,7 @@
                                Classes="cork-card-title"
                                Text="{Binding Title}"
                                FontWeight="SemiBold"
-                               Foreground="{DynamicResource OnSurfaceBrush}"
+                               Foreground="{DynamicResource Cora.Text}"
                                TextWrapping="Wrap"
                                MaxLines="2"
                                TextTrimming="CharacterEllipsis" />
@@ -544,7 +544,7 @@
                     <TextBlock Grid.Row="1"
                                Text="{Binding RelativePath}"
                                FontSize="10"
-                               Foreground="#94A3B8"
+                               Foreground="{DynamicResource Cora.Text.Secondary}"
                                TextWrapping="Wrap"
                                IsVisible="{Binding DataContext.CardDisplaySize, ElementName=Root, Converter={StaticResource CardDisplaySizeEqualsConverter}, ConverterParameter=Large}" />
 
@@ -554,33 +554,33 @@
                           IsVisible="{Binding DataContext.CardDisplaySize, ElementName=Root, Converter={StaticResource CardDisplaySizeEqualsConverter}, ConverterParameter=Large}">
                         <StackPanel Grid.Column="0"
                                     Spacing="2">
-                            <TextBlock Text="Status"
+                            <TextBlock Classes="caps" Text="Status"
                                        FontSize="9"
                                        LetterSpacing="1.5"
-                                       Foreground="#94A3B8" />
+                                       Foreground="{DynamicResource Cora.Text.Secondary}" />
                             <TextBlock Text="{Binding Card.StatusDisplay}"
                                        FontSize="11"
                                        Foreground="{Binding Card.Status, Converter={StaticResource StatusToBrushConverter}}" />
                         </StackPanel>
                         <StackPanel Grid.Column="1"
                                     Spacing="2">
-                            <TextBlock Text="Words"
+                            <TextBlock Classes="caps" Text="Words"
                                        FontSize="9"
                                        LetterSpacing="1.5"
-                                       Foreground="#94A3B8" />
+                                       Foreground="{DynamicResource Cora.Text.Secondary}" />
                             <TextBlock Text="{Binding Card.WordCountDisplay}"
                                        FontSize="11"
-                                       Foreground="{DynamicResource OnSurfaceBrush}" />
+                                       Foreground="{DynamicResource Cora.Text}" />
                         </StackPanel>
                         <StackPanel Grid.Column="2"
                                     Spacing="2">
-                            <TextBlock Text="Target"
+                            <TextBlock Classes="caps" Text="Target"
                                        FontSize="9"
                                        LetterSpacing="1.5"
-                                       Foreground="#94A3B8" />
+                                       Foreground="{DynamicResource Cora.Text.Secondary}" />
                             <TextBlock Text="{Binding Card.TargetDisplay}"
                                        FontSize="11"
-                                       Foreground="{DynamicResource OnSurfaceBrush}" />
+                                       Foreground="{DynamicResource Cora.Text}" />
                         </StackPanel>
                     </Grid>
 
@@ -596,7 +596,7 @@
                         <TextBlock Grid.Column="1"
                                    Text="{Binding Card.WordCountDisplay}"
                                    FontSize="11"
-                                   Foreground="{DynamicResource OnSurfaceBrush}"
+                                   Foreground="{DynamicResource Cora.Text}"
                                    VerticalAlignment="Center" />
                     </Grid>
 
@@ -605,11 +605,11 @@
                           ColumnSpacing="8"
                           VerticalAlignment="Center"
                           IsVisible="{Binding DataContext.CardDisplaySize, ElementName=Root, Converter={StaticResource CardDisplaySizeEqualsConverter}, ConverterParameter=Large}">
-                        <TextBlock Grid.Column="0"
+                        <TextBlock Classes="caps" Grid.Column="0"
                                    Text="Progress"
                                    FontSize="9"
                                    LetterSpacing="1.5"
-                                   Foreground="#94A3B8"
+                                   Foreground="{DynamicResource Cora.Text.Secondary}"
                                    VerticalAlignment="Center" />
                         <ProgressBar Grid.Column="1"
                                      Value="{Binding Card.ProximityFill}"
@@ -617,13 +617,13 @@
                                      Maximum="1"
                                      Height="6"
                                      VerticalAlignment="Center"
-                                     Background="{DynamicResource SurfaceHighBrush}"
-                                     Foreground="{DynamicResource SynthwavePurpleBrush}" />
+                                     Background="{DynamicResource Cora.Wash.Selected}"
+                                     Foreground="{DynamicResource Cora.Accent.Store}" />
                         <TextBlock Grid.Column="2"
                                    Text="{Binding Card.ProximityFill, StringFormat={}{0:P0}}"
                                    FontSize="11"
                                    HorizontalAlignment="Right"
-                                   Foreground="{DynamicResource OnSurfaceMutedBrush}"
+                                   Foreground="{DynamicResource Cora.Text.Disabled}"
                                    VerticalAlignment="Center" />
                     </Grid>
 
@@ -638,13 +638,13 @@
                                      Maximum="1"
                                      Height="6"
                                      VerticalAlignment="Center"
-                                     Background="{DynamicResource SurfaceHighBrush}"
-                                     Foreground="{DynamicResource SynthwavePurpleBrush}" />
+                                     Background="{DynamicResource Cora.Wash.Selected}"
+                                     Foreground="{DynamicResource Cora.Accent.Store}" />
                         <TextBlock Grid.Column="1"
                                    Text="{Binding Card.ProximityFill, StringFormat={}{0:P0}}"
                                    FontSize="11"
                                    HorizontalAlignment="Right"
-                                   Foreground="{DynamicResource OnSurfaceMutedBrush}"
+                                   Foreground="{DynamicResource Cora.Text.Disabled}"
                                    VerticalAlignment="Center" />
                     </Grid>
 
@@ -653,22 +653,22 @@
                           ColumnSpacing="12"
                           IsVisible="{Binding DataContext.CardDisplaySize, ElementName=Root, Converter={StaticResource CardDisplaySizeEqualsConverter}, ConverterParameter=Large}">
                         <StackPanel Grid.Column="0" Spacing="2">
-                            <TextBlock Text="Phase start"
+                            <TextBlock Classes="caps" Text="Phase start"
                                        FontSize="9"
                                        LetterSpacing="1.5"
-                                       Foreground="#94A3B8" />
+                                       Foreground="{DynamicResource Cora.Text.Secondary}" />
                             <TextBlock Text="{Binding Card.PhaseStartDateDisplay}"
                                        FontSize="11"
-                                       Foreground="{DynamicResource OnSurfaceBrush}" />
+                                       Foreground="{DynamicResource Cora.Text}" />
                         </StackPanel>
                         <StackPanel Grid.Column="1" Spacing="2">
-                            <TextBlock Text="Phase end"
+                            <TextBlock Classes="caps" Text="Phase end"
                                        FontSize="9"
                                        LetterSpacing="1.5"
-                                       Foreground="#94A3B8" />
+                                       Foreground="{DynamicResource Cora.Text.Secondary}" />
                             <TextBlock Text="{Binding Card.PhaseEndDateDisplay}"
                                        FontSize="11"
-                                       Foreground="{DynamicResource OnSurfaceBrush}" />
+                                       Foreground="{DynamicResource Cora.Text}" />
                         </StackPanel>
                     </Grid>
 
@@ -678,15 +678,15 @@
                                  Maximum="1"
                                  Height="3"
                                  VerticalAlignment="Center"
-                                 Background="{DynamicResource SurfaceHighBrush}"
-                                 Foreground="{DynamicResource SynthwavePurpleBrush}"
+                                 Background="{DynamicResource Cora.Wash.Selected}"
+                                 Foreground="{DynamicResource Cora.Accent.Store}"
                                  IsVisible="{Binding DataContext.CardDisplaySize, ElementName=Root, Converter={StaticResource CardDisplaySizeEqualsConverter}, ConverterParameter=Tiny}" />
 
                     <TextBlock Grid.Row="7"
                                Classes="cork-card-missing-text"
                                Text="{Binding Card.MissingStateDisplay}"
                                FontSize="10"
-                               Foreground="{DynamicResource OrangeBrush}"
+                               Foreground="{DynamicResource Cora.Accent.Unknown}"
                                IsVisible="{Binding Card.IsMissing}" />
 
                     <StackPanel Grid.Row="8"
@@ -718,7 +718,7 @@
                                    Text="{Binding Title}"
                                    FontSize="12"
                                    FontWeight="Medium"
-                                   Foreground="{DynamicResource OnSurfaceBrush}"
+                                   Foreground="{DynamicResource Cora.Text}"
                                    VerticalAlignment="Center"
                                    TextTrimming="CharacterEllipsis"
                                    MaxLines="1" />
@@ -728,12 +728,12 @@
                                      Maximum="1"
                                      Height="4"
                                      VerticalAlignment="Center"
-                                     Background="{DynamicResource SurfaceHighBrush}"
-                                     Foreground="{DynamicResource SynthwavePurpleBrush}" />
+                                     Background="{DynamicResource Cora.Wash.Selected}"
+                                     Foreground="{DynamicResource Cora.Accent.Store}" />
                         <TextBlock Grid.Column="3"
                                    Text="{Binding Card.WordCountDisplay}"
                                    FontSize="11"
-                                   Foreground="{DynamicResource OnSurfaceMutedBrush}"
+                                   Foreground="{DynamicResource Cora.Text.Disabled}"
                                    VerticalAlignment="Center"
                                    HorizontalAlignment="Right" />
                         <TextBlock Grid.Column="4"
@@ -762,26 +762,26 @@
                         <TextBlock Text="{Binding Title}"
                                    FontSize="15"
                                    FontWeight="SemiBold"
-                                   Foreground="{DynamicResource OnSurfaceMutedBrush}"
+                                   Foreground="{DynamicResource Cora.Text.Disabled}"
                                    TextWrapping="Wrap"
                                    MaxLines="2"
                                    TextTrimming="CharacterEllipsis" />
                         <Border Classes="cork-excluded-badge"
                                 VerticalAlignment="Center">
-                            <TextBlock Text="EXCLUDED"
+                            <TextBlock Classes="caps" Text="EXCLUDED"
                                        FontSize="9"
                                        FontWeight="SemiBold"
                                        LetterSpacing="1.2"
-                                       Foreground="#CBD5E1" />
+                                       Foreground="{DynamicResource Cora.Text.Secondary}" />
                         </Border>
                     </StackPanel>
                     <TextBlock Text="Excluded from Book.txt. Right-click to include it again."
                                FontSize="10"
-                               Foreground="#94A3B8"
+                               Foreground="{DynamicResource Cora.Text.Secondary}"
                                TextWrapping="Wrap" />
                     <TextBlock Text="{Binding RelativePath}"
                                FontSize="10"
-                               Foreground="#64748B"
+                               Foreground="{DynamicResource Cora.Text.Disabled}"
                                TextWrapping="Wrap" />
                 </StackPanel>
             </Button>

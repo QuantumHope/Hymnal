@@ -2,6 +2,7 @@
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              x:Class="Hymnal.App"
              xmlns:local="using:Hymnal"
+             xmlns:controls="using:Hymnal.Views.Controls"
              RequestedThemeVariant="Dark">
 
     <Application.DataTemplates>
@@ -18,28 +19,75 @@
             <Setter Property="ToolTip.Placement" Value="Right" />
             <Setter Property="ToolTip.ShowDelay" Value="500" />
         </Style>
+        <!-- The bands above and below the page, and the glow at the foot of the window: a plain rule in the theme's
+             header colour. A theme's own styles (Themes/*.Controls.axaml, added after these) can dress them up. -->
+        <Style Selector="Border.band">
+            <Setter Property="Height" Value="1" />
+            <Setter Property="Background" Value="{DynamicResource Cora.Border.Header}" />
+        </Style>
+        <Style Selector="Border.horizon">
+            <Setter Property="IsVisible" Value="False" />
+        </Style>
+        <!-- The status strip under the page: the theme's emblem, the window title, and a CORA theme's motto and its
+             signature chrome (KITT's scanner, HAL's eye, …). Theme styles may restyle the motto. -->
+        <Style Selector="Border.statusStrip">
+            <Setter Property="Background" Value="{DynamicResource Cora.Gradient.Header}" />
+            <Setter Property="Padding" Value="12,3" />
+            <Setter Property="MinHeight" Value="22" />
+        </Style>
+        <Style Selector="TextBlock.statusTitle">
+            <Setter Property="FontFamily" Value="{DynamicResource Cora.Font.Machine}" />
+            <Setter Property="FontSize" Value="11" />
+            <Setter Property="Foreground" Value="{DynamicResource Cora.Text.Secondary}" />
+            <Setter Property="VerticalAlignment" Value="Center" />
+            <Setter Property="TextTrimming" Value="CharacterEllipsis" />
+        </Style>
+        <Style Selector="TextBlock.motto">
+            <Setter Property="Text" Value="{DynamicResource Theme.Text.Motto}" />
+            <Setter Property="FontFamily" Value="{DynamicResource Cora.Font.Caps}" />
+            <Setter Property="FontSize" Value="10.5" />
+            <Setter Property="LetterSpacing" Value="1.2" />
+            <Setter Property="Foreground" Value="{DynamicResource Cora.Text.Machine}" />
+            <Setter Property="VerticalAlignment" Value="Center" />
+            <Setter Property="TextTrimming" Value="CharacterEllipsis" />
+            <Setter Property="MaxWidth" Value="520" />
+        </Style>
+        <!-- Type in the theme's faces: small-caps labels in its caps face, headings in its display face -->
+        <Style Selector="TextBlock.caps">
+            <Setter Property="FontFamily" Value="{DynamicResource Cora.Font.Caps}" />
+        </Style>
+        <Style Selector="TextBlock.heading">
+            <Setter Property="FontFamily" Value="{DynamicResource Cora.Font.Display}" />
+            <Setter Property="Foreground" Value="{DynamicResource Cora.Text}" />
+        </Style>
+        <!-- Mordor's wax seals: hidden unless a theme's styles show them -->
+        <Style Selector="controls|PuritySeal">
+            <Setter Property="IsVisible" Value="False" />
+        </Style>
         <!-- ScrollBar color overrides — applied as styles so the Fluent template is preserved -->
         <Style Selector="ScrollBar">
-            <Setter Property="Background" Value="{DynamicResource SurfaceElevatedBrush}" />
+            <Setter Property="Background" Value="{DynamicResource Cora.Surface.Panel}" />
         </Style>
         <Style Selector="ScrollBar /template/ RepeatButton#PART_PageUpButton,
                          ScrollBar /template/ RepeatButton#PART_PageDownButton">
             <Setter Property="Background" Value="Transparent" />
         </Style>
         <Style Selector="ScrollBar /template/ Thumb">
-            <Setter Property="Background" Value="{DynamicResource OnSurfaceDimBrush}" />
+            <Setter Property="Background" Value="{DynamicResource Cora.Text.Secondary}" />
         </Style>
         <Style Selector="ScrollBar /template/ Thumb:pointerover">
-            <Setter Property="Background" Value="{DynamicResource PrimaryBrightBrush}" />
+            <Setter Property="Background" Value="{DynamicResource Cora.Accent.Store.Hot}" />
         </Style>
     </Application.Styles>
 
     <Application.Resources>
         <ResourceDictionary>
             <ResourceDictionary.MergedDictionaries>
-                <ResourceInclude Source="avares://Hymnal/Themes/SynthwaveTheme.axaml" />
                 <ResourceInclude Source="avares://Hymnal/Themes/ControlStyles.axaml" />
                 <ResourceInclude Source="avares://Hymnal/Themes/Icons.axaml" />
+                <!-- The starting theme's tokens. ThemeManager swaps this dictionary for the saved theme at startup
+                     and whenever Settings picks another one; every view reads colours with DynamicResource. -->
+                <ResourceInclude Source="avares://Hymnal/Themes/Synthwave.Dark.axaml" />
             </ResourceDictionary.MergedDictionaries>
         </ResourceDictionary>
     </Application.Resources>

@@ -10,6 +10,7 @@ using Hymnal.Core.Interfaces;
 using Hymnal.Core.Services;
 using Hymnal.Core.Services.Ai;
 using Hymnal.Infrastructure;
+using Hymnal.Theming;
 using Hymnal.ViewModels;
 using Hymnal.ViewModels.Ai;
 using Hymnal.Views;
@@ -42,6 +43,9 @@ public partial class App : Application
 
         // S02 services
         services.AddSingleton<IAppSettingsStore, AppSettingsStore>();
+        // Themes: the picker in Settings swaps them at runtime; the choice is kept in the app settings
+        services.AddSingleton(sp => new ThemeManager(new ThemePreference(sp.GetRequiredService<IAppSettingsStore>())));
+        services.AddSingleton<IThemeService>(sp => sp.GetRequiredService<ThemeManager>());
         services.AddSingleton<ManuscriptService>();
 
         // Sound: preferences, the audio output (opened only while a sound is on) and the typewriter
@@ -287,7 +291,8 @@ public partial class App : Application
                     return notes && schedule;
                 },
                 sp.GetRequiredService<SoundPreferences>(),
-                sp.GetRequiredService<TypingSoundPlayer>()));
+                sp.GetRequiredService<TypingSoundPlayer>(),
+                sp.GetRequiredService<IThemeService>()));
 
         services.AddTransient<MainWindowViewModel>(sp =>
             new MainWindowViewModel(
@@ -318,6 +323,8 @@ public partial class App : Application
         if (ApplicationLifetime is IClassicDesktopStyleApplicationLifetime desktop)
         {
             desktop.Exit += (_, _) => DisposeServices();
+            // The saved theme, before the first window draws
+            Services.GetRequiredService<ThemeManager>().ApplySaved();
             var vm = Services.GetRequiredService<MainWindowViewModel>();
             desktop.MainWindow = new MainWindow { DataContext = vm };
         }

@@ -13,6 +13,7 @@ using Avalonia.Layout;
 using Avalonia.Media;
 using Avalonia.VisualTree;
 using Hymnal.Core.Models;
+using Hymnal.Theming;
 using Hymnal.ViewModels;
 
 namespace Hymnal.Views;
@@ -89,10 +90,10 @@ public partial class GanttView : UserControl
             Content = "Clear date",
             HorizontalAlignment = HorizontalAlignment.Stretch,
             HorizontalContentAlignment = HorizontalAlignment.Center,
-            Background = new SolidColorBrush(Color.Parse("#2D1B5E")),
-            Foreground = new SolidColorBrush(Color.Parse("#E2DDFF")),
+            Background = ThemeBrushes.Get("Cora.Surface.Elevated", "#2D1B5E"),
+            Foreground = ThemeBrushes.Get("Cora.Text", "#E2DDFF"),
             BorderThickness = new Thickness(0, 1, 0, 0),
-            BorderBrush = new SolidColorBrush(Color.Parse("#3D2B6E")),
+            BorderBrush = ThemeBrushes.Get("Cora.Border.Input", "#3D2B6E"),
             CornerRadius = new CornerRadius(0, 0, 4, 4),
             Padding = new Thickness(8, 7),
             FontSize = 11,

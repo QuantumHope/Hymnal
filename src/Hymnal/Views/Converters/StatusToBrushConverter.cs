@@ -2,10 +2,10 @@ using System;
 using System.Collections.Generic;
 using System.Globalization;
 using System.Linq;
-using Avalonia;
 using Avalonia.Data.Converters;
 using Avalonia.Media;
 using Hymnal.Core.Models;
+using Hymnal.Theming;
 
 namespace Hymnal.Views.Converters;
 
@@ -13,30 +13,17 @@ public sealed class StatusToBrushConverter : IValueConverter
 {
     public static readonly StatusToBrushConverter Instance = new();
 
+    // ThemeBrushes hands out one brush per key and recolours it on a theme change, so bound dots follow the theme.
     public object? Convert(object? value, Type targetType, object? parameter, CultureInfo culture)
-    {
-        var brushKey = value is ChapterStatus status ? StatusToBrushKey(status) : null;
-        if (brushKey == null) return Brushes.Transparent;
-        if (Application.Current?.Resources.TryGetResource(brushKey, null, out var resource) == true
-            && resource is IBrush brush)
-            return brush;
-        return Brushes.Transparent;
-    }
+        => value is ChapterStatus status && KeyFor(status) is { } k
+            ? ThemeBrushes.Get(k.Key, k.Fallback)
+            : Brushes.Transparent;
 
     public object ConvertBack(object? value, Type targetType, object? parameter, CultureInfo culture)
         => throw new NotSupportedException();
 
-    private static string? StatusToBrushKey(ChapterStatus status) => status switch
-    {
-        ChapterStatus.Planned   => "OrangeBrush",
-        ChapterStatus.Outlining => "OnSurfaceDimBrush",
-        ChapterStatus.Drafting  => "CyanBrush",
-        ChapterStatus.Editing   => "SynthwavePurpleBrush",
-        ChapterStatus.Polishing => "YellowBrush",
-        ChapterStatus.Reviewing => "PinkBrush",
-        ChapterStatus.Done      => "SuccessBrush",
-        _                       => null
-    };
+    /// <summary>The theme key for a status colour (see <see cref="StatusColors"/>), shared by the drawn charts.</summary>
+    internal static (string Key, string Fallback)? KeyFor(ChapterStatus status) => StatusColors.KeyFor(status);
 }
 
 public sealed class BoolToOpacityConverter : IValueConverter

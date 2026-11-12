@@ -5,18 +5,18 @@
              xmlns:aiviews="clr-namespace:Hymnal.Views.Ai"
              x:Class="Hymnal.Views.ResearchView"
              x:DataType="vm:ResearchViewModel"
-             Background="#0B0820">
+             Background="{DynamicResource Cora.Surface.Void}">
 
     <Grid ColumnDefinitions="220,4,*,4,280">
 
         <!-- Docs sidebar -->
         <Border Grid.Column="0"
-                Background="{DynamicResource SurfaceElevatedBrush}"
-                BorderBrush="{DynamicResource BorderSubtleBrush}"
+                Background="{DynamicResource Cora.Surface.Panel}"
+                BorderBrush="{DynamicResource Cora.Border.Subtle}"
                 BorderThickness="0,0,1,0">
             <Grid RowDefinitions="48,*">
                 <Border Grid.Row="0"
-                        BorderBrush="{DynamicResource BorderSubtleBrush}"
+                        BorderBrush="{DynamicResource Cora.Border.Subtle}"
                         BorderThickness="0,0,0,1">
                     <Grid ColumnDefinitions="48,*">
                         <Path Grid.Column="0"
@@ -25,18 +25,18 @@
                               Stretch="Uniform"
                               VerticalAlignment="Center"
                               HorizontalAlignment="Center"
-                              Stroke="{DynamicResource SynthwavePurpleBrush}"
+                              Stroke="{DynamicResource Cora.Accent.Store}"
                               StrokeThickness="1.5"
                               StrokeLineCap="Round"
                               Data="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8zM14 2v6h6M16 13H8M16 17H8M10 9H8" />
-                        <TextBlock Grid.Column="1"
+                        <TextBlock Classes="caps" Grid.Column="1"
                                    Text="DOCS"
                                    VerticalAlignment="Center"
                                    Margin="4,0,0,0"
                                    FontSize="10"
                                    FontWeight="SemiBold"
                                    LetterSpacing="1.5"
-                                   Foreground="{DynamicResource OnSurfaceDimBrush}" />
+                                   Foreground="{DynamicResource Cora.Text.Secondary}" />
                     </Grid>
                 </Border>
 
@@ -48,7 +48,7 @@
         <GridSplitter Grid.Column="1"
                       Width="4"
                       ResizeDirection="Columns"
-                      Background="{DynamicResource BorderSubtleBrush}" />
+                      Background="{DynamicResource Cora.Border.Subtle}" />
 
         <!-- Editor -->
         <views:EditorView Grid.Column="2"
@@ -58,18 +58,18 @@
         <GridSplitter Grid.Column="3"
                       Width="4"
                       ResizeDirection="Columns"
-                      Background="{DynamicResource BorderSubtleBrush}" />
+                      Background="{DynamicResource Cora.Border.Subtle}" />
 
         <!-- AI chat panel -->
         <Border Grid.Column="4"
-                Background="{DynamicResource SurfaceElevatedBrush}"
-                BorderBrush="{DynamicResource BorderSubtleBrush}"
+                Background="{DynamicResource Cora.Surface.Panel}"
+                BorderBrush="{DynamicResource Cora.Border.Subtle}"
                 BorderThickness="1,0,0,0">
             <Grid RowDefinitions="48,*">
                 <!-- Header -->
                 <Border Grid.Row="0"
                         Height="48"
-                        BorderBrush="{DynamicResource BorderSubtleBrush}"
+                        BorderBrush="{DynamicResource Cora.Border.Subtle}"
                         BorderThickness="0,0,0,1">
                     <Grid ColumnDefinitions="48,*">
                         <Path Grid.Column="0"
@@ -78,18 +78,18 @@
                               Stretch="Uniform"
                               VerticalAlignment="Center"
                               HorizontalAlignment="Center"
-                              Stroke="{DynamicResource SynthwavePurpleBrush}"
+                              Stroke="{DynamicResource Cora.Accent.Store}"
                               StrokeThickness="1.5"
                               StrokeLineCap="Round"
                               Data="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z" />
-                        <TextBlock Grid.Column="1"
+                        <TextBlock Classes="caps" Grid.Column="1"
                                    Text="AI CHAT"
                                    VerticalAlignment="Center"
                                    Margin="4,0,0,0"
                                    FontSize="10"
                                    FontWeight="SemiBold"
                                    LetterSpacing="1.5"
-                                   Foreground="{DynamicResource OnSurfaceDimBrush}" />
+                                   Foreground="{DynamicResource Cora.Text.Secondary}" />
                     </Grid>
                 </Border>
 

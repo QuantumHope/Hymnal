@@ -10,6 +10,7 @@ using Avalonia;
 using Avalonia.Media;
 using AvaloniaEdit.Document;
 using AvaloniaEdit.Rendering;
+using Hymnal.Theming;
 
 namespace Hymnal.Views;
 
@@ -51,7 +52,8 @@ internal sealed class ValidationMargin : IBackgroundRenderer
     private const double DotRadius = 4.0;
     private const double DotX = DotRadius + 2.0;   // horizontal centre of dot in viewport
 
-    private readonly IBrush _advisoryBrush = new SolidColorBrush(Color.Parse("#FCD34D"));
+    // The theme's warning yellow, recoloured in place when the theme changes.
+    private readonly IBrush _advisoryBrush = ThemeBrushes.Get("Cora.Accent.Create", "#FCD34D");
 
     // ── Advisory state ───────────────────────────────────────────────────────
     private readonly HashSet<int> _advisoryLines = new();

@@ -1,0 +1,45 @@
+<!--
+  Synthwave's decoration in Hymnal: the neon bands above and below the page, with their glow, and the magenta
+  horizon at the foot of the window. Loaded after App.axaml's base styles while Synthwave is the theme
+  (ThemeInfo.Styles), so these win; every other theme keeps the plain one-pixel rule.
+-->
+<Styles xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+
+  <Style Selector="Border.band">
+    <Setter Property="Height" Value="3" />
+    <Setter Property="Background" Value="{DynamicResource Synthwave.Neon}" />
+  </Style>
+  <Style Selector="Border.band.top">
+    <Setter Property="BoxShadow" Value="0 2 12 1 #AA9D4EDD, 0 4 28 0 #559D4EDD" />
+  </Style>
+  <!-- The bottom band runs the other way: cyan, magenta, purple -->
+  <Style Selector="Border.band.bottom">
+    <Setter Property="BoxShadow" Value="0 -2 12 1 #AA9D4EDD, 0 -4 28 0 #559D4EDD" />
+    <Setter Property="Background">
+      <LinearGradientBrush StartPoint="0%,0%" EndPoint="100%,0%">
+        <GradientStop Color="#38BDF8" Offset="0" />
+        <GradientStop Color="#E91E8C" Offset="0.5" />
+        <GradientStop Color="#9D4EDD" Offset="1" />
+      </LinearGradientBrush>
+    </Setter>
+  </Style>
+
+  <!-- The status strip's motto: the night drive, in neon pink -->
+  <Style Selector="TextBlock.motto">
+    <Setter Property="Text" Value="&#x25B2; SYNTHWAVE &#xB7; NIGHT DRIVE" />
+    <Setter Property="Foreground" Value="{DynamicResource Synthwave.Pink}" />
+  </Style>
+
+  <Style Selector="Border.horizon">
+    <Setter Property="IsVisible" Value="True" />
+    <Setter Property="Background">
+      <LinearGradientBrush StartPoint="0%,100%" EndPoint="0%,0%">
+        <GradientStop Color="#60E91E8C" Offset="0" />
+        <GradientStop Color="#289D4EDD" Offset="0.38" />
+        <GradientStop Color="#0038BDF8" Offset="0.7" />
+        <GradientStop Color="#00000000" Offset="1" />
+      </LinearGradientBrush>
+    </Setter>
+  </Style>
+</Styles>

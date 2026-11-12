@@ -40,7 +40,7 @@ tests/
 | App entry / DI wiring | `src/Hymnal/Program.cs`, `src/Hymnal/App.axaml.cs` |
 | ViewModels | `src/Hymnal/ViewModels/` |
 | Views (AXAML + code-behind) | `src/Hymnal/Views/` |
-| Themes / styles | `src/Hymnal/Themes/` |
+| Themes / styles | `src/Hymnal/Themes/` (token files), `src/Hymnal/Theming/Themes.cs` (catalog, manager, `ThemeBrushes`) |
 | Markua parser / preview model | `src/Hymnal.Core/Markua/` (`MarkuaParser`, `MarkuaDocument`, `MarkuaResourceResolver`) |
 | Markua preview control | `src/Hymnal/Views/Editor/MarkuaPreviewView.cs` |
 | Sound schemes, synthesis, settings | `src/Hymnal.Core/Audio/` (`SoundScheme` with the schemes, `SoundSchemes`, `ThemeSoundSchemes`, `SoundVoice`, `TypingSoundVoicer`, `SoundSettings`) |
@@ -83,6 +83,15 @@ Baseline: 761 tests (`dotnet test Hymnal.slnx --list-tests`). Measured 2026-11-0
 - Commands are `ReactiveCommand.CreateFromTask()` or `ReactiveCommand.Create()` with a `canExecute` observable gate
 - Debounced auto-save uses `Subject<string>` + `.Throttle(TimeSpan)` + `.Subscribe(async text => ...)` — see `NotesViewModel`
 - `_isSwitching` bool guard in `WorkspaceViewModel` prevents re-entrant chapter switches — follow the same pattern for any async switch operation
+
+### Themes
+- 26 themes, switched at runtime from Settings → Appearance (a gallery of `ThemeThumbnail` tiles, each drawn from that theme's own tokens, grouped Light then Dark as CORA's picker is). The choice is saved in the app settings under `theme`; default and fallback is Synthwave.
+- Settings shows one section at a time (`SettingsViewModel.Section`: Appearance, Project, AI Providers). Picking a mode tab while Settings is open closes it (`MainWindowViewModel.LeaveSettings`); `HighlightedMode` underlines no tab while Settings covers the shell.
+- Embellishments, all theme-driven: the status strip under the page (`ThemeEmblem`, the window title, a CORA theme's `Theme.Text.Motto` and its `ThemeChrome` signature); the emblem again in the editor's empty states (`Hymnal.Emblem`, derived: Synthwave's sun, Mordor's Eye, CORA's face); `TextBlock.caps` labels in `Cora.Font.Caps` and `TextBlock.heading` in `Cora.Font.Display`; Mordor's wax `PuritySeal`s (hidden unless `Mordor.Controls.axaml` shows them). `ThemeChrome`, `EyeRing` and `PuritySeal` are ported from OneRing.
+- Every theme is one token file with the same `Cora.*` keys (CORA's vocabulary, shared with OneRing): `Cora.Surface.*`, `Cora.Text*`, `Cora.Border.*`, `Cora.Accent.<Store|Create|Merge|Retrieve|Success|Error|Unknown>`, `Cora.Wash.*`, `Cora.Font.*`, plus the `Fluent.*` palette. `ThemeManager.Apply` swaps the token dictionary, the theme's optional styles (`Synthwave.Controls.axaml`, `Cora/Cora.Controls.axaml`) and Fluent's palette and light/dark variant. `HymnalTokens` derives the few Hymnal-only keys (`Hymnal.Selection`).
+- **Never hard-code a colour in a view.** AXAML uses `{DynamicResource Cora.…}`; text on an accent fill uses `Cora.IconInk`. C# uses `ThemeBrushes.Get(key, fallbackHex)` (a stable brush recoloured on theme change) or `ThemeBrushes.Color(key, fallbackHex)` at render time; the fallback is Synthwave's value, which headless tests see. `ThemeTests.Views_use_theme_tokens_rather_than_literal_colours` enforces it for AXAML.
+- Chapter status colours: Planned → `Cora.Accent.Unknown`, Outlining → `Cora.Text.Secondary`, Drafting → `Retrieve`, Editing → `Store`, Polishing → `Create`, Reviewing → `Merge`, Done → `Success`.
+- `Themes/Synthwave.Dark.axaml`, `Themes/Mordor.Dark.axaml`, `Themes/Cora/*.axaml` (except `Cora.Controls.axaml`), `Theming/CoraThemes.g.cs` and the bundled fonts are **imported from OneRing**; don't edit them. Re-import with `dotnet run tools/OneRingThemeImport/OneRingThemeImport.cs -- <onering checkout> [ref=origin/main]`. OneRing's branded themes (Foxen, Leading EDJE) are deliberately not imported. `ThemeTests` checks key parity, the Fluent palette and WCAG contrast floors for every theme.
 
 ### Services & Results
 - Service methods return `Result<T>` (see `src/Hymnal.Core/Common/Result.cs`) — always propagate via `Result.Ok(value)` / `Result.Fail(message)`; never throw for expected failures

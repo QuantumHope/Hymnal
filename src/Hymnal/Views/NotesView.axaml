@@ -3,7 +3,7 @@
              xmlns:vm="using:Hymnal.ViewModels"
              x:Class="Hymnal.Views.NotesView"
              x:DataType="vm:NotesViewModel"
-             Background="{DynamicResource SurfaceElevatedBrush}">
+             Background="{DynamicResource Cora.Surface.Panel}">
 
     <Panel>
 
@@ -12,7 +12,7 @@
                    IsVisible="{Binding ChapterTitle, Converter={x:Static ObjectConverters.IsNull}}"
                    VerticalAlignment="Center"
                    HorizontalAlignment="Center"
-                   Foreground="{DynamicResource OnSurfaceMutedBrush}"
+                   Foreground="{DynamicResource Cora.Text.Disabled}"
                    TextWrapping="Wrap"
                    TextAlignment="Center"
                    FontSize="12"
@@ -25,14 +25,14 @@
                  IsVisible="{Binding ChapterTitle, Converter={x:Static ObjectConverters.IsNotNull}}"
                  AcceptsReturn="True"
                  TextWrapping="Wrap"
-                 Background="{DynamicResource SurfaceBaseBrush}"
-                 Foreground="{DynamicResource OnSurfaceBrush}"
+                 Background="{DynamicResource Cora.Surface.Void}"
+                 Foreground="{DynamicResource Cora.Text}"
                  BorderThickness="0"
                  Padding="10"
                  FontSize="13"
-                 FontFamily="{DynamicResource InterFont}"
+                 FontFamily="{DynamicResource Cora.Font.Persona}"
                  VerticalAlignment="Stretch"
-                 CaretBrush="{DynamicResource SynthwavePurpleBrush}"
+                 CaretBrush="{DynamicResource Cora.Accent.Store}"
                  VerticalContentAlignment="Top" />
 
     </Panel>

@@ -9,13 +9,13 @@
         CanResize="False"
         ShowInTaskbar="False"
         WindowStartupLocation="CenterOwner"
-        Background="#120932"
-        FontFamily="{DynamicResource InterFont}">
+        Background="{DynamicResource Cora.Surface.Panel}"
+        FontFamily="{DynamicResource Cora.Font.Persona}">
 
     <Window.Styles>
         <Style Selector="Button.typeCard">
-            <Setter Property="Background" Value="{DynamicResource SurfaceBaseBrush}" />
-            <Setter Property="BorderBrush" Value="{DynamicResource BorderSubtleBrush}" />
+            <Setter Property="Background" Value="{DynamicResource Cora.Surface.Void}" />
+            <Setter Property="BorderBrush" Value="{DynamicResource Cora.Border.Subtle}" />
             <Setter Property="BorderThickness" Value="2" />
             <Setter Property="Padding" Value="14" />
             <Setter Property="Margin" Value="0,0,12,0" />
@@ -25,19 +25,19 @@
             <Setter Property="HorizontalContentAlignment" Value="Left" />
         </Style>
         <Style Selector="Button.typeCard.selected">
-            <Setter Property="BorderBrush" Value="{DynamicResource SynthwavePurpleBrush}" />
+            <Setter Property="BorderBrush" Value="{DynamicResource Cora.Accent.Store}" />
         </Style>
     </Window.Styles>
 
-    <Border BorderBrush="#2D1B5E" BorderThickness="1" Padding="16">
+    <Border BorderBrush="{DynamicResource Cora.Border.Subtle}" BorderThickness="1" Padding="16">
         <DockPanel>
             <StackPanel DockPanel.Dock="Bottom" Orientation="Horizontal"
                         HorizontalAlignment="Right" Spacing="8" Margin="0,12,0,0">
                 <Button Content="Create"
                         IsDefault="True"
                         Padding="12,6"
-                        Background="{DynamicResource SynthwavePurpleBrush}"
-                        Foreground="{DynamicResource OnSurfaceBrush}"
+                        Background="{DynamicResource Cora.Accent.Store}"
+                        Foreground="{DynamicResource Cora.Text}"
                         BorderThickness="0"
                         Command="{Binding CreateCommand}" />
                 <Button Content="Cancel"
@@ -62,19 +62,19 @@
                                 <!-- Outline icons: stroke on a 24x24 canvas (PathIcon would fill the open subpaths). -->
                                 <Viewbox Width="40" Height="40" HorizontalAlignment="Left">
                                     <Path Width="24" Height="24"
-                                          Stroke="{DynamicResource SynthwavePurpleBrush}"
+                                          Stroke="{DynamicResource Cora.Accent.Store}"
                                           StrokeThickness="1.5"
                                           StrokeLineCap="Round"
                                           StrokeJoin="Round"
                                           Data="{Binding Info.IconKey, Converter={x:Static conv:IconKeyToGeometryConverter.Instance}}" />
                                 </Viewbox>
                                 <TextBlock Text="{Binding Info.Title}" FontSize="18" FontWeight="SemiBold"
-                                           Foreground="{DynamicResource OnSurfaceBrush}" />
+                                           Foreground="{DynamicResource Cora.Text}" />
                                 <TextBlock Text="{Binding Info.Description}"
-                                           Foreground="{DynamicResource OnSurfaceDimBrush}"
+                                           Foreground="{DynamicResource Cora.Text.Secondary}"
                                            TextWrapping="Wrap" />
                                 <TextBlock Text="{Binding Info.Impact}" FontSize="12"
-                                           Foreground="{DynamicResource OnSurfaceBrush}"
+                                           Foreground="{DynamicResource Cora.Text}"
                                            TextWrapping="Wrap" />
                             </StackPanel>
                         </Button>

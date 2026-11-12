@@ -53,7 +53,26 @@ public class MainWindowViewModel : ViewModelBase
     public bool IsSettingsOpen
     {
         get => _isSettingsOpen;
-        private set => this.RaiseAndSetIfChanged(ref _isSettingsOpen, value);
+        private set
+        {
+            this.RaiseAndSetIfChanged(ref _isSettingsOpen, value);
+            this.RaisePropertyChanged(nameof(HighlightedMode));
+        }
+    }
+
+    /// <summary>
+    /// The mode tab to underline: the active mode, or none while Settings covers the shell (so the tabs don't
+    /// claim a view that isn't showing).
+    /// </summary>
+    public ShellMode? HighlightedMode => IsSettingsOpen ? null : ActiveMode;
+
+    /// <summary>Closes Settings if it is open; picking a mode tab leaves Settings for that mode.</summary>
+    private void LeaveSettings()
+    {
+        if (!IsSettingsOpen)
+            return;
+        IsSettingsOpen = false;
+        ActiveSettingsViewModel = null;
     }
 
     private readonly Func<SettingsViewModel> _settingsVmFactory;
@@ -125,6 +144,7 @@ public class MainWindowViewModel : ViewModelBase
             GanttViewModel.SetViewActive(value == ShellMode.Manage);
             AiChatViewModel.CurrentShellModeName = value.ToString();
             this.RaisePropertyChanged(nameof(ActiveMode));
+            this.RaisePropertyChanged(nameof(HighlightedMode));
             this.RaisePropertyChanged(nameof(IsEditorVisible));
             this.RaisePropertyChanged(nameof(IsGanttVisible));
             this.RaisePropertyChanged(nameof(IsCorkboardVisible));
@@ -318,11 +338,7 @@ public class MainWindowViewModel : ViewModelBase
             ActiveSettingsViewModel = _settingsVmFactory();
             IsSettingsOpen = true;
         });
-        CloseSettingsCommand = ReactiveCommand.Create(() =>
-        {
-            IsSettingsOpen = false;
-            ActiveSettingsViewModel = null;
-        });
+        CloseSettingsCommand = ReactiveCommand.Create(LeaveSettings);
         ToggleAiChatCommand = ReactiveCommand.Create(() =>
         {
             AiChatViewModel.IsVisible = !AiChatViewModel.IsVisible;
@@ -380,7 +396,7 @@ public class MainWindowViewModel : ViewModelBase
                 .Subscribe(_ => ActiveMode = ShellMode.Write));
 
         SelectIdeasCommand = ReactiveCommand.Create(
-            () => { ActiveMode = ShellMode.Ideas; },
+            () => { LeaveSettings(); ActiveMode = ShellMode.Ideas; },
             this.WhenAnyValue(x => x.IsIdeasModeAvailable));
 
         var canQuickCapture = ideasViewModel == null
@@ -393,11 +409,12 @@ public class MainWindowViewModel : ViewModelBase
         Disposables.Add(QuickCaptureIdeaCommand.ThrownExceptions.Subscribe(ex =>
             notificationService.ShowError($"Failed to capture idea: {ex.Message}")));
 
-        SelectPlanCommand = ReactiveCommand.Create(() => { ActiveMode = ShellMode.Plan; });
-        SelectWriteCommand = ReactiveCommand.Create(() => { ActiveMode = ShellMode.Write; });
-        SelectManageCommand = ReactiveCommand.Create(() => { ActiveMode = ShellMode.Manage; });
+        SelectPlanCommand = ReactiveCommand.Create(() => { LeaveSettings(); ActiveMode = ShellMode.Plan; });
+        SelectWriteCommand = ReactiveCommand.Create(() => { LeaveSettings(); ActiveMode = ShellMode.Write; });
+        SelectManageCommand = ReactiveCommand.Create(() => { LeaveSettings(); ActiveMode = ShellMode.Manage; });
         ToggleGanttCommand = ReactiveCommand.Create(() =>
         {
+            LeaveSettings();
             ActiveMode = IsGanttVisible ? ShellMode.Write : ShellMode.Manage;
         });
 
@@ -582,6 +599,7 @@ public class MainWindowViewModel : ViewModelBase
 
     private async Task EnterResearchModeAsync()
     {
+        LeaveSettings();
         if (EditorViewModel.ActiveNode != null
             || EditorViewModel.IsBookSelected
             || EditorViewModel.ShowMissingChapterPrompt)

@@ -3,7 +3,7 @@
              xmlns:vm="using:Hymnal.ViewModels"
              x:Class="Hymnal.Views.PlanHostView"
              x:DataType="vm:PlanHostViewModel"
-             Background="#0B0820">
+             Background="{DynamicResource Cora.Surface.Void}">
 
     <Grid RowDefinitions="Auto,*,Auto">
 
@@ -11,25 +11,25 @@
         <Border x:Name="Breadcrumb"
                 Grid.Row="0"
                 Padding="12,6"
-                BorderBrush="{DynamicResource BorderSubtleBrush}"
+                BorderBrush="{DynamicResource Cora.Border.Subtle}"
                 BorderThickness="0,0,0,1"
                 IsVisible="{Binding ShowBreadcrumb}">
             <StackPanel Orientation="Horizontal" Spacing="8">
                 <Button Padding="8,2"
                         Background="Transparent"
                         BorderThickness="0"
-                        Foreground="#9D4EDD"
+                        Foreground="{DynamicResource Cora.Accent.Store}"
                         ToolTip.Tip="Back to the collection"
                         Command="{Binding BackToCollectionCommand}">
                     <TextBlock Text="{Binding BreadcrumbParent, StringFormat='← {0}'}" />
                 </Button>
                 <TextBlock Text="›"
                            VerticalAlignment="Center"
-                           Foreground="{DynamicResource OnSurfaceMutedBrush}" />
+                           Foreground="{DynamicResource Cora.Text.Disabled}" />
                 <TextBlock Text="{Binding BeatBoard.BoardTitle}"
                            VerticalAlignment="Center"
                            FontWeight="SemiBold"
-                           Foreground="{DynamicResource OnSurfaceBrush}" />
+                           Foreground="{DynamicResource Cora.Text}" />
             </StackPanel>
         </Border>
 

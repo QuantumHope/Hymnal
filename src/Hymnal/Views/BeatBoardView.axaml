@@ -5,7 +5,7 @@
              x:Name="Root"
              x:DataType="vm:BeatBoardViewModel"
              x:CompileBindings="False"
-             Background="#0B0820">
+             Background="{DynamicResource Cora.Surface.Void}">
 
     <UserControl.Styles>
         <Style Selector="ListBox#BeatList ListBoxItem">
@@ -20,8 +20,8 @@
             <Setter Property="Background" Value="Transparent" />
         </Style>
         <Style Selector="Border.beat-card">
-            <Setter Property="Background" Value="{DynamicResource SurfaceElevatedBrush}" />
-            <Setter Property="BorderBrush" Value="{DynamicResource BorderSubtleBrush}" />
+            <Setter Property="Background" Value="{DynamicResource Cora.Surface.Panel}" />
+            <Setter Property="BorderBrush" Value="{DynamicResource Cora.Border.Subtle}" />
             <Setter Property="BorderThickness" Value="1" />
             <Setter Property="CornerRadius" Value="12" />
             <Setter Property="Padding" Value="12,10" />
@@ -29,15 +29,15 @@
             <Setter Property="HorizontalAlignment" Value="Left" />
         </Style>
         <Style Selector="ListBox#BeatList ListBoxItem:selected Border.beat-card">
-            <Setter Property="BorderBrush" Value="{DynamicResource SynthwavePurpleBrush}" />
+            <Setter Property="BorderBrush" Value="{DynamicResource Cora.Accent.Store}" />
         </Style>
         <Style Selector="Border.beat-card.drop-target">
-            <Setter Property="BorderBrush" Value="{DynamicResource SynthwavePurpleBrush}" />
+            <Setter Property="BorderBrush" Value="{DynamicResource Cora.Accent.Store}" />
             <Setter Property="BorderThickness" Value="1,3,1,1" />
         </Style>
         <Style Selector="Border.template-card">
-            <Setter Property="Background" Value="{DynamicResource SurfaceElevatedBrush}" />
-            <Setter Property="BorderBrush" Value="{DynamicResource BorderSubtleBrush}" />
+            <Setter Property="Background" Value="{DynamicResource Cora.Surface.Panel}" />
+            <Setter Property="BorderBrush" Value="{DynamicResource Cora.Border.Subtle}" />
             <Setter Property="BorderThickness" Value="1" />
             <Setter Property="CornerRadius" Value="12" />
             <Setter Property="Padding" Value="14,12" />
@@ -48,15 +48,15 @@
             <Setter Property="FontSize" Value="10" />
             <Setter Property="FontWeight" Value="SemiBold" />
             <Setter Property="LetterSpacing" Value="1.5" />
-            <Setter Property="Foreground" Value="{DynamicResource OnSurfaceDimBrush}" />
+            <Setter Property="Foreground" Value="{DynamicResource Cora.Text.Secondary}" />
         </Style>
         <Style Selector="Button.beat-action">
             <Setter Property="Padding" Value="12,4" />
             <Setter Property="Background" Value="Transparent" />
-            <Setter Property="BorderBrush" Value="#2D1B5E" />
+            <Setter Property="BorderBrush" Value="{DynamicResource Cora.Border.Subtle}" />
             <Setter Property="BorderThickness" Value="1" />
             <Setter Property="CornerRadius" Value="6" />
-            <Setter Property="Foreground" Value="#9D4EDD" />
+            <Setter Property="Foreground" Value="{DynamicResource Cora.Accent.Store}" />
         </Style>
     </UserControl.Styles>
 
@@ -65,23 +65,23 @@
         <!-- Header: board title and board-wide actions -->
         <Border Grid.Row="0"
                 Padding="16,10"
-                BorderBrush="{DynamicResource BorderSubtleBrush}"
+                BorderBrush="{DynamicResource Cora.Border.Subtle}"
                 BorderThickness="0,0,0,1">
             <DockPanel LastChildFill="False">
-                <TextBlock DockPanel.Dock="Left"
+                <TextBlock Classes="caps" DockPanel.Dock="Left"
                            Text="BEATS"
                            VerticalAlignment="Center"
                            FontSize="10"
                            FontWeight="SemiBold"
                            LetterSpacing="1.5"
-                           Foreground="{DynamicResource OnSurfaceDimBrush}" />
+                           Foreground="{DynamicResource Cora.Text.Secondary}" />
                 <TextBlock DockPanel.Dock="Left"
                            Margin="12,0,0,0"
                            Text="{Binding BoardTitle}"
                            VerticalAlignment="Center"
                            FontSize="14"
                            FontWeight="SemiBold"
-                           Foreground="{DynamicResource OnSurfaceBrush}" />
+                           Foreground="{DynamicResource Cora.Text}" />
                 <Button x:Name="ApplyTemplateButton"
                         DockPanel.Dock="Right"
                         Classes="beat-action"
@@ -102,12 +102,12 @@
                                                 <StackPanel Grid.Column="0" Spacing="2">
                                                     <TextBlock Text="{Binding Name}"
                                                                FontWeight="SemiBold"
-                                                               Foreground="{DynamicResource OnSurfaceBrush}" />
+                                                               Foreground="{DynamicResource Cora.Text}" />
                                                     <TextBlock Text="{Binding Description}"
                                                                FontSize="11"
                                                                TextWrapping="Wrap"
                                                                MaxWidth="260"
-                                                               Foreground="{DynamicResource OnSurfaceMutedBrush}" />
+                                                               Foreground="{DynamicResource Cora.Text.Disabled}" />
                                                 </StackPanel>
                                                 <ComboBox Grid.Column="1"
                                                           VerticalAlignment="Center"
@@ -142,8 +142,8 @@
                 <Button DockPanel.Dock="Right"
                         Content="+ Add beat"
                         Padding="12,4"
-                        Background="{DynamicResource SynthwavePurpleBrush}"
-                        Foreground="{DynamicResource OnSurfaceBrush}"
+                        Background="{DynamicResource Cora.Accent.Store}"
+                        Foreground="{DynamicResource Cora.IconInk}"
                         BorderThickness="0"
                         ToolTip.Tip="Add a beat after the selected one"
                         Command="{Binding AddBeatCommand}" />
@@ -153,12 +153,12 @@
         <Border x:Name="ReadOnlyBanner"
                 Grid.Row="1"
                 Padding="16,8"
-                Background="#2A1A0A"
+                Background="{DynamicResource Cora.Wash.Warning}"
                 IsVisible="{Binding IsReadOnly}">
             <TextBlock Text="This beat board's file couldn't be read, so the board is read-only. Fix or remove the file, then reopen the project to edit it."
                        TextWrapping="Wrap"
                        FontSize="12"
-                       Foreground="{DynamicResource OrangeBrush}" />
+                       Foreground="{DynamicResource Cora.Accent.Unknown}" />
         </Border>
 
         <!-- Empty board: pick a template to start from -->
@@ -170,7 +170,7 @@
                 <TextBlock Text="Start this board from a template"
                            FontSize="15"
                            FontWeight="SemiBold"
-                           Foreground="{DynamicResource OnSurfaceBrush}" />
+                           Foreground="{DynamicResource Cora.Text}" />
                 <ItemsControl x:Name="TemplatePicker"
                               ItemsSource="{Binding TemplateOptions}">
                     <ItemsControl.ItemsPanel>
@@ -185,18 +185,18 @@
                                     <TextBlock Text="{Binding Name}"
                                                FontSize="14"
                                                FontWeight="SemiBold"
-                                               Foreground="{DynamicResource OnSurfaceBrush}" />
+                                               Foreground="{DynamicResource Cora.Text}" />
                                     <TextBlock Text="{Binding Description}"
                                                FontSize="12"
                                                TextWrapping="Wrap"
-                                               Foreground="{DynamicResource OnSurfaceMutedBrush}" />
+                                               Foreground="{DynamicResource Cora.Text.Disabled}" />
                                     <StackPanel Orientation="Horizontal"
                                                 Spacing="8"
                                                 IsVisible="{Binding HasParameter}">
                                         <TextBlock Text="Thread"
                                                    VerticalAlignment="Center"
                                                    FontSize="12"
-                                                   Foreground="{DynamicResource OnSurfaceMutedBrush}" />
+                                                   Foreground="{DynamicResource Cora.Text.Disabled}" />
                                         <ComboBox ItemsSource="{Binding ParameterOptions}"
                                                   SelectedItem="{Binding SelectedParameter, Mode=TwoWay}" />
                                     </StackPanel>
@@ -235,7 +235,7 @@
                                        VerticalAlignment="Top"
                                        Margin="0,4,0,0"
                                        ToolTip.Tip="Drag to reorder"
-                                       Foreground="{DynamicResource OnSurfaceMutedBrush}" />
+                                       Foreground="{DynamicResource Cora.Text.Disabled}" />
                             <StackPanel Grid.Column="1" Spacing="6">
                                 <TextBox Text="{Binding Title, Mode=TwoWay}"
                                          PlaceholderText="Beat title"
@@ -265,17 +265,17 @@
                                     </ComboBox>
                                     <TextBlock VerticalAlignment="Center"
                                                FontSize="11"
-                                               Foreground="{DynamicResource OnSurfaceMutedBrush}"
+                                               Foreground="{DynamicResource Cora.Text.Disabled}"
                                                Text="{Binding SceneStatusLabel}" />
                                     <TextBlock VerticalAlignment="Center"
                                                FontSize="11"
-                                               Foreground="{DynamicResource OnSurfaceMutedBrush}"
+                                               Foreground="{DynamicResource Cora.Text.Disabled}"
                                                Text="{Binding SceneWordCount, StringFormat='{}{0:N0} words'}" />
                                 </StackPanel>
                                 <TextBlock IsVisible="{Binding IsSceneMissing}"
                                            FontSize="11"
                                            TextWrapping="Wrap"
-                                           Foreground="{DynamicResource OrangeBrush}"
+                                           Foreground="{DynamicResource Cora.Accent.Unknown}"
                                            Text="{Binding SceneTitle, StringFormat='Linked scene {0} is no longer in the book. Choose None to unlink it.'}" />
                             </StackPanel>
                             <Button Grid.Column="2"

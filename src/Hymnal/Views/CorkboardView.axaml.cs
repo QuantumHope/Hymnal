@@ -877,7 +877,7 @@ public partial class CorkboardView : UserControl
             Height = 190,
             CanResize = false,
             WindowStartupLocation = WindowStartupLocation.CenterOwner,
-            Background = new Avalonia.Media.SolidColorBrush(Avalonia.Media.Color.Parse("#120932"))
+            Background = Hymnal.Theming.ThemeBrushes.Get("Cora.Surface.Panel", "#120932")
         };
 
         var input = new TextBox
@@ -885,11 +885,11 @@ public partial class CorkboardView : UserControl
             Text = initialValue,
             FontSize = 12,
             Padding = new Thickness(8, 6),
-            Background = GetResource<Avalonia.Media.IBrush>("SurfaceBaseBrush")
+            Background = GetResource<Avalonia.Media.IBrush>("Cora.Surface.Void")
                 ?? new Avalonia.Media.SolidColorBrush(Avalonia.Media.Color.Parse("#0F0828")),
-            Foreground = GetResource<Avalonia.Media.IBrush>("OnSurfaceBrush")
+            Foreground = GetResource<Avalonia.Media.IBrush>("Cora.Text")
                 ?? Avalonia.Media.Brushes.White,
-            BorderBrush = GetResource<Avalonia.Media.IBrush>("BorderSubtleBrush")
+            BorderBrush = GetResource<Avalonia.Media.IBrush>("Cora.Border.Subtle")
                 ?? new Avalonia.Media.SolidColorBrush(Avalonia.Media.Color.Parse("#2D1B5E")),
             BorderThickness = new Thickness(1)
         };
@@ -910,9 +910,9 @@ public partial class CorkboardView : UserControl
         {
             Content = "OK",
             IsDefault = true,
-            Background = GetResource<Avalonia.Media.IBrush>("SynthwavePurpleBrush")
+            Background = GetResource<Avalonia.Media.IBrush>("Cora.Accent.Store")
                 ?? new Avalonia.Media.SolidColorBrush(Avalonia.Media.Color.Parse("#9D4EDD")),
-            Foreground = GetResource<Avalonia.Media.IBrush>("OnSurfaceBrush")
+            Foreground = GetResource<Avalonia.Media.IBrush>("Cora.IconInk")
                 ?? Avalonia.Media.Brushes.White,
             BorderThickness = new Thickness(0),
             Padding = new Thickness(12, 6)
@@ -933,7 +933,7 @@ public partial class CorkboardView : UserControl
 
         dialog.Content = new Border
         {
-            BorderBrush = new Avalonia.Media.SolidColorBrush(Avalonia.Media.Color.Parse("#2D1B5E")),
+            BorderBrush = Hymnal.Theming.ThemeBrushes.Get("Cora.Border.Subtle", "#2D1B5E"),
             BorderThickness = new Thickness(1),
             Child = new StackPanel
             {
@@ -944,7 +944,7 @@ public partial class CorkboardView : UserControl
                     new TextBlock
                     {
                         Text = prompt,
-                        Foreground = GetResource<Avalonia.Media.IBrush>("OnSurfaceBrush")
+                        Foreground = GetResource<Avalonia.Media.IBrush>("Cora.Text")
                             ?? Avalonia.Media.Brushes.White,
                         TextWrapping = Avalonia.Media.TextWrapping.Wrap
                     },
@@ -982,7 +982,7 @@ public partial class CorkboardView : UserControl
             Height = 180,
             CanResize = false,
             WindowStartupLocation = WindowStartupLocation.CenterOwner,
-            Background = new Avalonia.Media.SolidColorBrush(Avalonia.Media.Color.Parse("#120932"))
+            Background = Hymnal.Theming.ThemeBrushes.Get("Cora.Surface.Panel", "#120932")
         };
 
         var result = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
@@ -1002,9 +1002,9 @@ public partial class CorkboardView : UserControl
         {
             Content = "Delete",
             IsDefault = true,
-            Background = GetResource<Avalonia.Media.IBrush>("OrangeBrush")
+            Background = GetResource<Avalonia.Media.IBrush>("Cora.Accent.Unknown")
                 ?? new Avalonia.Media.SolidColorBrush(Avalonia.Media.Color.Parse("#F97316")),
-            Foreground = GetResource<Avalonia.Media.IBrush>("OnSurfaceBrush")
+            Foreground = GetResource<Avalonia.Media.IBrush>("Cora.IconInk")
                 ?? Avalonia.Media.Brushes.White,
             BorderThickness = new Thickness(0),
             Padding = new Thickness(12, 6)
@@ -1021,7 +1021,7 @@ public partial class CorkboardView : UserControl
 
         dialog.Content = new Border
         {
-            BorderBrush = new Avalonia.Media.SolidColorBrush(Avalonia.Media.Color.Parse("#2D1B5E")),
+            BorderBrush = Hymnal.Theming.ThemeBrushes.Get("Cora.Border.Subtle", "#2D1B5E"),
             BorderThickness = new Thickness(1),
             Child = new StackPanel
             {
@@ -1032,7 +1032,7 @@ public partial class CorkboardView : UserControl
                     new TextBlock
                     {
                         Text = message,
-                        Foreground = GetResource<Avalonia.Media.IBrush>("OnSurfaceBrush")
+                        Foreground = GetResource<Avalonia.Media.IBrush>("Cora.Text")
                             ?? Avalonia.Media.Brushes.White,
                         TextWrapping = Avalonia.Media.TextWrapping.Wrap
                     },

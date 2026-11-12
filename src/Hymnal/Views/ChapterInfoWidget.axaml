@@ -13,20 +13,20 @@
 
             <!-- Status -->
             <StackPanel Spacing="4">
-                <TextBlock Text="STATUS"
+                <TextBlock Classes="caps" Text="STATUS"
                            FontSize="10"
                            FontWeight="SemiBold"
                            LetterSpacing="1.5"
-                           Foreground="{DynamicResource OnSurfaceDimBrush}" />
+                           Foreground="{DynamicResource Cora.Text.Secondary}" />
                 <ComboBox x:Name="StatusComboBox"
                           ItemsSource="{Binding StatusOptions}"
                           SelectedValueBinding="{Binding Value, DataType=models:StatusOption}"
                           SelectedValue="{Binding DisplayStatus, Mode=OneWay}"
                           HorizontalAlignment="Stretch"
                           Padding="8,6"
-                          Background="{DynamicResource SurfaceBaseBrush}"
-                          Foreground="{DynamicResource OnSurfaceBrush}"
-                          BorderBrush="{DynamicResource BorderSubtleBrush}"
+                          Background="{DynamicResource Cora.Surface.Void}"
+                          Foreground="{DynamicResource Cora.Text}"
+                          BorderBrush="{DynamicResource Cora.Border.Subtle}"
                           BorderThickness="1">
                     <ComboBox.ItemTemplate>
                         <DataTemplate x:DataType="models:StatusOption">
@@ -45,26 +45,26 @@
 
             <!-- Phase schedule -->
             <StackPanel Spacing="6">
-                <TextBlock Text="PHASE SCHEDULE"
+                <TextBlock Classes="caps" Text="PHASE SCHEDULE"
                            FontSize="10"
                            FontWeight="SemiBold"
                            LetterSpacing="1.5"
-                           Foreground="{DynamicResource OnSurfaceDimBrush}" />
+                           Foreground="{DynamicResource Cora.Text.Secondary}" />
 
                 <!-- Column headers -->
                 <Grid ColumnDefinitions="80,*,*,44">
-                    <TextBlock Grid.Column="0" Text="Phase"
+                    <TextBlock Classes="caps" Grid.Column="0" Text="Phase"
                                FontSize="9" FontWeight="SemiBold" LetterSpacing="1"
-                               Foreground="{DynamicResource OnSurfaceMutedBrush}" />
-                    <TextBlock Grid.Column="1" Text="Start"
+                               Foreground="{DynamicResource Cora.Text.Disabled}" />
+                    <TextBlock Classes="caps" Grid.Column="1" Text="Start"
                                FontSize="9" FontWeight="SemiBold" LetterSpacing="1"
-                               Foreground="{DynamicResource OnSurfaceMutedBrush}" />
-                    <TextBlock Grid.Column="2" Text="End"
+                               Foreground="{DynamicResource Cora.Text.Disabled}" />
+                    <TextBlock Classes="caps" Grid.Column="2" Text="End"
                                FontSize="9" FontWeight="SemiBold" LetterSpacing="1"
-                               Foreground="{DynamicResource OnSurfaceMutedBrush}" />
-                    <TextBlock Grid.Column="3" Text="%"
+                               Foreground="{DynamicResource Cora.Text.Disabled}" />
+                    <TextBlock Classes="caps" Grid.Column="3" Text="%"
                                FontSize="9" FontWeight="SemiBold" LetterSpacing="1"
-                               Foreground="{DynamicResource OnSurfaceMutedBrush}"
+                               Foreground="{DynamicResource Cora.Text.Disabled}"
                                HorizontalAlignment="Center" />
                 </Grid>
 
@@ -78,13 +78,13 @@
                                            Text="{Binding PhaseName}"
                                            FontSize="11"
                                            VerticalAlignment="Center"
-                                           Foreground="{DynamicResource OnSurfaceDimBrush}" />
+                                           Foreground="{DynamicResource Cora.Text.Secondary}" />
                                 <TextBox Grid.Column="1"
                                          Text="{Binding StartDate, Mode=TwoWay}"
                                          PlaceholderText="YYYY-MM-DD"
-                                         Background="{DynamicResource SurfaceBaseBrush}"
-                                         Foreground="{DynamicResource OnSurfaceBrush}"
-                                         BorderBrush="{DynamicResource BorderSubtleBrush}"
+                                         Background="{DynamicResource Cora.Surface.Void}"
+                                         Foreground="{DynamicResource Cora.Text}"
+                                         BorderBrush="{DynamicResource Cora.Border.Subtle}"
                                          BorderThickness="1"
                                          FontSize="11"
                                          Padding="4,4"
@@ -92,9 +92,9 @@
                                 <TextBox Grid.Column="2"
                                          Text="{Binding EndDate, Mode=TwoWay}"
                                          PlaceholderText="YYYY-MM-DD"
-                                         Background="{DynamicResource SurfaceBaseBrush}"
-                                         Foreground="{DynamicResource OnSurfaceBrush}"
-                                         BorderBrush="{DynamicResource BorderSubtleBrush}"
+                                         Background="{DynamicResource Cora.Surface.Void}"
+                                         Foreground="{DynamicResource Cora.Text}"
+                                         BorderBrush="{DynamicResource Cora.Border.Subtle}"
                                          BorderThickness="1"
                                          FontSize="11"
                                          Padding="4,4"
@@ -103,9 +103,9 @@
                                          Text="{Binding Progress, Mode=TwoWay,
                                                         Converter={x:Static conv:NullableDoubleToStringConverter.Instance}}"
                                          PlaceholderText="—"
-                                         Background="{DynamicResource SurfaceBaseBrush}"
-                                         Foreground="{DynamicResource OnSurfaceBrush}"
-                                         BorderBrush="{DynamicResource BorderSubtleBrush}"
+                                         Background="{DynamicResource Cora.Surface.Void}"
+                                         Foreground="{DynamicResource Cora.Text}"
+                                         BorderBrush="{DynamicResource Cora.Border.Subtle}"
                                          BorderThickness="1"
                                          FontSize="11"
                                          Padding="4,4"
@@ -119,24 +119,24 @@
                 <TextBlock Text="✓ Saved"
                            FontSize="10"
                            HorizontalAlignment="Right"
-                           Foreground="{DynamicResource OnSurfaceMutedBrush}"
+                           Foreground="{DynamicResource Cora.Text.Disabled}"
                            IsVisible="{Binding ScheduleSavedRecently}"
                            Margin="0,4,0,0" />
             </StackPanel>
 
-            <Separator Background="{DynamicResource BorderSubtleBrush}" Height="1" />
+            <Separator Background="{DynamicResource Cora.Border.Subtle}" Height="1" />
 
             <!-- Word Count -->
             <StackPanel Spacing="2">
-                <TextBlock Text="WORDS"
+                <TextBlock Classes="caps" Text="WORDS"
                            FontSize="10"
                            FontWeight="SemiBold"
                            LetterSpacing="1.5"
-                           Foreground="{DynamicResource OnSurfaceDimBrush}" />
+                           Foreground="{DynamicResource Cora.Text.Secondary}" />
                 <TextBlock Text="{Binding WordCountDisplay}"
                            FontSize="13"
                            FontWeight="Medium"
-                           Foreground="{DynamicResource OnSurfaceBrush}" />
+                           Foreground="{DynamicResource Cora.Text}" />
             </StackPanel>
 
             <!-- Proximity bar (visible only when target is set) -->
@@ -146,26 +146,26 @@
                          IsVisible="{Binding HasTarget}"
                          Height="4"
                          CornerRadius="2"
-                         Foreground="{DynamicResource SynthwavePurpleBrush}"
-                         Background="{DynamicResource SurfaceHighBrush}" />
+                         Foreground="{DynamicResource Cora.Accent.Store}"
+                         Background="{DynamicResource Cora.Wash.Selected}" />
 
             <!-- Target -->
             <StackPanel Spacing="4">
-                <TextBlock Text="TARGET"
+                <TextBlock Classes="caps" Text="TARGET"
                            FontSize="10"
                            FontWeight="SemiBold"
                            LetterSpacing="1.5"
-                           Foreground="{DynamicResource OnSurfaceDimBrush}" />
+                           Foreground="{DynamicResource Cora.Text.Secondary}" />
                 <TextBlock Text="{Binding TargetDisplay}"
                            IsVisible="{Binding HasTarget}"
                            FontSize="12"
-                           Foreground="{DynamicResource OnSurfaceDimBrush}" />
+                           Foreground="{DynamicResource Cora.Text.Secondary}" />
                 <TextBox Text="{Binding PendingTarget, Mode=TwoWay,
                                         Converter={x:Static conv:NullableIntToStringConverter.Instance}}"
                          PlaceholderText="e.g. 5000"
-                         Background="{DynamicResource SurfaceBaseBrush}"
-                         Foreground="{DynamicResource OnSurfaceBrush}"
-                         BorderBrush="{DynamicResource BorderSubtleBrush}"
+                         Background="{DynamicResource Cora.Surface.Void}"
+                         Foreground="{DynamicResource Cora.Text}"
+                         BorderBrush="{DynamicResource Cora.Border.Subtle}"
                          BorderThickness="1"
                          FontSize="12"
                          Padding="8,6" />
@@ -176,8 +176,8 @@
                             CommandParameter="{Binding PendingTarget}"
                             HorizontalAlignment="Stretch"
                             HorizontalContentAlignment="Center"
-                            Background="{DynamicResource SurfaceHighBrush}"
-                            Foreground="{DynamicResource SynthwavePurpleBrush}"
+                            Background="{DynamicResource Cora.Wash.Selected}"
+                            Foreground="{DynamicResource Cora.Accent.Store}"
                             BorderThickness="0"
                             CornerRadius="4"
                             Padding="8,6"
@@ -188,8 +188,8 @@
                             CommandParameter="{x:Null}"
                             HorizontalAlignment="Stretch"
                             HorizontalContentAlignment="Center"
-                            Background="{DynamicResource SurfaceHighBrush}"
-                            Foreground="{DynamicResource OnSurfaceDimBrush}"
+                            Background="{DynamicResource Cora.Wash.Selected}"
+                            Foreground="{DynamicResource Cora.Text.Secondary}"
                             BorderThickness="0"
                             CornerRadius="4"
                             Padding="8,6"
@@ -197,13 +197,13 @@
                 </Grid>
             </StackPanel>
 
-            <Separator Background="{DynamicResource BorderSubtleBrush}" Height="1" />
+            <Separator Background="{DynamicResource Cora.Border.Subtle}" Height="1" />
 
             <!-- Pre-fill toggle -->
             <CheckBox Content="Auto-fill today on status change"
                       IsChecked="{Binding PrefillPhaseDate, Mode=TwoWay}"
                       FontSize="12"
-                      Foreground="{DynamicResource OnSurfaceDimBrush}" />
+                      Foreground="{DynamicResource Cora.Text.Secondary}" />
 
         </StackPanel>
     </ScrollViewer>

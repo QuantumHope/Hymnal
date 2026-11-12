@@ -6,43 +6,43 @@
         CanResize="False"
         ShowInTaskbar="False"
         WindowStartupLocation="CenterOwner"
-        Background="#120932"
-        FontFamily="{DynamicResource InterFont}">
+        Background="{DynamicResource Cora.Surface.Panel}"
+        FontFamily="{DynamicResource Cora.Font.Persona}">
 
-    <Border BorderBrush="#2D1B5E"
+    <Border BorderBrush="{DynamicResource Cora.Border.Subtle}"
             BorderThickness="1"
             Padding="16">
         <StackPanel Spacing="12">
             <StackPanel Spacing="4">
-                <TextBlock Text="TITLE"
+                <TextBlock Classes="caps" Text="TITLE"
                            FontSize="10"
                            FontWeight="SemiBold"
                            LetterSpacing="1.5"
-                           Foreground="{DynamicResource OnSurfaceDimBrush}" />
+                           Foreground="{DynamicResource Cora.Text.Secondary}" />
                 <TextBox x:Name="TitleInput"
                          FontSize="12"
                          Padding="8,6"
-                         Background="{DynamicResource SurfaceBaseBrush}"
-                         Foreground="{DynamicResource OnSurfaceBrush}"
-                         BorderBrush="{DynamicResource BorderSubtleBrush}"
+                         Background="{DynamicResource Cora.Surface.Void}"
+                         Foreground="{DynamicResource Cora.Text}"
+                         BorderBrush="{DynamicResource Cora.Border.Subtle}"
                          BorderThickness="1" />
             </StackPanel>
 
             <StackPanel Spacing="4">
-                <TextBlock Text="PREMISE (optional)"
+                <TextBlock Classes="caps" Text="PREMISE (optional)"
                            FontSize="10"
                            FontWeight="SemiBold"
                            LetterSpacing="1.5"
-                           Foreground="{DynamicResource OnSurfaceDimBrush}" />
+                           Foreground="{DynamicResource Cora.Text.Secondary}" />
                 <TextBox x:Name="PremiseInput"
                          Height="80"
                          FontSize="12"
                          Padding="8,6"
                          AcceptsReturn="True"
                          TextWrapping="Wrap"
-                         Background="{DynamicResource SurfaceBaseBrush}"
-                         Foreground="{DynamicResource OnSurfaceBrush}"
-                         BorderBrush="{DynamicResource BorderSubtleBrush}"
+                         Background="{DynamicResource Cora.Surface.Void}"
+                         Foreground="{DynamicResource Cora.Text}"
+                         BorderBrush="{DynamicResource Cora.Border.Subtle}"
                          BorderThickness="1" />
             </StackPanel>
 
@@ -53,8 +53,8 @@
                         Content="Create"
                         IsDefault="True"
                         Padding="12,6"
-                        Background="{DynamicResource SynthwavePurpleBrush}"
-                        Foreground="{DynamicResource OnSurfaceBrush}"
+                        Background="{DynamicResource Cora.Accent.Store}"
+                        Foreground="{DynamicResource Cora.Text}"
                         BorderThickness="0"
                         Click="CreateButton_Click" />
                 <Button Content="Cancel"

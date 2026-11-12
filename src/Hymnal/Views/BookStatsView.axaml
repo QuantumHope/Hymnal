@@ -5,7 +5,7 @@
              xmlns:controls="using:Hymnal.Views.Controls"
              x:Class="Hymnal.Views.BookStatsView"
              x:DataType="vm:BookStatsViewModel"
-             Background="{DynamicResource SurfaceElevatedBrush}">
+             Background="{DynamicResource Cora.Surface.Panel}">
 
     <ScrollViewer VerticalScrollBarVisibility="Auto"
                   HorizontalScrollBarVisibility="Disabled">
@@ -15,46 +15,46 @@
             <TextBlock Text="{Binding ContextTitle}"
                        FontSize="13"
                        FontWeight="SemiBold"
-                       Foreground="{DynamicResource OnSurfaceBrush}"
+                       Foreground="{DynamicResource Cora.Text}"
                        TextWrapping="Wrap" />
 
-            <Separator Background="{DynamicResource BorderSubtleBrush}" Height="1" />
+            <Separator Background="{DynamicResource Cora.Border.Subtle}" Height="1" />
 
             <!-- Word count -->
             <StackPanel Spacing="2">
-                <TextBlock Text="WORDS"
+                <TextBlock Classes="caps" Text="WORDS"
                            FontSize="10"
                            FontWeight="SemiBold"
                            LetterSpacing="1.5"
-                           Foreground="{DynamicResource OnSurfaceDimBrush}" />
+                           Foreground="{DynamicResource Cora.Text.Secondary}" />
                 <TextBlock Text="{Binding TotalWordCountDisplay}"
                            FontSize="18"
                            FontWeight="Medium"
-                           Foreground="{DynamicResource OnSurfaceBrush}" />
+                           Foreground="{DynamicResource Cora.Text}" />
             </StackPanel>
 
             <!-- Status breakdown -->
             <StackPanel Spacing="6">
-                <TextBlock Text="STATUS"
+                <TextBlock Classes="caps" Text="STATUS"
                            FontSize="10"
                            FontWeight="SemiBold"
                            LetterSpacing="1.5"
-                           Foreground="{DynamicResource OnSurfaceDimBrush}" />
+                           Foreground="{DynamicResource Cora.Text.Secondary}" />
                 <controls:StatusPieChart Segments="{Binding StatusSummary}"
                                          Width="80"
                                          Height="80"
                                          HorizontalAlignment="Left" />
             </StackPanel>
 
-            <Separator Background="{DynamicResource BorderSubtleBrush}" Height="1" />
+            <Separator Background="{DynamicResource Cora.Border.Subtle}" Height="1" />
 
             <!-- Word count bar chart -->
             <StackPanel Spacing="6">
-                <TextBlock Text="{Binding BarSectionLabel}"
+                <TextBlock Classes="caps" Text="{Binding BarSectionLabel}"
                            FontSize="10"
                            FontWeight="SemiBold"
                            LetterSpacing="1.5"
-                           Foreground="{DynamicResource OnSurfaceDimBrush}" />
+                           Foreground="{DynamicResource Cora.Text.Secondary}" />
 
                 <ItemsControl ItemsSource="{Binding BarItems}">
                     <ItemsControl.ItemTemplate>
@@ -65,12 +65,12 @@
                                     <TextBlock Grid.Column="0"
                                                Text="{Binding Title}"
                                                FontSize="11"
-                                               Foreground="{DynamicResource OnSurfaceBrush}"
+                                               Foreground="{DynamicResource Cora.Text}"
                                                TextTrimming="CharacterEllipsis" />
                                     <TextBlock Grid.Column="1"
                                                Text="{Binding WordCountDisplay}"
                                                FontSize="11"
-                                               Foreground="{DynamicResource OnSurfaceDimBrush}"
+                                               Foreground="{DynamicResource Cora.Text.Secondary}"
                                                Margin="6,0,0,0" />
                                 </Grid>
                                 <!-- Proportional fill bar -->
@@ -80,7 +80,7 @@
                                              Height="6"
                                              CornerRadius="3"
                                              Foreground="{Binding Status, Converter={x:Static conv:StatusToBrushConverter.Instance}}"
-                                             Background="{DynamicResource SurfaceHighBrush}" />
+                                             Background="{DynamicResource Cora.Wash.Selected}" />
                             </StackPanel>
                         </DataTemplate>
                     </ItemsControl.ItemTemplate>
@@ -90,12 +90,12 @@
             <!-- Stacked word count history chart -->
             <StackPanel Spacing="6"
                         IsVisible="{Binding HasStackedHistory}">
-                <Separator Background="{DynamicResource BorderSubtleBrush}" Height="1" />
-                <TextBlock Text="WORDS BY DAY"
+                <Separator Background="{DynamicResource Cora.Border.Subtle}" Height="1" />
+                <TextBlock Classes="caps" Text="WORDS BY DAY"
                            FontSize="10"
                            FontWeight="SemiBold"
                            LetterSpacing="1.5"
-                           Foreground="{DynamicResource OnSurfaceDimBrush}" />
+                           Foreground="{DynamicResource Cora.Text.Secondary}" />
                 <controls:StackedWordCountHistoryChart Items="{Binding StackedHistoryItems}"
                                                        Target="{Binding TotalTarget}"
                                                        ShowTrendline="True" />
