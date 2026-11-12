@@ -114,6 +114,7 @@ public class MainWindowViewModel : ViewModelBase
 
             _activeMode = value;
             EditorViewModel.IsResearchSurface = value == ShellMode.Research;
+            EditorViewModel.IsEditorSurfaceVisible = value is ShellMode.Write or ShellMode.Research;
             CorkboardViewModel.SetViewActive(value == ShellMode.Plan);
             GanttViewModel.SetViewActive(value == ShellMode.Manage);
             AiChatViewModel.CurrentShellModeName = value.ToString();

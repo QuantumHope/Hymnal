@@ -440,6 +440,48 @@ public class MarkuaParserTests
         Assert.Equal("The rest of the chapter.", Text(((MarkuaParagraph)doc.Blocks[1]).Runs));
     }
 
+    [Theory]
+    [InlineData("<!-- note -->Visible prose", "Visible prose")]
+    [InlineData("Before <!-- note --> after", "Before after")]
+    [InlineData("Glued<!-- note -->text", "Gluedtext")]
+    [InlineData("Ends here <!-- note -->", "Ends here")]
+    [InlineData("A <!-- one --> B <!-- two --> C", "A B C")]
+    [InlineData("Start <!-- a comment\nacross lines --> tail", "Start tail")]
+    [InlineData("Use `<!-- x -->` in code", "Use <!-- x --> in code")]
+    public void Parse_ClosedHtmlComments_AreRemovedWithoutLosingProse(string source, string expected)
+    {
+        var paragraph = Single<MarkuaParagraph>(MarkuaParser.Parse(source));
+        Assert.Equal(expected, Text(paragraph.Runs));
+    }
+
+    [Fact]
+    public void Parse_CommentOnlyLine_DisappearsAndHeadingAfterMultilineCommentSurvives()
+    {
+        var doc = MarkuaParser.Parse("<!--\nTODO: tighten\n--># Chapter One\n\nText.");
+
+        Assert.Equal("Chapter One", Text(Assert.IsType<MarkuaHeading>(doc.Blocks[0]).Runs));
+        Assert.IsType<MarkuaParagraph>(doc.Blocks[1]);
+    }
+
+    [Fact]
+    public void Parse_CommentInsideFencedCode_IsKeptAsCode()
+    {
+        var code = Single<MarkuaCodeBlock>(MarkuaParser.Parse("```html\n<!-- keep me -->\n<p>Hi</p>\n```"));
+        Assert.Equal("<!-- keep me -->\n<p>Hi</p>", code.Code);
+    }
+
+    [Fact]
+    public void Parse_ClosingDirectiveInsideFencedCode_DoesNotEndTheAside()
+    {
+        const string source = "{aside}\nHow to close an aside:\n\n```\n{/aside}\n```\n\nStill in the aside.\n{/aside}\n\nAfter.";
+        var doc = MarkuaParser.Parse(source);
+
+        var aside = Assert.IsType<MarkuaCallout>(doc.Blocks[0]);
+        Assert.Equal(3, aside.Blocks.Count);
+        Assert.Equal("{/aside}", Assert.IsType<MarkuaCodeBlock>(aside.Blocks[1]).Code);
+        Assert.Equal("After.", Text(Assert.IsType<MarkuaParagraph>(Assert.Single(doc.Blocks.Skip(1))).Runs));
+    }
+
     [Fact]
     public void Parse_InlineTripleBackticks_AreNotAFence()
     {

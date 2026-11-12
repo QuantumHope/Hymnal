@@ -16,20 +16,33 @@ public static class MarkuaResourceResolver
 
         var relative = Uri.UnescapeDataString(source.Split('?', '#')[0]).Replace('\\', '/');
 
+        // A document must never make the preview reach another machine: probing a share such as
+        // //host/share/x.png (\\host\share\x.png) can start network access and Windows authentication.
+        if (IsNetworkPath(relative) || relative.StartsWith("file:", StringComparison.OrdinalIgnoreCase))
+            return null;
+
         if (Path.IsPathRooted(relative))
             return fileExists(relative) ? relative : null;
 
         if (string.IsNullOrEmpty(baseDirectory))
             return null;
 
+        // Only a workspace that itself lives on a share may resolve to one (e.g. via ../ out of a local folder).
+        var baseIsShare = IsNetworkPath(baseDirectory.Replace('\\', '/'));
         foreach (var candidate in Candidates(baseDirectory, relative))
         {
+            if (!baseIsShare && IsNetworkPath(candidate.Replace('\\', '/')))
+                continue;
+
             if (fileExists(candidate))
                 return candidate;
         }
 
         return null;
     }
+
+    /// <summary>True for a UNC / network-share path written with forward slashes: //host/share/…</summary>
+    private static bool IsNetworkPath(string path) => path.StartsWith("//", StringComparison.Ordinal);
 
     public static bool IsRemote(string source) =>
         source.StartsWith("http://", StringComparison.OrdinalIgnoreCase)
