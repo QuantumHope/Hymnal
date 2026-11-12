@@ -15,9 +15,9 @@ namespace Hymnal.Core.Markua;
 /// </summary>
 public static class MarkuaParser
 {
-    private static readonly Regex HeadingRegex = new(@"^ {0,3}(#{1,6})(?:[ \t]+(.*?))?[ \t]*#*[ \t]*$", RegexOptions.Compiled);
+    private static readonly Regex HeadingRegex = new(@"^ {0,3}(#{1,6})(?:[ \t]+(.*?))?(?:[ \t]+#+)?[ \t]*$", RegexOptions.Compiled);
     private static readonly Regex SceneBreakRegex = new(@"^ {0,3}([*\-_])(?:[ \t]*\1){2,}[ \t]*$", RegexOptions.Compiled);
-    private static readonly Regex FenceRegex = new(@"^ {0,3}(`{3,}|~{3,})[ \t]*([^`\s]*)", RegexOptions.Compiled);
+    private static readonly Regex FenceRegex = new(@"^ {0,3}(?:(`{3,})[ \t]*([^`\s]*)[^`]*|(~{3,})[ \t]*(\S*).*)$", RegexOptions.Compiled);
     private static readonly Regex AttributeLineRegex = new(@"^ {0,3}\{([^{}]*)\}[ \t]*$", RegexOptions.Compiled);
     private static readonly Regex CalloutPrefixRegex = new(@"^([ABWTEIQDXC])>(?:[ \t]|$)", RegexOptions.Compiled);
     private static readonly Regex QuotePrefixRegex = new(@"^ {0,3}>", RegexOptions.Compiled);
@@ -67,11 +67,10 @@ public static class MarkuaParser
                 continue;
             }
 
-            if (trimmed.StartsWith("<!--", StringComparison.Ordinal))
+            // An unclosed comment (still being typed) stays visible rather than hiding the rest of the file.
+            if (trimmed.StartsWith("<!--", StringComparison.Ordinal) && FindCommentEnd(lines, i) is var commentEnd and >= 0)
             {
-                while (i < lines.Count && !lines[i].Contains("-->", StringComparison.Ordinal))
-                    i++;
-                i++;
+                i = commentEnd + 1;
                 continue;
             }
 
@@ -84,7 +83,7 @@ public static class MarkuaParser
             }
 
             var attribute = AttributeLineRegex.Match(line);
-            if (attribute.Success)
+            if (attribute.Success && IsAttributeOrDirective(attribute.Groups[1].Value))
             {
                 i = ParseAttributeLine(lines, i, attribute.Groups[1].Value.Trim(), context, blocks, ref pending);
                 continue;
@@ -165,7 +164,7 @@ public static class MarkuaParser
             }
 
             if (i + 1 < lines.Count && line.Contains('|') && TableDelimiterRegex.IsMatch(lines[i + 1])
-                && lines[i + 1].Contains('-'))
+                && lines[i + 1].Contains('-') && SplitRow(line).Count == SplitRow(lines[i + 1]).Count)
             {
                 i = ParseTable(lines, i, context, blocks);
                 pending = new PendingAttributes();
@@ -222,8 +221,9 @@ public static class MarkuaParser
 
     private static int ParseCodeFence(IReadOnlyList<string> lines, int start, Match fence, string? format, List<MarkuaBlock> blocks)
     {
-        var marker = fence.Groups[1].Value;
-        var language = fence.Groups[2].Value;
+        var backticks = fence.Groups[1].Success;
+        var marker = backticks ? fence.Groups[1].Value : fence.Groups[3].Value;
+        var language = backticks ? fence.Groups[2].Value : fence.Groups[4].Value;
         var code = new List<string>();
         var i = start + 1;
 
@@ -306,6 +306,37 @@ public static class MarkuaParser
             pending.Format = format;
 
         return i + 1;
+    }
+
+    private static int FindCommentEnd(IReadOnlyList<string> lines, int from)
+    {
+        for (var j = from; j < lines.Count; j++)
+        {
+            if (lines[j].Contains("-->", StringComparison.Ordinal))
+                return j;
+        }
+
+        return -1;
+    }
+
+    private static readonly HashSet<string> KnownDirectives = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "pagebreak", "frontmatter", "mainmatter", "backmatter", "aside", "blurb", "blockquote",
+    };
+
+    /// <summary>
+    /// True when a <c>{…}</c> line is Markua (a known directive, a closing directive, an id or key: value
+    /// attributes). Anything else, such as <c>{sigh}</c> in prose, stays visible as text.
+    /// </summary>
+    private static bool IsAttributeOrDirective(string content)
+    {
+        var parts = SplitAttributes(content.Trim());
+        if (parts.Count == 0)
+            return true;
+
+        var first = parts[0];
+        return first.StartsWith('/') || first.StartsWith('#') || KnownDirectives.Contains(first)
+               || parts.Any(part => part.IndexOf(':') > 0);
     }
 
     private static int FindClosingDirective(IReadOnlyList<string> lines, int from, string name)
@@ -518,7 +549,8 @@ public static class MarkuaParser
 
     /// <summary>True for a line that interrupts a paragraph by starting a different block.</summary>
     private static bool StartsBlock(string line) =>
-        HeadingRegex.IsMatch(line) || FenceRegex.IsMatch(line) || AttributeLineRegex.IsMatch(line)
+        HeadingRegex.IsMatch(line) || FenceRegex.IsMatch(line)
+        || (AttributeLineRegex.Match(line) is { Success: true } attribute && IsAttributeOrDirective(attribute.Groups[1].Value))
         || CalloutPrefixRegex.IsMatch(line) || QuotePrefixRegex.IsMatch(line) || SceneBreakRegex.IsMatch(line)
         || FootnoteDefinitionRegex.IsMatch(line) || ResourceRegex.IsMatch(line)
         || line.TrimStart().StartsWith("%%", StringComparison.Ordinal)

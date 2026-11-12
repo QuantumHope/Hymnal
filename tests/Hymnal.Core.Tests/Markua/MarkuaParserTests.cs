@@ -428,4 +428,60 @@ public class MarkuaParserTests
             b => Assert.IsType<MarkuaSceneBreak>(b),
             b => Assert.IsType<MarkuaParagraph>(b));
     }
+
+    // ── Half-typed or prose-like constructs stay visible ─────────────────────
+
+    [Fact]
+    public void Parse_UnclosedHtmlComment_DoesNotHideTheRestOfTheFile()
+    {
+        var doc = MarkuaParser.Parse("<!-- still typing\n\nThe rest of the chapter.");
+
+        Assert.Equal(2, doc.Blocks.Count);
+        Assert.Equal("The rest of the chapter.", Text(((MarkuaParagraph)doc.Blocks[1]).Runs));
+    }
+
+    [Fact]
+    public void Parse_InlineTripleBackticks_AreNotAFence()
+    {
+        var doc = MarkuaParser.Parse("```x``` is code.\n\nNext paragraph.");
+
+        Assert.Equal(2, doc.Blocks.Count);
+        Assert.All(doc.Blocks, b => Assert.IsType<MarkuaParagraph>(b));
+    }
+
+    [Fact]
+    public void Parse_TildeFence_StillTakesALanguage()
+    {
+        var code = Single<MarkuaCodeBlock>(MarkuaParser.Parse("~~~ ruby\nputs `x`\n~~~"));
+
+        Assert.Equal("ruby", code.Language);
+        Assert.Equal("puts `x`", code.Code);
+    }
+
+    [Theory]
+    [InlineData("# Learning C#", "Learning C#")]
+    [InlineData("# Title #", "Title")]
+    [InlineData("## Title ##  ", "Title")]
+    public void Parse_HeadingClosingHashes_NeedASpaceBefore(string source, string expected)
+    {
+        Assert.Equal(expected, Text(Single<MarkuaHeading>(MarkuaParser.Parse(source)).Runs));
+    }
+
+    [Fact]
+    public void Parse_BracedProseLine_StaysVisible()
+    {
+        var paragraph = Single<MarkuaParagraph>(MarkuaParser.Parse("{sigh}"));
+
+        Assert.Equal("{sigh}", Text(paragraph.Runs));
+    }
+
+    [Fact]
+    public void Parse_PipeLineBeforeSceneBreak_IsNotATable()
+    {
+        var doc = MarkuaParser.Parse("Either this | or that.\n---");
+
+        Assert.Collection(doc.Blocks,
+            b => Assert.IsType<MarkuaParagraph>(b),
+            b => Assert.IsType<MarkuaSceneBreak>(b));
+    }
 }
