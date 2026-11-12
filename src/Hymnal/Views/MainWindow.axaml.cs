@@ -232,6 +232,8 @@ public partial class MainWindow : Window
 
     // ── Right-pane row heights ─────────────────────────────────────────────────
 
+    private const double BeatsRowMinHeight = 180;
+
     private void SetupRightPaneRowHeights(MainWindowViewModel vm)
     {
         var grid = RightPaneGrid;   // x:Name="RightPaneGrid" field from generated partial class
@@ -285,6 +287,9 @@ public partial class MainWindow : Window
 
             grid.RowDefinitions[0].Height = Row(chPanelVisible, layout.RightPaneTopStar);
             grid.RowDefinitions[2].Height = Row(beatsVisible, layout.RightPaneBeatsStar);
+            // Saved weights are often pixel-sized (hundreds) while a never-resized Beats row is 1, which would
+            // squeeze it to nothing beside them; while open it keeps room for its header and a few beats.
+            grid.RowDefinitions[2].MinHeight = beatsVisible ? BeatsRowMinHeight : 0;
             grid.RowDefinitions[4].Height = Row(notesVisible, layout.RightPaneBottomStar);
             grid.RowDefinitions[6].Height = Row(chatVisible, layout.RightPaneChatStar);
         }

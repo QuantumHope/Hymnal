@@ -74,6 +74,7 @@ If a file contains the marker {class: part} in its first non-blank lines, Hymnal
 
 - Ctrl+B: toggle chapter sidebar
 - F4: toggle notes panel
+- F7: toggle the Beats panel (Short Story and Anthology projects): the story's beats beside the draft
 - Ctrl+S: save active chapter
 
 ## Architecture Overview
