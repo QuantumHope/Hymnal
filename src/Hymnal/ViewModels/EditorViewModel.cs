@@ -389,11 +389,15 @@ public class EditorViewModel : ViewModelBase, IDisposable, IOpenStoryBuffer
             .ToProperty(this, x => x.IsSplitView);
         Disposables.Add(_isSplitView);
 
-        _previewDocument = this.WhenAnyValue(x => x.Text, x => x.ShowPreviewPane)
-            .Where(t => t.Item2)
-            .Select(t => t.Item1)
-            .DistinctUntilChanged()
-            .Throttle(TimeSpan.FromMilliseconds(200), TaskPoolScheduler.Default)
+        // When the preview appears, parse the current text at once (otherwise the last document it showed,
+        // possibly another file's, stays up until the throttle fires); after that, parse when typing pauses.
+        _previewDocument = this.WhenAnyValue(x => x.ShowPreviewPane)
+            .Select(show => show
+                ? this.WhenAnyValue(x => x.Text).Publish(texts => texts.Take(1).Merge(
+                    texts.Skip(1).Throttle(TimeSpan.FromMilliseconds(200), TaskPoolScheduler.Default)))
+                : Observable.Empty<string>())
+            .Switch()
+            .ObserveOn(TaskPoolScheduler.Default)
             .Select(MarkuaParser.Parse)
             .ObserveOn(AvaloniaScheduler.Instance)
             .ToProperty(this, x => x.PreviewDocument, MarkuaDocument.Empty);
@@ -404,7 +408,15 @@ public class EditorViewModel : ViewModelBase, IDisposable, IOpenStoryBuffer
             .ToProperty(this, x => x.PreviewBaseDirectory);
         Disposables.Add(_previewBaseDirectory);
 
-        SetViewModeCommand = ReactiveCommand.Create<EditorViewMode>(mode => ViewMode = mode);
+        SetViewModeCommand = ReactiveCommand.Create<EditorViewMode>(mode =>
+        {
+            // Clicking the active mode's toggle button unchecks it locally; re-announce the unchanged mode so
+            // its IsChecked binding re-applies and the button stays checked.
+            if (ViewMode == mode)
+                this.RaisePropertyChanged(nameof(ViewMode));
+            else
+                ViewMode = mode;
+        });
         CycleViewModeCommand = ReactiveCommand.Create(() =>
         {
             ViewMode = ViewMode switch

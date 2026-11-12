@@ -117,16 +117,42 @@ public sealed class MarkuaPreviewView : UserControl
         _scroller.Offset = new Vector(_scroller.Offset.X, Math.Clamp(ratio, 0, 1) * max);
     }
 
+    // Set when the document or folder changed while the page was hidden or detached; rendered when it shows.
+    private bool _renderPending = true;
+
     protected override void OnPropertyChanged(AvaloniaPropertyChangedEventArgs change)
     {
         base.OnPropertyChanged(change);
         if (change.Property == DocumentProperty || change.Property == BaseDirectoryProperty)
-            Render();
+            RenderWhenShown();
+        else if (change.Property == IsVisibleProperty && _renderPending)
+            RenderWhenShown();
+    }
+
+    private void RenderWhenShown()
+    {
+        _renderPending = true;
+        if (!IsVisible || VisualRoot is null)
+            return;
+
+        _renderPending = false;
+        Render();
+    }
+
+    protected override void OnAttachedToVisualTree(VisualTreeAttachmentEventArgs e)
+    {
+        base.OnAttachedToVisualTree(e);
+        if (_renderPending)
+            RenderWhenShown();
     }
 
     protected override void OnDetachedFromVisualTree(VisualTreeAttachmentEventArgs e)
     {
         base.OnDetachedFromVisualTree(e);
+
+        // The images are about to be disposed: drop the page that shows them and rebuild it on re-attach.
+        _page.Children.Clear();
+        _renderPending = true;
         foreach (var (_, bitmap) in _images.Values)
             bitmap.Dispose();
         _images.Clear();
