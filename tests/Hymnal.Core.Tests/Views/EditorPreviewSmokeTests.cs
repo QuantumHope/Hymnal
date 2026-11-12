@@ -22,6 +22,27 @@ public sealed class EditorPreviewSmokeTests
     }
 
     [Fact]
+    public void ModeButtons_HaveIcons_AndShareOneHeaderRowWithTheChapterBar()
+    {
+        var editor = File.ReadAllText(FindRepositoryFile("src/Hymnal/Views/EditorView.axaml"));
+        Assert.Contains("{StaticResource Icon.ViewWrite}", editor);
+        Assert.Contains("{StaticResource Icon.ViewSplit}", editor);
+        Assert.Contains("{StaticResource Icon.ViewPreview}", editor);
+        Assert.Contains("Content=\"{Binding $parent[views:EditorView].HeaderContent}\"", editor);
+
+        var icons = File.ReadAllText(FindRepositoryFile("src/Hymnal/Themes/Icons.axaml"));
+        Assert.Contains("x:Key=\"Icon.ViewWrite\"", icons);
+
+        // The chapter bar lives in the editor's header row, not in a bar of its own above the editor.
+        var mainWindow = File.ReadAllText(FindRepositoryFile("src/Hymnal/Views/MainWindow.axaml"));
+        var header = mainWindow.IndexOf("<views:EditorView.HeaderContent>", StringComparison.Ordinal);
+        var chapterBar = mainWindow.IndexOf("<views:EditorChapterBar", StringComparison.Ordinal);
+        Assert.True(header >= 0 && chapterBar > header, "EditorChapterBar should be the Write editor's HeaderContent");
+        Assert.Single(Regex.Matches(mainWindow, "<views:EditorChapterBar"));
+        Assert.Contains("IsEditorChapterBarVisible}", mainWindow);
+    }
+
+    [Fact]
     public void F6_CyclesPreviewMode_AndIsBoundOnlyOnce()
     {
         var mainWindow = File.ReadAllText(FindRepositoryFile("src/Hymnal/Views/MainWindow.axaml"));

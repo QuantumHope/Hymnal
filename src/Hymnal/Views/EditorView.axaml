@@ -4,6 +4,7 @@
              xmlns:avedit="using:AvaloniaEdit"
              xmlns:editor="using:Hymnal.Views.Editor"
              xmlns:conv="using:Hymnal.Views.Converters"
+             xmlns:views="using:Hymnal.Views"
              xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
              mc:Ignorable="d"
@@ -34,6 +35,32 @@
         <Style Selector="ToggleButton.view-mode:checked /template/ ContentPresenter#PART_ContentPresenter">
             <Setter Property="Background" Value="#2D1B5E" />
             <Setter Property="Foreground" Value="#E9D5FF" />
+        </Style>
+        <Style Selector="ToggleButton.view-mode Path.view-icon">
+            <Setter Property="Width" Value="14" />
+            <Setter Property="Height" Value="14" />
+            <Setter Property="Stretch" Value="Uniform" />
+            <Setter Property="StrokeThickness" Value="1.6" />
+            <Setter Property="StrokeLineCap" Value="Round" />
+            <Setter Property="StrokeJoin" Value="Round" />
+            <Setter Property="VerticalAlignment" Value="Center" />
+            <Setter Property="Stroke" Value="{Binding $parent[ToggleButton].Foreground}" />
+        </Style>
+        <Style Selector="ToggleButton.view-mode:checked Path.view-icon">
+            <Setter Property="Stroke" Value="#E9D5FF" />
+        </Style>
+        <Style Selector="ToggleButton.view-mode:pointerover Path.view-icon">
+            <Setter Property="Stroke" Value="{DynamicResource OnSurfaceBrush}" />
+        </Style>
+        <Style Selector="ToggleButton.view-mode TextBlock.view-label">
+            <Setter Property="VerticalAlignment" Value="Center" />
+        </Style>
+        <!-- Narrow editor column: icons only (the tooltips still name each mode). -->
+        <Style Selector="Border.compact ToggleButton.view-mode TextBlock.view-label">
+            <Setter Property="IsVisible" Value="False" />
+        </Style>
+        <Style Selector="Border.compact ToggleButton.view-mode">
+            <Setter Property="Padding" Value="7,4" />
         </Style>
     </UserControl.Styles>
 
@@ -85,35 +112,69 @@
             </StackPanel>
         </Border>
 
-        <!-- Write / Split / Preview switch (F6 cycles). Hidden for Book.txt. -->
-        <Border Grid.Row="2"
-                IsVisible="{Binding IsPreviewAvailable}"
+        <!-- Editor header: the host's HeaderContent (Write mode: the chapter status bar) on the left, the
+             Write / Split / Preview switch (F6 cycles; hidden for Book.txt) on the right. One row, not two. -->
+        <Border x:Name="PART_HeaderRow"
+                Grid.Row="2"
+                Height="36"
+                Background="{DynamicResource SurfaceElevatedBrush}"
                 BorderBrush="{DynamicResource BorderSubtleBrush}"
                 BorderThickness="0,0,0,1"
-                Padding="8,4">
-            <StackPanel Orientation="Horizontal"
-                        HorizontalAlignment="Right"
-                        Spacing="2"
-                        ToolTip.Tip="Preview the chapter as Leanpub sets it (F6 cycles)">
-                <ToggleButton x:Name="PART_WriteModeButton"
-                              Classes="view-mode"
-                              Content="WRITE"
-                              Command="{Binding SetViewModeCommand}"
-                              CommandParameter="{x:Static vm:EditorViewMode.Write}"
-                              IsChecked="{Binding ViewMode, Mode=OneWay, Converter={x:Static conv:ShellModeEqualsConverter.Instance}, ConverterParameter=Write}" />
-                <ToggleButton x:Name="PART_SplitModeButton"
-                              Classes="view-mode"
-                              Content="SPLIT"
-                              Command="{Binding SetViewModeCommand}"
-                              CommandParameter="{x:Static vm:EditorViewMode.Split}"
-                              IsChecked="{Binding ViewMode, Mode=OneWay, Converter={x:Static conv:ShellModeEqualsConverter.Instance}, ConverterParameter=Split}" />
-                <ToggleButton x:Name="PART_PreviewModeButton"
-                              Classes="view-mode"
-                              Content="PREVIEW"
-                              Command="{Binding SetViewModeCommand}"
-                              CommandParameter="{x:Static vm:EditorViewMode.Preview}"
-                              IsChecked="{Binding ViewMode, Mode=OneWay, Converter={x:Static conv:ShellModeEqualsConverter.Instance}, ConverterParameter=Preview}" />
-            </StackPanel>
+                Padding="0,0,8,0">
+            <Grid ColumnDefinitions="*,Auto,Auto">
+                <ContentPresenter x:Name="PART_HeaderPresenter"
+                                  Grid.Column="0"
+                                  VerticalAlignment="Center"
+                                  Content="{Binding $parent[views:EditorView].HeaderContent}" />
+
+                <Border x:Name="PART_HeaderDivider"
+                        Grid.Column="1"
+                        Width="1"
+                        Height="18"
+                        Margin="10,0"
+                        Background="{DynamicResource BorderDefaultBrush}" />
+
+                <StackPanel x:Name="PART_ViewModeSwitch"
+                            Grid.Column="2"
+                            Orientation="Horizontal"
+                            VerticalAlignment="Center"
+                            Spacing="2"
+                            IsVisible="{Binding IsPreviewAvailable}">
+                    <ToggleButton x:Name="PART_WriteModeButton"
+                                  Classes="view-mode"
+                                  ToolTip.Tip="Write: Markua source only (F6 cycles modes)"
+                                  Command="{Binding SetViewModeCommand}"
+                                  CommandParameter="{x:Static vm:EditorViewMode.Write}"
+                                  IsChecked="{Binding ViewMode, Mode=OneWay, Converter={x:Static conv:ShellModeEqualsConverter.Instance}, ConverterParameter=Write}">
+                        <StackPanel Orientation="Horizontal" Spacing="6">
+                            <Path Classes="view-icon" Data="{StaticResource Icon.ViewWrite}" />
+                            <TextBlock Classes="view-label" Text="WRITE" />
+                        </StackPanel>
+                    </ToggleButton>
+                    <ToggleButton x:Name="PART_SplitModeButton"
+                                  Classes="view-mode"
+                                  ToolTip.Tip="Split: source beside the Leanpub preview (F6 cycles modes)"
+                                  Command="{Binding SetViewModeCommand}"
+                                  CommandParameter="{x:Static vm:EditorViewMode.Split}"
+                                  IsChecked="{Binding ViewMode, Mode=OneWay, Converter={x:Static conv:ShellModeEqualsConverter.Instance}, ConverterParameter=Split}">
+                        <StackPanel Orientation="Horizontal" Spacing="6">
+                            <Path Classes="view-icon" Data="{StaticResource Icon.ViewSplit}" />
+                            <TextBlock Classes="view-label" Text="SPLIT" />
+                        </StackPanel>
+                    </ToggleButton>
+                    <ToggleButton x:Name="PART_PreviewModeButton"
+                                  Classes="view-mode"
+                                  ToolTip.Tip="Preview: the chapter as Leanpub sets it (F6 cycles modes)"
+                                  Command="{Binding SetViewModeCommand}"
+                                  CommandParameter="{x:Static vm:EditorViewMode.Preview}"
+                                  IsChecked="{Binding ViewMode, Mode=OneWay, Converter={x:Static conv:ShellModeEqualsConverter.Instance}, ConverterParameter=Preview}">
+                        <StackPanel Orientation="Horizontal" Spacing="6">
+                            <Path Classes="view-icon" Data="{StaticResource Icon.ViewPreview}" />
+                            <TextBlock Classes="view-label" Text="PREVIEW" />
+                        </StackPanel>
+                    </ToggleButton>
+                </StackPanel>
+            </Grid>
         </Border>
 
         <Grid Grid.Row="3">

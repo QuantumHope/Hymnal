@@ -57,6 +57,7 @@ public sealed class MarkuaPreviewView : UserControl
     private const double BodyLineHeight = 27;
 
     private readonly ScrollViewer _scroller;
+    private readonly Border _paper;
     private readonly StackPanel _page;
     private readonly Dictionary<string, (DateTime Stamp, Bitmap Bitmap)> _images = new(StringComparer.Ordinal);
 
@@ -69,7 +70,7 @@ public sealed class MarkuaPreviewView : UserControl
     {
         _page = new StackPanel();
 
-        var paper = new Border
+        _paper = new Border
         {
             Background = PaperBrush,
             CornerRadius = new CornerRadius(3),
@@ -85,11 +86,28 @@ public sealed class MarkuaPreviewView : UserControl
         {
             HorizontalScrollBarVisibility = Avalonia.Controls.Primitives.ScrollBarVisibility.Disabled,
             VerticalScrollBarVisibility = Avalonia.Controls.Primitives.ScrollBarVisibility.Auto,
-            Content = paper,
+            Content = _paper,
         };
+
+        // A narrow split leaves little room: shrink the page margins so words aren't broken mid-word.
+        SizeChanged += (_, e) => ApplyPageMargins(e.NewSize.Width);
 
         Content = _scroller;
         Background = Brushes.Transparent;
+    }
+
+    /// <summary>Page margins for the available width: generous on a wide pane, tight in a narrow split.</summary>
+    internal void ApplyPageMargins(double width)
+    {
+        var (side, top, outer) = width switch
+        {
+            < 520 => (20.0, 22.0, 8.0),
+            < 720 => (32.0, 32.0, 14.0),
+            _ => (56.0, 48.0, 24.0),
+        };
+
+        _paper.Padding = new Thickness(side, top, side, top + 16);
+        _paper.Margin = new Thickness(outer, 20, outer, 32);
     }
 
     /// <summary>Scrolls so the given fraction (0 = top, 1 = bottom) of the page is in view; used by split view.</summary>
@@ -352,7 +370,7 @@ public sealed class MarkuaPreviewView : UserControl
         var grid = new Grid
         {
             ColumnDefinitions = new ColumnDefinitions("*,Auto,*"),
-            Margin = new Thickness(-56, 18, -56, 30),
+            Margin = new Thickness(0, 18, 0, 30),
         };
 
         Border Dash(int column)

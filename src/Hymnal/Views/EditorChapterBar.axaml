@@ -4,10 +4,8 @@
              xmlns:conv="using:Hymnal.Views.Converters"
              x:Class="Hymnal.Views.EditorChapterBar"
              x:DataType="vm:ChapterViewModel"
-             Height="32"
-             Background="#120932"
-             BorderBrush="#2D1B5E"
-             BorderThickness="0,0,0,1">
+             Height="32">
+    <!-- Hosted in EditorView's header row, which supplies the background and bottom border. -->
 
     <Grid ColumnDefinitions="Auto,*,Auto"
           Margin="12,0">

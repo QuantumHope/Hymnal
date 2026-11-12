@@ -474,14 +474,16 @@
                               Background="{DynamicResource BorderSubtleBrush}" />
 
                 <!-- ── EDITOR ─────────────────────────────────────── -->
-                <DockPanel Grid.Column="2">
-                    <Border DockPanel.Dock="Top"
-                            IsVisible="{Binding IsEditorChapterBarVisible}">
-                        <views:EditorChapterBar DataContext="{Binding WorkspaceViewModel.SelectedNode}" />
-                    </Border>
-                    <views:EditorView DataContext="{Binding EditorViewModel}"
-                                      Background="Transparent" />
-                </DockPanel>
+                <!-- The chapter status bar shares the editor's header row with the Write / Split / Preview switch. -->
+                <views:EditorView Grid.Column="2"
+                                  DataContext="{Binding EditorViewModel}"
+                                  Background="Transparent">
+                    <views:EditorView.HeaderContent>
+                        <views:EditorChapterBar
+                            DataContext="{Binding $parent[Window].((vm:MainWindowViewModel)DataContext).WorkspaceViewModel.SelectedNode}"
+                            IsVisible="{Binding $parent[Window].((vm:MainWindowViewModel)DataContext).IsEditorChapterBarVisible}" />
+                    </views:EditorView.HeaderContent>
+                </views:EditorView>
 
                 <!-- ── SPLITTER (visible when any right pane is open) ─────────── -->
                 <GridSplitter Grid.Column="3"
