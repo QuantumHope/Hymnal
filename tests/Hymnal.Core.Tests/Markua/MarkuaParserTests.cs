@@ -373,6 +373,47 @@ public class MarkuaParserTests
         Assert.All(paragraph.Runs.Where(r => !r.IsLineBreak), r => Assert.True(r.Has(MarkuaTextStyle.Italic)));
     }
 
+    [Fact(Timeout = 5000)]
+    public async Task Parse_EveryConstructTogether_Terminates()
+    {
+        const string source = """
+            {class: part}
+            # Part One
+
+            Plain **bold** *italic* `code` ~~gone~~ x^2^ [link](https://x.y) note[^n]
+            second line
+
+            B> A blurb.
+
+            {aside}
+            Aside text.
+            {/aside}
+
+            > A quote.
+
+            - one
+              1. nested
+
+            * * *
+
+            {pagebreak}
+
+            ![Missing](nowhere.png)
+
+            | A | B |
+            |---|:-:|
+            | 1 | 2 |
+
+            [^n]: The note.
+            """;
+
+        var doc = await Task.Run(() => MarkuaParser.Parse(source));
+        Assert.Equal(
+            "Heading,Paragraph,Callout,Callout,BlockQuote,List,SceneBreak,PageBreak,Resource,Table",
+            string.Join(",", doc.Blocks.Select(b => b.GetType().Name.Replace("Markua", ""))));
+        Assert.Single(doc.Footnotes);
+    }
+
     [Fact]
     public void Parse_ShortStoryFixture_ParsesWithoutLosingText()
     {

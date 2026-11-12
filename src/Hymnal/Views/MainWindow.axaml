@@ -92,6 +92,7 @@
         <KeyBinding Gesture="F3" Command="{Binding ChapterInfoViewModel.ToggleCommand}" />
         <KeyBinding Gesture="F4" Command="{Binding NotesViewModel.ToggleCommand}" />
         <KeyBinding Gesture="F5" Command="{Binding ToggleGanttCommand}" />
+        <KeyBinding Gesture="F6" Command="{Binding EditorViewModel.CycleViewModeCommand}" />
         <KeyBinding Gesture="Ctrl+Shift+I" Command="{Binding QuickCaptureIdeaCommand}" />
     </Window.KeyBindings>
 
@@ -135,6 +136,22 @@
                         <MenuItem Header="Toggle _Manage View"
                                   Command="{Binding ToggleGanttCommand}"
                                   InputGesture="F5" />
+                        <Separator />
+                        <MenuItem Header="Markua _Preview">
+                            <MenuItem Header="_Write Only"
+                                      Command="{Binding EditorViewModel.SetViewModeCommand}"
+                                      CommandParameter="{x:Static vm:EditorViewMode.Write}" />
+                            <MenuItem Header="_Split: Write and Preview"
+                                      Command="{Binding EditorViewModel.SetViewModeCommand}"
+                                      CommandParameter="{x:Static vm:EditorViewMode.Split}" />
+                            <MenuItem Header="_Preview Only"
+                                      Command="{Binding EditorViewModel.SetViewModeCommand}"
+                                      CommandParameter="{x:Static vm:EditorViewMode.Preview}" />
+                            <Separator />
+                            <MenuItem Header="_Cycle Mode"
+                                      Command="{Binding EditorViewModel.CycleViewModeCommand}"
+                                      InputGesture="F6" />
+                        </MenuItem>
                         <Separator />
                         <MenuItem Header="_Reset Write Layout"
                                   Command="{Binding ResetWriteLayoutCommand}" />
