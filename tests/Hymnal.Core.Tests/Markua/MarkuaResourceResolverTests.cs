@@ -40,6 +40,28 @@ public class MarkuaResourceResolverTests
         Assert.Null(MarkuaResourceResolver.Resolve(Manuscript, source, _ => true));
     }
 
+    [Theory]
+    [InlineData("//preview-host/share/map.png")]
+    [InlineData(@"\\preview-host\share\map.png")]
+    [InlineData("%2F%2Fpreview-host/share/map.png")]
+    [InlineData("file://preview-host/share/map.png")]
+    [InlineData("file:///C:/images/map.png")]
+    public void Resolve_NetworkShareOrFileUri_NeverTouchesTheFileSystem(string source)
+    {
+        var probes = new List<string>();
+        Assert.Null(MarkuaResourceResolver.Resolve(Manuscript, source, p => { probes.Add(p); return true; }));
+        Assert.Empty(probes);
+    }
+
+    [Fact]
+    public void Resolve_RelativePathClimbingOntoAShare_IsSkipped()
+    {
+        // From a local folder, a relative path can't be steered onto a share.
+        var probes = new List<string>();
+        MarkuaResourceResolver.Resolve(Manuscript, "map.png", p => { probes.Add(p); return false; });
+        Assert.DoesNotContain(probes, p => p.StartsWith(@"\\", StringComparison.Ordinal) || p.StartsWith("//", StringComparison.Ordinal));
+    }
+
     [Fact]
     public void Resolve_Missing_ReturnsNull()
     {

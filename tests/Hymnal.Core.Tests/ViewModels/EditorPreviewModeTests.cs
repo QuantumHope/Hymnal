@@ -1,3 +1,4 @@
+using System.Reactive.Linq;
 using Avalonia.Controls;
 using Avalonia.Controls.Documents;
 using Avalonia.Media;
@@ -110,6 +111,66 @@ public sealed class EditorPreviewModeTests : IDisposable
             Assert.True(editor.ShowPreviewPane);
             Assert.False(editor.IsSplitView);
             return 0;
+        }, TimeSpan.FromSeconds(30));
+    }
+
+    [Fact]
+    public async Task Hidden_editor_surface_does_not_parse_and_disables_mode_commands()
+    {
+        var path = WriteFile("one.md", "# One\n\nHello.");
+
+        await ReactiveUiTestBootstrap.RunOnUiThreadAsync(async () =>
+        {
+            using var owner = new OwnedDisposables();
+            var editor = CreateEditor(owner);
+            await PlanTestHarness.Within(editor.OpenChapterAsync(Node("one.md"), path));
+
+            editor.IsEditorSurfaceVisible = false; // e.g. the shell is in Plan mode
+            editor.ViewMode = EditorViewMode.Split;
+            Assert.False(await editor.CycleViewModeCommand.CanExecute.FirstAsync());
+            Assert.False(await editor.SetViewModeCommand.CanExecute.FirstAsync());
+
+            await Task.Delay(350);
+            Avalonia.Threading.Dispatcher.UIThread.RunJobs();
+            Assert.Same(MarkuaDocument.Empty, editor.PreviewDocument);
+
+            editor.IsEditorSurfaceVisible = true; // back to Write: parses at once
+            await PlanTestHarness.PumpUntilAsync(() => editor.PreviewDocument.Blocks.Count == 2);
+            Assert.True(await editor.CycleViewModeCommand.CanExecute.FirstAsync());
+            return 0;
+        }, TimeSpan.FromSeconds(30));
+    }
+
+    [Fact]
+    public async Task Preview_view_releases_images_the_current_page_no_longer_shows()
+    {
+        // A 1×1 PNG.
+        var png = Convert.FromBase64String(
+            "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==");
+        File.WriteAllBytes(Path.Combine(_root, "map.png"), png);
+
+        await ReactiveUiTestBootstrap.RunOnUiThreadAsync(() =>
+        {
+            var view = new MarkuaPreviewView { BaseDirectory = _root, Document = MarkuaParser.Parse("![Map](map.png)") };
+            var window = new Window { Content = view, Width = 900, Height = 700 };
+            window.Show();
+            try
+            {
+                Assert.Equal(1, view.CachedImageCount);
+
+                view.Document = MarkuaParser.Parse("# Another chapter, no pictures");
+                Assert.Equal(0, view.CachedImageCount);
+
+                view.Document = MarkuaParser.Parse("![Map](map.png)");
+                view.Document = MarkuaDocument.Empty;
+                Assert.Equal(0, view.CachedImageCount);
+            }
+            finally
+            {
+                window.Close();
+            }
+
+            return Task.FromResult(0);
         }, TimeSpan.FromSeconds(30));
     }
 

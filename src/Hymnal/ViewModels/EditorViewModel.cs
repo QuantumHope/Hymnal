@@ -224,6 +224,17 @@ public class EditorViewModel : ViewModelBase, IDisposable, IOpenStoryBuffer
         set => this.RaiseAndSetIfChanged(ref _viewMode, value);
     }
 
+    private bool _isEditorSurfaceVisible = true;
+    /// <summary>
+    /// True while a surface hosting this editor (Write or Research) is on screen. The shell clears it in Plan,
+    /// Manage and Ideas, which stops preview parsing and disables the view-mode commands (F6) there.
+    /// </summary>
+    public bool IsEditorSurfaceVisible
+    {
+        get => _isEditorSurfaceVisible;
+        set => this.RaiseAndSetIfChanged(ref _isEditorSurfaceVisible, value);
+    }
+
     private readonly ObservableAsPropertyHelper<bool> _isPreviewAvailable;
     /// <summary>True when the open file can be previewed: any chapter or doc, but not Book.txt.</summary>
     public bool IsPreviewAvailable => _isPreviewAvailable.Value;
@@ -391,7 +402,11 @@ public class EditorViewModel : ViewModelBase, IDisposable, IOpenStoryBuffer
 
         // When the preview appears, parse the current text at once (otherwise the last document it showed,
         // possibly another file's, stays up until the throttle fires); after that, parse when typing pauses.
-        _previewDocument = this.WhenAnyValue(x => x.ShowPreviewPane)
+        // Gated on the editor surface too: the pane flags describe the file and mode, not whether Write or
+        // Research is actually showing.
+        _previewDocument = this.WhenAnyValue(x => x.ShowPreviewPane, x => x.IsEditorSurfaceVisible,
+                (pane, surface) => pane && surface)
+            .DistinctUntilChanged()
             .Select(show => show
                 ? this.WhenAnyValue(x => x.Text).Publish(texts => texts.Take(1).Merge(
                     texts.Skip(1).Throttle(TimeSpan.FromMilliseconds(200), TaskPoolScheduler.Default)))
@@ -408,6 +423,7 @@ public class EditorViewModel : ViewModelBase, IDisposable, IOpenStoryBuffer
             .ToProperty(this, x => x.PreviewBaseDirectory);
         Disposables.Add(_previewBaseDirectory);
 
+        var editorSurfaceVisible = this.WhenAnyValue(x => x.IsEditorSurfaceVisible);
         SetViewModeCommand = ReactiveCommand.Create<EditorViewMode>(mode =>
         {
             // Clicking the active mode's toggle button unchecks it locally; re-announce the unchanged mode so
@@ -416,7 +432,7 @@ public class EditorViewModel : ViewModelBase, IDisposable, IOpenStoryBuffer
                 this.RaisePropertyChanged(nameof(ViewMode));
             else
                 ViewMode = mode;
-        });
+        }, editorSurfaceVisible);
         CycleViewModeCommand = ReactiveCommand.Create(() =>
         {
             ViewMode = ViewMode switch
@@ -425,7 +441,7 @@ public class EditorViewModel : ViewModelBase, IDisposable, IOpenStoryBuffer
                 EditorViewMode.Split => EditorViewMode.Preview,
                 _ => EditorViewMode.Write,
             };
-        });
+        }, editorSurfaceVisible);
 
         // Register watcher teardown with the composite disposable.
         Disposables.Add(Disposable.Create(StopWatcher));

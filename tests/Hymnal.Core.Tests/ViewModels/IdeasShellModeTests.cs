@@ -118,6 +118,39 @@ public sealed class IdeasShellModeTests : IDisposable
     }
 
     [Fact]
+    public async Task Editor_surface_is_visible_only_in_write_and_research()
+    {
+        var root = CreateWorkspace(StoryJson);
+        try
+        {
+            await Ui(root, async context =>
+            {
+                var window = context.CreateMainWindow();
+                await context.SettleAsync();
+                var editor = window.EditorViewModel;
+
+                await Within(window.SelectIdeasCommand.Execute().ToTask());
+                Assert.False(editor.IsEditorSurfaceVisible);
+                Assert.False(await editor.CycleViewModeCommand.CanExecute.FirstAsync());
+
+                await Within(window.SelectPlanCommand.Execute().ToTask());
+                Assert.False(editor.IsEditorSurfaceVisible);
+
+                await Within(window.SelectManageCommand.Execute().ToTask());
+                Assert.False(editor.IsEditorSurfaceVisible);
+
+                await Within(window.SelectResearchCommand.Execute().ToTask());
+                Assert.True(editor.IsEditorSurfaceVisible);
+
+                await Within(window.SelectWriteCommand.Execute().ToTask());
+                Assert.True(editor.IsEditorSurfaceVisible);
+                Assert.True(await editor.CycleViewModeCommand.CanExecute.FirstAsync());
+            });
+        }
+        finally { DeleteFolder(root); }
+    }
+
+    [Fact]
     public async Task Switching_profile_to_novel_while_in_ideas_returns_to_write()
     {
         var root = CreateWorkspace(StoryJson);

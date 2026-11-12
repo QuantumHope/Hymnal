@@ -31,7 +31,7 @@ public static class MarkuaParser
         if (string.IsNullOrWhiteSpace(source))
             return MarkuaDocument.Empty;
 
-        var lines = source.Replace("\r\n", "\n").Replace('\r', '\n').Split('\n');
+        var lines = StripClosedComments(source.Replace("\r\n", "\n").Replace('\r', '\n').Split('\n'));
         var context = new ParseContext();
         var blocks = ParseBlocks(lines, context);
         return new MarkuaDocument(blocks, context.BuildFootnotes());
@@ -60,17 +60,10 @@ public static class MarkuaParser
                 continue;
             }
 
-            // Comments: %% line comments and HTML comments (possibly spanning lines).
+            // %% line comments. (Closed HTML comments were already removed by StripClosedComments.)
             if (trimmed.StartsWith("%%", StringComparison.Ordinal))
             {
                 i++;
-                continue;
-            }
-
-            // An unclosed comment (still being typed) stays visible rather than hiding the rest of the file.
-            if (trimmed.StartsWith("<!--", StringComparison.Ordinal) && FindCommentEnd(lines, i) is var commentEnd and >= 0)
-            {
-                i = commentEnd + 1;
                 continue;
             }
 
@@ -308,15 +301,109 @@ public static class MarkuaParser
         return i + 1;
     }
 
-    private static int FindCommentEnd(IReadOnlyList<string> lines, int from)
+    /// <summary>
+    /// Removes every closed <c>&lt;!-- … --&gt;</c> comment outside fenced code and inline code spans, wherever it
+    /// sits: a whole line, the start or middle of a paragraph line, or spanning lines. The prose around it is
+    /// kept; a line that held only a comment disappears. An unclosed comment (still being typed) is left as
+    /// text, so it never hides the rest of the file.
+    /// </summary>
+    private static List<string> StripClosedComments(string[] lines)
     {
-        for (var j = from; j < lines.Count; j++)
+        var result = new List<string>(lines.Length);
+        var fence = new FenceTracker();
+
+        for (var i = 0; i < lines.Length; i++)
         {
-            if (lines[j].Contains("-->", StringComparison.Ordinal))
-                return j;
+            var line = lines[i];
+            if (fence.Consume(line))
+            {
+                result.Add(line);
+                continue;
+            }
+
+            var removed = false;
+            var open = FindCommentOpen(line, 0);
+            while (open >= 0)
+            {
+                var closeLine = i;
+                var close = line.IndexOf("-->", open + 4, StringComparison.Ordinal);
+                while (close < 0 && closeLine + 1 < lines.Length)
+                {
+                    closeLine++;
+                    close = lines[closeLine].IndexOf("-->", StringComparison.Ordinal);
+                }
+
+                if (close < 0)
+                    break; // Unclosed: leave it, and everything after it, visible.
+
+                var after = (closeLine == i ? line : lines[closeLine])[(close + 3)..];
+                line = JoinAroundComment(line[..open], after);
+                i = closeLine;
+                removed = true;
+                open = FindCommentOpen(line, Math.Min(open, line.Length));
+            }
+
+            if (removed && line.Trim().Length == 0)
+                continue;
+
+            result.Add(line);
+        }
+
+        return result;
+    }
+
+    /// <summary>The next <c>&lt;!--</c> at or after <paramref name="from"/> that is not inside an inline code span.</summary>
+    private static int FindCommentOpen(string line, int from)
+    {
+        for (var at = line.IndexOf("<!--", from, StringComparison.Ordinal); at >= 0;
+             at = line.IndexOf("<!--", at + 4, StringComparison.Ordinal))
+        {
+            if (line.AsSpan(0, at).Count('`') % 2 == 0)
+                return at;
         }
 
         return -1;
+    }
+
+    /// <summary>Joins the text either side of a removed comment, keeping one space where there was any.</summary>
+    private static string JoinAroundComment(string before, string after)
+    {
+        if (before.Trim().Length == 0)
+            return before + after;
+        if (after.Trim().Length == 0)
+            return before.TrimEnd();
+
+        var spaced = char.IsWhiteSpace(before[^1]) || char.IsWhiteSpace(after[0]);
+        return before.TrimEnd() + (spaced ? " " : "") + after.TrimStart();
+    }
+
+    /// <summary>Tracks whether a line-by-line scan is inside a fenced code block.</summary>
+    private sealed class FenceTracker
+    {
+        private char _marker;
+        private int _length;
+
+        /// <summary>Feeds one line; true when the line belongs to a fence (its opening, body or closing line).</summary>
+        public bool Consume(string line)
+        {
+            if (_marker != '\0')
+            {
+                var trimmed = line.Trim();
+                if (trimmed.Length >= _length && trimmed.All(c => c == _marker))
+                    _marker = '\0';
+                return true;
+            }
+
+            var fence = FenceRegex.Match(line);
+            if (!fence.Success)
+                return false;
+
+            // FenceRegex captures a backtick fence in group 1 and a tilde fence in group 3.
+            var marker = fence.Groups[1].Success ? fence.Groups[1].Value : fence.Groups[3].Value;
+            _marker = marker[0];
+            _length = marker.Length;
+            return true;
+        }
     }
 
     private static readonly HashSet<string> KnownDirectives = new(StringComparer.OrdinalIgnoreCase)
@@ -341,9 +428,14 @@ public static class MarkuaParser
 
     private static int FindClosingDirective(IReadOnlyList<string> lines, int from, string name)
     {
+        // A {/aside} inside a code example is code, not the end of the aside.
         var depth = 0;
+        var fence = new FenceTracker();
         for (var j = from; j < lines.Count; j++)
         {
+            if (fence.Consume(lines[j]))
+                continue;
+
             var match = AttributeLineRegex.Match(lines[j]);
             if (!match.Success)
                 continue;
@@ -553,8 +645,7 @@ public static class MarkuaParser
         || (AttributeLineRegex.Match(line) is { Success: true } attribute && IsAttributeOrDirective(attribute.Groups[1].Value))
         || CalloutPrefixRegex.IsMatch(line) || QuotePrefixRegex.IsMatch(line) || SceneBreakRegex.IsMatch(line)
         || FootnoteDefinitionRegex.IsMatch(line) || ResourceRegex.IsMatch(line)
-        || line.TrimStart().StartsWith("%%", StringComparison.Ordinal)
-        || line.TrimStart().StartsWith("<!--", StringComparison.Ordinal);
+        || line.TrimStart().StartsWith("%%", StringComparison.Ordinal);
 
     private static int ParseParagraph(IReadOnlyList<string> lines, int start, ParseContext context,
         MarkuaAlignment alignment, bool listMarkersInterrupt, List<MarkuaBlock> blocks)

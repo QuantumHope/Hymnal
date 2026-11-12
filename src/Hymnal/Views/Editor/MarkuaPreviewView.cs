@@ -60,6 +60,7 @@ public sealed class MarkuaPreviewView : UserControl
     private readonly Border _paper;
     private readonly StackPanel _page;
     private readonly Dictionary<string, (DateTime Stamp, Bitmap Bitmap)> _images = new(StringComparer.Ordinal);
+    private readonly HashSet<string> _usedImages = new(StringComparer.Ordinal);
 
     /// <summary>Number of top-level blocks currently laid out (for tests and diagnostics).</summary>
     internal int RenderedBlockCount { get; private set; }
@@ -88,6 +89,10 @@ public sealed class MarkuaPreviewView : UserControl
             VerticalScrollBarVisibility = Avalonia.Controls.Primitives.ScrollBarVisibility.Auto,
             Content = _paper,
         };
+
+        // Showing a hidden ancestor (switching back from Research to Write) runs a layout pass; that is when a
+        // render deferred while the page was hidden can happen. The check is a bool test when nothing is pending.
+        LayoutUpdated += OnEffectiveVisibilityChanged;
 
         // A narrow split leaves little room: shrink the page margins so words aren't broken mid-word.
         SizeChanged += (_, e) => ApplyPageMargins(e.NewSize.Width);
@@ -125,14 +130,20 @@ public sealed class MarkuaPreviewView : UserControl
         base.OnPropertyChanged(change);
         if (change.Property == DocumentProperty || change.Property == BaseDirectoryProperty)
             RenderWhenShown();
-        else if (change.Property == IsVisibleProperty && _renderPending)
+    }
+
+    // Effective visibility includes ancestors: the Write host's preview stays attached but hidden while Research
+    // (which shares the editor view model) is showing, and must not rebuild pages nobody can see.
+    private void OnEffectiveVisibilityChanged(object? sender, EventArgs e)
+    {
+        if (_renderPending && IsEffectivelyVisible)
             RenderWhenShown();
     }
 
     private void RenderWhenShown()
     {
         _renderPending = true;
-        if (!IsVisible || VisualRoot is null)
+        if (!IsEffectivelyVisible || VisualRoot is null)
             return;
 
         _renderPending = false;
@@ -163,6 +174,35 @@ public sealed class MarkuaPreviewView : UserControl
     private void Render()
     {
         _page.Children.Clear();
+        _usedImages.Clear();
+        try
+        {
+            RenderPage();
+        }
+        finally
+        {
+            ReleaseUnusedImages();
+        }
+    }
+
+    /// <summary>
+    /// Disposes cached bitmaps this render did not show (another chapter's, or a removed image's). The old page's
+    /// controls were cleared before rendering, so nothing still draws them.
+    /// </summary>
+    private void ReleaseUnusedImages()
+    {
+        foreach (var path in _images.Keys.Where(path => !_usedImages.Contains(path)).ToList())
+        {
+            _images[path].Bitmap.Dispose();
+            _images.Remove(path);
+        }
+    }
+
+    /// <summary>Number of decoded images kept for the current page (for tests).</summary>
+    internal int CachedImageCount => _images.Count;
+
+    private void RenderPage()
+    {
         var document = Document ?? MarkuaDocument.Empty;
 
         if (document.Blocks.Count == 0)
@@ -492,6 +532,7 @@ public sealed class MarkuaPreviewView : UserControl
             if (path is null)
                 return null;
 
+            _usedImages.Add(path);
             var stamp = File.GetLastWriteTimeUtc(path);
             if (_images.TryGetValue(path, out var cached) && cached.Stamp == stamp)
                 return cached.Bitmap;
