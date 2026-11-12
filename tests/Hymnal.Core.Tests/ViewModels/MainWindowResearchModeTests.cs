@@ -60,9 +60,17 @@ public sealed class MainWindowResearchModeTests
         var chapter = context.AddChapter("part-one/chapter-one.md", "Chapter One", "# Chapter One\n\nBody.");
         context.SeedWorkspace(chapter);
         var window = context.CreateMainWindow();
-        var chapterPath = Path.Combine(context.ManuscriptRoot, "part-one/chapter-one.md");
-        await context.EditorViewModel.OpenChapterAsync(chapter.Node, chapterPath);
+
+        // Selecting the chapter opens it through the workspace's fire-and-forget switch. Wait for that open to
+        // finish (OpenChapterAsync sets ActiveNode last); otherwise it can land after Research mode has closed
+        // the chapter and reopen it, which made this test fail intermittently on slower CI runners.
         context.Workspace.SelectedNode = chapter;
+        var deadline = DateTime.UtcNow.AddSeconds(10);
+        while (context.EditorViewModel.ActiveNode != chapter.Node)
+        {
+            Assert.True(DateTime.UtcNow < deadline, "Timed out waiting for the selected chapter to open.");
+            await Task.Delay(10);
+        }
 
         await ExecuteCommandAsync(window.SelectResearchCommand.Execute());
 
