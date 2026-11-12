@@ -23,7 +23,7 @@ namespace Hymnal.ViewModels;
 public sealed class PlanHostViewModel : ViewModelBase, IDisposable
 {
     public const string CollectionBreadcrumb = "Collection";
-    public const string DefaultStoryTitle = "Story";
+    public const string DefaultStoryTitle = StoryStructure.DefaultStoryTitle;
 
     /// <summary>A board to show: its workspace, key, title and the scenes its beats may link to.</summary>
     private sealed record BoardRequest(string Root, string Key, string Title, IReadOnlyList<string> Scope)
@@ -142,6 +142,18 @@ public sealed class PlanHostViewModel : ViewModelBase, IDisposable
         Refresh();
     }
 
+    /// <summary>
+    /// Anthology: shows the board of the story with registry id <paramref name="storyUuid"/> (Write mode's
+    /// Beats panel asks for this to plan the story being written). Ignored for other project kinds.
+    /// </summary>
+    public void ShowStoryBoard(string storyUuid)
+    {
+        if (_shownKind != ProjectKind.Anthology || !BeatBoardService.IsValidBoardKey(storyUuid))
+            return;
+        _drilledStoryUuid = storyUuid;
+        Refresh();
+    }
+
     /// <summary>Leaves the story's board (its pending edits are written to it) for the collection.</summary>
     private void BackToCollection()
     {
@@ -192,12 +204,11 @@ public sealed class PlanHostViewModel : ViewModelBase, IDisposable
 
     private void ShowStory()
     {
-        var chapters = IncludedChapters(_workspace.Nodes).ToList();
-        var title = chapters.FirstOrDefault()?.Node.Title is { Length: > 0 } first ? first : DefaultStoryTitle;
-        RequestBoard(new BoardRequest(_shownRoot ?? "", BeatBoardService.ShortStoryBoardKey, title, Scope(chapters)));
+        var story = StoryStructure.ShortStory(_workspace.Nodes);
+        RequestBoard(new BoardRequest(_shownRoot ?? "", story.Key, story.Title, story.Scope));
         Content = BeatBoard;
         ShowBreadcrumb = false;
-        ShowFilesStrip = chapters.Count >= 2;
+        ShowFilesStrip = story.Scenes.Count >= 2;
     }
 
     private void ShowAnthology()
@@ -212,8 +223,9 @@ public sealed class PlanHostViewModel : ViewModelBase, IDisposable
             return;
         }
 
-        var scenes = StoryScenes(story).ToList();
-        var request = new BoardRequest(_shownRoot ?? "", story.Uuid, story.Node.Title, Scope(scenes));
+        var scenes = StoryStructure.StoryScenes(_workspace.Nodes, story);
+        var request = new BoardRequest(_shownRoot ?? "", story.Uuid, story.Node.Title,
+            scenes.Select(s => s.Node.RelativePath).ToList());
         RequestBoard(request, story.Node.Kind == NodeKind.Part ? FindAdoption(request, scenes) : null);
         Content = BeatBoard;
         ShowBreadcrumb = true;
@@ -231,24 +243,6 @@ public sealed class PlanHostViewModel : ViewModelBase, IDisposable
             _ = TrackAsync(BeatBoard.CloseBoardAsync());
         }
     }
-
-    /// <summary>The scene files of an anthology story: itself, or the chapters inside its Part.</summary>
-    private IEnumerable<ChapterViewModel> StoryScenes(ChapterViewModel story)
-    {
-        if (story.Node.Kind == NodeKind.Chapter)
-            return IncludedChapters([story]);
-
-        var nodes = _workspace.Nodes.ToList();
-        var partIndex = nodes.IndexOf(story);
-        return IncludedChapters(nodes.Skip(partIndex + 1).TakeWhile(n => n.Node.Kind != NodeKind.Part));
-    }
-
-    /// <summary>Chapters a beat may link to: in Book.txt and present on disk.</summary>
-    private static IEnumerable<ChapterViewModel> IncludedChapters(IEnumerable<ChapterViewModel> nodes) =>
-        nodes.Where(n => n.Node.Kind == NodeKind.Chapter && !n.Node.IsExcluded && !n.Node.IsMissing);
-
-    private static IReadOnlyList<string> Scope(IEnumerable<ChapterViewModel> chapters) =>
-        chapters.Select(c => c.Node.RelativePath).ToList();
 
     /// <summary>
     /// A story that became a Part (its file now the Part's first scene) keeps its beats: when the Part has

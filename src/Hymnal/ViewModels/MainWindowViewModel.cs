@@ -7,6 +7,7 @@ using Hymnal.ViewModels.Ai;
 using ReactiveUI;
 using System;
 using System.IO;
+using System.Linq;
 using System.Threading.Tasks;
 using System.Reactive;
 using System.Reactive.Disposables;
@@ -46,6 +47,8 @@ public class MainWindowViewModel : ViewModelBase
 
     /// <summary>View → Sound: turns all of Hymnal's sound on or off.</summary>
     public ReactiveCommand<Unit, Unit> ToggleSoundCommand { get; }
+    /// <summary>Write mode's Beats panel (story/anthology); null when the shell has none.</summary>
+    public WriteBeatsViewModel? WriteBeatsViewModel { get; }
 
     // ── Settings overlay ──────────────────────────────────────────────────────
 
@@ -246,6 +249,22 @@ public class MainWindowViewModel : ViewModelBase
     /// <summary>True when both Info and Notes content areas are open (shows the splitter between them).</summary>
     public bool IsInfoNotesSplitterVisible => _isInfoNotesSplitterVisible.Value;
 
+    private readonly ObservableAsPropertyHelper<bool> _isBeatsSectionAvailable;
+    /// <summary>True when the right rail has a Beats section: a story or anthology is open.</summary>
+    public bool IsBeatsSectionAvailable => _isBeatsSectionAvailable.Value;
+
+    private readonly ObservableAsPropertyHelper<bool> _isBeatsPanelOpen;
+    /// <summary>True when the Beats section's content is shown.</summary>
+    public bool IsBeatsPanelOpen => _isBeatsPanelOpen.Value;
+
+    private readonly ObservableAsPropertyHelper<bool> _isInfoBeatsSplitterVisible;
+    /// <summary>True when both the Info and Beats content areas are open (the splitter between them).</summary>
+    public bool IsInfoBeatsSplitterVisible => _isInfoBeatsSplitterVisible.Value;
+
+    private readonly ObservableAsPropertyHelper<bool> _isAboveNotesSplitterVisible;
+    /// <summary>True when Notes is open under an open Info or Beats area (the splitter above Notes).</summary>
+    public bool IsAboveNotesSplitterVisible => _isAboveNotesSplitterVisible.Value;
+
     private readonly ObservableAsPropertyHelper<bool> _isNotesChatSplitterVisible;
     /// <summary>True when both Notes and Chat content areas are open (shows the splitter between them).</summary>
     public bool IsNotesChatSplitterVisible => _isNotesChatSplitterVisible.Value;
@@ -305,7 +324,8 @@ public class MainWindowViewModel : ViewModelBase
         Func<SettingsViewModel> settingsVmFactory,
         IdeasViewModel? ideasViewModel = null,
         PlanHostViewModel? planHostViewModel = null,
-        Hymnal.Audio.SoundPreferences? soundPreferences = null)
+        Hymnal.Audio.SoundPreferences? soundPreferences = null,
+        WriteBeatsViewModel? writeBeatsViewModel = null)
     {
         _settingsStore = settingsStore;
         _workspaceVm = workspaceViewModel;
@@ -328,6 +348,7 @@ public class MainWindowViewModel : ViewModelBase
         PlanHostViewModel = planHostViewModel;
         SoundPreferences = soundPreferences;
         ToggleSoundCommand = ReactiveCommand.Create(() => soundPreferences?.ToggleSound());
+        WriteBeatsViewModel = writeBeatsViewModel;
         _settingsVmFactory = settingsVmFactory;
 
         CorkboardViewModel.SetViewActive(false);
@@ -457,11 +478,23 @@ public class MainWindowViewModel : ViewModelBase
             .ToProperty(this, x => x.IsChapterPanelOpen);
         Disposables.Add(_isChapterPanelOpen);
 
+        var beatsOpenObs = writeBeatsViewModel == null
+            ? Observable.Return(false)
+            : writeBeatsViewModel.WhenAnyValue(x => x.IsOpen);
+        _isBeatsSectionAvailable = (writeBeatsViewModel == null
+                ? Observable.Return(false)
+                : writeBeatsViewModel.WhenAnyValue(x => x.IsAvailable))
+            .ToProperty(this, x => x.IsBeatsSectionAvailable);
+        Disposables.Add(_isBeatsSectionAvailable);
+        _isBeatsPanelOpen = beatsOpenObs.ToProperty(this, x => x.IsBeatsPanelOpen);
+        Disposables.Add(_isBeatsPanelOpen);
+
         _isAnyRightPaneOpen = Observable.CombineLatest(
                 chapterPanelOpenObs,
                 NotesViewModel.WhenAnyValue(x => x.IsVisible),
                 AiChatViewModel.WhenAnyValue(x => x.IsVisible),
-                (chPanel, notes, ai) => chPanel || notes || ai)
+                beatsOpenObs,
+                (chPanel, notes, ai, beats) => chPanel || notes || ai || beats)
             .ToProperty(this, x => x.IsAnyRightPaneOpen);
         Disposables.Add(_isAnyRightPaneOpen);
 
@@ -469,7 +502,8 @@ public class MainWindowViewModel : ViewModelBase
                 chapterPanelOpenObs,
                 NotesViewModel.WhenAnyValue(x => x.IsVisible),
                 AiChatViewModel.WhenAnyValue(x => x.IsVisible),
-                (chPanel, notes, ai) => (chPanel ? 1 : 0) + (notes ? 1 : 0) + (ai ? 1 : 0) >= 2)
+                beatsOpenObs,
+                (chPanel, notes, ai, beats) => (chPanel ? 1 : 0) + (notes ? 1 : 0) + (ai ? 1 : 0) + (beats ? 1 : 0) >= 2)
             .ToProperty(this, x => x.IsBothRightPanesOpen);
         Disposables.Add(_isBothRightPanesOpen);
 
@@ -479,6 +513,19 @@ public class MainWindowViewModel : ViewModelBase
                 (chPanel, notes) => chPanel && notes)
             .ToProperty(this, x => x.IsInfoNotesSplitterVisible);
         Disposables.Add(_isInfoNotesSplitterVisible);
+
+        _isInfoBeatsSplitterVisible = Observable.CombineLatest(
+                chapterPanelOpenObs, beatsOpenObs, (chPanel, beats) => chPanel && beats)
+            .ToProperty(this, x => x.IsInfoBeatsSplitterVisible);
+        Disposables.Add(_isInfoBeatsSplitterVisible);
+
+        _isAboveNotesSplitterVisible = Observable.CombineLatest(
+                chapterPanelOpenObs,
+                beatsOpenObs,
+                NotesViewModel.WhenAnyValue(x => x.IsVisible),
+                (chPanel, beats, notes) => notes && (chPanel || beats))
+            .ToProperty(this, x => x.IsAboveNotesSplitterVisible);
+        Disposables.Add(_isAboveNotesSplitterVisible);
 
         _isNotesChatSplitterVisible = Observable.CombineLatest(
                 NotesViewModel.WhenAnyValue(x => x.IsVisible),
@@ -514,6 +561,18 @@ public class MainWindowViewModel : ViewModelBase
                     .Skip(1)
                     .Where(_ => ActiveMode == ShellMode.Plan)
                     .Subscribe(_ => this.RaisePropertyChanged(nameof(SecondaryCentreContent))));
+
+        // The Beats panel's "Plan this story" opens Plan mode on the story being written.
+        if (writeBeatsViewModel != null)
+            Disposables.Add(
+                writeBeatsViewModel.PlanRequested
+                    .Subscribe(storyUuid =>
+                    {
+                        if (storyUuid != null)
+                            PlanHostViewModel?.ShowStoryBoard(storyUuid);
+                        LeaveSettings();
+                        ActiveMode = ShellMode.Plan;
+                    }));
 
         // Promoting an idea brings the author to the new story.
         if (ideasViewModel != null)
@@ -592,6 +651,8 @@ public class MainWindowViewModel : ViewModelBase
         await NotesViewModel.RestoreSettingsAsync().ConfigureAwait(false);
         await ChapterInfoViewModel.RestoreSettingsAsync().ConfigureAwait(false);
         await SupplementalDocsViewModel.RestoreSettingsAsync().ConfigureAwait(false);
+        if (WriteBeatsViewModel != null)
+            await WriteBeatsViewModel.RestoreSettingsAsync().ConfigureAwait(false);
         await RestoreWriteLayoutAsync().ConfigureAwait(false);
         CorkboardViewModel.SetViewActive(ActiveMode == ShellMode.Plan);
         GanttViewModel.SetViewActive(ActiveMode == ShellMode.Manage);
@@ -643,7 +704,7 @@ public class MainWindowViewModel : ViewModelBase
     /// </summary>
     public async Task<bool> FlushPendingEditsBeforeCloseAsync(TimeSpan timeout)
     {
-        if (IdeasViewModel == null && PlanHostViewModel == null)
+        if (IdeasViewModel == null && PlanHostViewModel == null && WriteBeatsViewModel == null)
             return true;
 
         try
@@ -669,8 +730,9 @@ public class MainWindowViewModel : ViewModelBase
     {
         var ideas = IdeasViewModel == null ? Task.FromResult(true) : FlushAfterPromoteAsync(IdeasViewModel);
         var beats = PlanHostViewModel == null ? Task.FromResult(true) : PlanHostViewModel.FlushAsync();
-        var results = await Task.WhenAll(ideas, beats);
-        return results[0] && results[1];
+        var writeBeats = WriteBeatsViewModel == null ? Task.FromResult(true) : WriteBeatsViewModel.FlushAsync();
+        var results = await Task.WhenAll(ideas, beats, writeBeats);
+        return results.All(ok => ok);
     }
 
     /// <summary>Waits for an in-flight promote (it saves ideas itself), then writes pending idea edits.</summary>
@@ -737,6 +799,13 @@ public class MainWindowViewModel : ViewModelBase
 
         // Hide AI chat panel
         AiChatViewModel.IsVisible = false;
+
+        // The Beats panel is shown by default.
+        if (WriteBeatsViewModel != null)
+        {
+            WriteBeatsViewModel.ApplyVisibility(true);
+            await WriteBeatsViewModel.PersistVisibilityAsync().ConfigureAwait(false);
+        }
 
         // Persist and broadcast the geometry defaults.
         await PersistWriteLayoutAsync(defaults).ConfigureAwait(false);

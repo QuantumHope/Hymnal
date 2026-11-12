@@ -55,6 +55,7 @@ public sealed class BeatBoardViewModel : ViewModelBase, IDisposable
     private readonly ObservableCollectionExtended<BeatCardViewModel> _beats = new();
     private readonly Dictionary<BeatCardViewModel, IDisposable> _cardSubscriptions = new();
     private readonly Subject<Unit> _saveRequests = new();
+    private readonly Subject<(string Root, string Key)> _saved = new();
 
     /// <summary>Workspace root of the open board (read-only ones too); null when no board is open.</summary>
     private string? _boardRoot;
@@ -140,6 +141,12 @@ public sealed class BeatBoardViewModel : ViewModelBase, IDisposable
     // ── State ─────────────────────────────────────────────────────────────────
 
     public ReadOnlyObservableCollection<BeatCardViewModel> Beats { get; }
+
+    /// <summary>
+    /// Fires (workspace root, board key) after this view-model wrote a board, so another view of the same
+    /// board (Plan's and Write's) can reload it.
+    /// </summary>
+    public IObservable<(string Root, string Key)> Saved => _saved.AsObservable();
 
     private string? _boardKey;
     /// <summary>Key of the open board (also when it is read-only); null when no board is open.</summary>
@@ -261,6 +268,19 @@ public sealed class BeatBoardViewModel : ViewModelBase, IDisposable
         BoardTitle = title ?? "";
         _sceneScope = sceneScope.ToList();
         RefreshScenes();
+    }
+
+    /// <summary>
+    /// Re-reads the open board when it is <paramref name="key"/> in <paramref name="root"/>, after another view
+    /// of it saved. Does nothing while this view has unsaved edits or is switching boards, so neither its own
+    /// edits nor a board switch in flight are lost.
+    /// </summary>
+    public Task ReloadIfShowingAsync(string root, string key)
+    {
+        if (_disposed || _savePending || !_currentSwitch.IsCompleted
+            || BoardKey != key || !string.Equals(_boardRoot, root, StringComparison.Ordinal))
+            return Task.CompletedTask;
+        return OpenBoardAsync(key, BoardTitle, _sceneScope);
     }
 
     /// <summary>Writes pending edits, then closes the board.</summary>
@@ -555,6 +575,8 @@ public sealed class BeatBoardViewModel : ViewModelBase, IDisposable
             RecordSave(target, result.IsSuccess);
             if (!result.IsSuccess)
                 _notifications.ShowError(result.Error!);
+            else if (!_disposed)
+                _saved.OnNext((target.Root, target.Key));
         }
         catch (Exception ex)
         {
@@ -687,5 +709,7 @@ public sealed class BeatBoardViewModel : ViewModelBase, IDisposable
         _beats.Clear();
         _saveRequests.OnCompleted();
         _saveRequests.Dispose();
+        _saved.OnCompleted();
+        _saved.Dispose();
     }
 }

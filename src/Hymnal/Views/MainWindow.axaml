@@ -101,6 +101,7 @@
         <KeyBinding Gesture="F4" Command="{Binding NotesViewModel.ToggleCommand}" />
         <KeyBinding Gesture="F5" Command="{Binding ToggleGanttCommand}" />
         <KeyBinding Gesture="F6" Command="{Binding EditorViewModel.CycleViewModeCommand}" />
+        <KeyBinding Gesture="F7" Command="{Binding WriteBeatsViewModel.ToggleCommand}" />
         <KeyBinding Gesture="Ctrl+Shift+I" Command="{Binding QuickCaptureIdeaCommand}" />
     </Window.KeyBindings>
 
@@ -144,6 +145,10 @@
                         <MenuItem Header="Toggle _Manage View"
                                   Command="{Binding ToggleGanttCommand}"
                                   InputGesture="F5" />
+                        <MenuItem Header="Toggle _Beats"
+                                  IsVisible="{Binding IsBeatsSectionAvailable}"
+                                  Command="{Binding WriteBeatsViewModel.ToggleCommand}"
+                                  InputGesture="F7" />
                         <Separator />
                         <MenuItem Header="Markua _Preview">
                             <MenuItem Header="_Write Only"
@@ -500,6 +505,18 @@
                                       Width="18" Height="18"
                                       Stretch="Uniform" />
                             </Button>
+                            <!-- F7: Beats (story/anthology) -->
+                            <Button Classes="nav-icon"
+                                    IsVisible="{Binding IsBeatsSectionAvailable}"
+                                    Command="{Binding WriteBeatsViewModel.ToggleCommand}"
+                                    ToolTip.Tip="Beats (F7)">
+                                <Path Data="M4 6h16M4 12h10M4 18h13"
+                                      Stroke="{DynamicResource Cora.Text.Secondary}"
+                                      StrokeThickness="1.5"
+                                      StrokeLineCap="Round"
+                                      Width="18" Height="18"
+                                      Stretch="Uniform" />
+                            </Button>
                             <!-- F4: Notes -->
                             <Button Classes="nav-icon"
                                     Command="{Binding NotesViewModel.ToggleCommand}"
@@ -538,7 +555,7 @@
                              full sections (header + content) rather than a header row directly.
                         -->
                         <Grid IsVisible="{Binding IsAnyRightPaneOpen}"
-                              RowDefinitions="*,Auto,*,Auto,*"
+                              RowDefinitions="*,Auto,*,Auto,*,Auto,*"
                               x:Name="RightPaneGrid">
 
                             <!-- Row 0: Chapter panel DockPanel (header pinned top + content fills rest) -->
@@ -572,15 +589,66 @@
                                                 IsVisible="{Binding IsChapterPanelOpen}" />
                             </DockPanel>
 
-                            <!-- Row 1: GridSplitter between Info and Notes (visible when both content areas open) -->
+                            <!-- Row 1: GridSplitter between Info and Beats (visible when both content areas open) -->
                             <GridSplitter Grid.Row="1"
                                           Height="4"
                                           ResizeDirection="Rows"
-                                          IsVisible="{Binding IsInfoNotesSplitterVisible}"
+                                          IsVisible="{Binding IsInfoBeatsSplitterVisible}"
                                           Background="{DynamicResource Cora.Border.Subtle}" />
 
-                            <!-- Row 2: Notes DockPanel (header pinned top + content fills rest) -->
-                            <DockPanel Grid.Row="2">
+                            <!-- Row 2: Beats DockPanel (story/anthology only): the story's beats beside the draft -->
+                            <DockPanel Grid.Row="2"
+                                       IsVisible="{Binding IsBeatsSectionAvailable}">
+                                <Border DockPanel.Dock="Top"
+                                        Height="48"
+                                        BorderBrush="{DynamicResource Cora.Border.Subtle}"
+                                        BorderThickness="0,1,0,1">
+                                    <Grid ColumnDefinitions="48,*,Auto">
+                                        <Button Grid.Column="0"
+                                                Classes="nav-icon"
+                                                Command="{Binding WriteBeatsViewModel.ToggleCommand}"
+                                                ToolTip.Tip="Beats (F7)">
+                                            <Path Data="M4 6h16M4 12h10M4 18h13"
+                                                  Stroke="{DynamicResource Cora.Accent.Store}"
+                                                  StrokeThickness="1.5"
+                                                  StrokeLineCap="Round"
+                                                  Width="18" Height="18"
+                                                  Stretch="Uniform" />
+                                        </Button>
+                                        <TextBlock Classes="caps" Grid.Column="1"
+                                                   Text="BEATS"
+                                                   VerticalAlignment="Center"
+                                                   Margin="4,0,0,0"
+                                                   FontSize="10"
+                                                   FontWeight="SemiBold"
+                                                   LetterSpacing="1.5"
+                                                   Foreground="{DynamicResource Cora.Text.Secondary}" />
+                                        <Button Grid.Column="2"
+                                                Classes="nav-icon"
+                                                Command="{Binding WriteBeatsViewModel.PlanStoryCommand}"
+                                                ToolTip.Tip="Plan this story"
+                                                Margin="0,0,4,0">
+                                            <TextBlock Text="PLAN"
+                                                       FontSize="9"
+                                                       FontWeight="SemiBold"
+                                                       LetterSpacing="1"
+                                                       Foreground="{DynamicResource Cora.Accent.Store}" />
+                                        </Button>
+                                    </Grid>
+                                </Border>
+                                <views:WriteBeatsView x:Name="WriteBeatsViewContent"
+                                                      DataContext="{Binding WriteBeatsViewModel}" />
+                            </DockPanel>
+
+                            <!-- Row 3: GridSplitter above Notes (visible when Notes and Info or Beats are open) -->
+                            <GridSplitter Grid.Row="3"
+                                          Height="4"
+                                          ResizeDirection="Rows"
+                                          IsVisible="{Binding IsAboveNotesSplitterVisible}"
+                                          Background="{DynamicResource Cora.Border.Subtle}" />
+
+                            <!-- Row 4: Notes DockPanel (header pinned top + content fills rest) -->
+                            <DockPanel Grid.Row="4">
                                 <Border DockPanel.Dock="Top"
                                         Height="48"
                                         BorderBrush="{DynamicResource Cora.Border.Subtle}"
@@ -611,15 +679,15 @@
                                                  DataContext="{Binding NotesViewModel}" />
                             </DockPanel>
 
-                            <!-- Row 3: GridSplitter between Notes and AI (visible when both content areas open) -->
-                            <GridSplitter Grid.Row="3"
+                            <!-- Row 5: GridSplitter between Notes and AI (visible when both content areas open) -->
+                            <GridSplitter Grid.Row="5"
                                           Height="4"
                                           ResizeDirection="Rows"
                                           IsVisible="{Binding IsNotesChatSplitterVisible}"
                                           Background="{DynamicResource Cora.Border.Subtle}" />
 
-                            <!-- Row 4: AI Chat DockPanel (header always visible; content collapses) -->
-                            <DockPanel Grid.Row="4">
+                            <!-- Row 6: AI Chat DockPanel (header always visible; content collapses) -->
+                            <DockPanel Grid.Row="6">
                                 <Border DockPanel.Dock="Top"
                                         Height="48"
                                         BorderBrush="{DynamicResource Cora.Border.Subtle}"

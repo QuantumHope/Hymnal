@@ -258,44 +258,54 @@ public partial class MainWindow : Window
                     .Subscribe(v => AiChatViewContent.IsVisible = v));
         }
 
+        if (WriteBeatsViewContent is not null)
+        {
+            WriteBeatsViewContent.IsVisible = vm.IsBeatsPanelOpen;
+            _layoutDisposables.Add(
+                vm.WhenAnyValue(x => x.IsBeatsPanelOpen)
+                    .ObserveOn(AvaloniaScheduler.Instance)
+                    .Subscribe(v => WriteBeatsViewContent.IsVisible = v));
+        }
+
         // ChapterPanelContentControl.IsVisible is bound in AXAML to IsChapterPanelOpen;
         // we only need to drive the row heights here.
 
-        // Outlook-style layout: 5 rows — DockPanel | splitter | DockPanel | splitter | DockPanel
-        // Rows 0, 2, 4: content rows (* or Auto — managed here)
+        // Outlook-style layout: 7 rows — Info | splitter | Beats | splitter | Notes | splitter | AI Chat
+        // Rows 0, 2, 4, 6: content rows (* or Auto — managed here). Beats exists for story/anthology only.
 
-        void ApplyRowHeights(bool chPanelVisible, bool notesVisible, bool chatVisible, WriteLayoutSettings layout)
+        void ApplyRowHeights(bool chPanelVisible, bool beatsVisible, bool notesVisible, bool chatVisible,
+            WriteLayoutSettings layout)
         {
-            var openCount = (chPanelVisible ? 1 : 0) + (notesVisible ? 1 : 0) + (chatVisible ? 1 : 0);
+            var openCount = (chPanelVisible ? 1 : 0) + (beatsVisible ? 1 : 0) + (notesVisible ? 1 : 0) + (chatVisible ? 1 : 0);
             var usePersistedStars = openCount >= 2;
 
-            grid.RowDefinitions[0].Height = chPanelVisible
-                ? new GridLength(usePersistedStars ? layout.RightPaneTopStar : 1.0, GridUnitType.Star)
+            GridLength Row(bool visible, double star) => visible
+                ? new GridLength(usePersistedStars ? star : 1.0, GridUnitType.Star)
                 : GridLength.Auto;
-            grid.RowDefinitions[2].Height = notesVisible
-                ? new GridLength(usePersistedStars ? layout.RightPaneBottomStar : 1.0, GridUnitType.Star)
-                : GridLength.Auto;
-            grid.RowDefinitions[4].Height = chatVisible
-                ? new GridLength(usePersistedStars ? layout.RightPaneChatStar : 1.0, GridUnitType.Star)
-                : GridLength.Auto;
+
+            grid.RowDefinitions[0].Height = Row(chPanelVisible, layout.RightPaneTopStar);
+            grid.RowDefinitions[2].Height = Row(beatsVisible, layout.RightPaneBeatsStar);
+            grid.RowDefinitions[4].Height = Row(notesVisible, layout.RightPaneBottomStar);
+            grid.RowDefinitions[6].Height = Row(chatVisible, layout.RightPaneChatStar);
         }
 
         ApplyRowHeights(
             vm.IsChapterPanelOpen,
+            vm.IsBeatsPanelOpen,
             vm.NotesViewModel.IsVisible,
             vm.AiChatViewModel.IsVisible,
             vm.CurrentWriteLayout);
 
         _layoutDisposables.Add(
-            vm.WhenAnyValue(x => x.IsChapterPanelOpen)
+            vm.WhenAnyValue(x => x.IsChapterPanelOpen, x => x.IsBeatsPanelOpen, (chPanel, beats) => (chPanel, beats))
                 .CombineLatest(
                     vm.NotesViewModel.WhenAnyValue(x => x.IsVisible),
                     vm.AiChatViewModel.WhenAnyValue(x => x.IsVisible),
                     vm.WhenAnyValue(x => x.CurrentWriteLayout),
-                    (chPanel, notes, chat, layout) => (chPanel, notes, chat, layout))
+                    (top, notes, chat, layout) => (top.chPanel, top.beats, notes, chat, layout))
                 .ObserveOn(AvaloniaScheduler.Instance)
                 .Subscribe(
-                    state => ApplyRowHeights(state.chPanel, state.notes, state.chat, state.layout),
+                    state => ApplyRowHeights(state.chPanel, state.beats, state.notes, state.chat, state.layout),
                     _ => { /* non-fatal */ }));
     }
 
@@ -371,6 +381,7 @@ public partial class MainWindow : Window
             LeftPaneTopStar     = current.LeftPaneTopStar,
             LeftPaneBottomStar  = current.LeftPaneBottomStar,
             RightPaneTopStar    = current.RightPaneTopStar,
+            RightPaneBeatsStar  = current.RightPaneBeatsStar,
             RightPaneBottomStar = current.RightPaneBottomStar,
             RightPaneChatStar   = current.RightPaneChatStar,
         };
@@ -404,17 +415,21 @@ public partial class MainWindow : Window
         }
 
         // Capture right-pane vertical star weights for each open content row.
-        if (rightPane?.RowDefinitions.Count >= 5)
+        if (rightPane?.RowDefinitions.Count >= 7)
         {
             var top = rightPane.RowDefinitions[0].Height;
             if (top.IsStar && top.Value > 0)
                 captured.RightPaneTopStar = top.Value;
 
-            var mid = rightPane.RowDefinitions[2].Height;
+            var beats = rightPane.RowDefinitions[2].Height;
+            if (beats.IsStar && beats.Value > 0)
+                captured.RightPaneBeatsStar = beats.Value;
+
+            var mid = rightPane.RowDefinitions[4].Height;
             if (mid.IsStar && mid.Value > 0)
                 captured.RightPaneBottomStar = mid.Value;
 
-            var chat = rightPane.RowDefinitions[4].Height;
+            var chat = rightPane.RowDefinitions[6].Height;
             if (chat.IsStar && chat.Value > 0)
                 captured.RightPaneChatStar = chat.Value;
         }

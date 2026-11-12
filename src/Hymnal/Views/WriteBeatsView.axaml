@@ -1,0 +1,145 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:Hymnal.ViewModels"
+             x:Class="Hymnal.Views.WriteBeatsView"
+             x:DataType="vm:WriteBeatsViewModel"
+             x:Name="Root"
+             Background="{DynamicResource Cora.Surface.Panel}">
+
+    <UserControl.Styles>
+        <Style Selector="Border.write-beat">
+            <Setter Property="Background" Value="Transparent" />
+            <Setter Property="BorderBrush" Value="{DynamicResource Cora.Border.Subtle}" />
+            <Setter Property="BorderThickness" Value="3,0,0,0" />
+            <Setter Property="Padding" Value="10,6,8,8" />
+            <Setter Property="Margin" Value="0,0,0,6" />
+        </Style>
+        <Style Selector="Border.write-beat.current">
+            <Setter Property="BorderBrush" Value="{DynamicResource Cora.Accent.Store}" />
+            <Setter Property="Background" Value="{DynamicResource Cora.Wash.Selected}" />
+        </Style>
+        <Style Selector="TextBox.beat-field">
+            <Setter Property="Background" Value="Transparent" />
+            <Setter Property="BorderThickness" Value="0" />
+            <Setter Property="Padding" Value="0,2" />
+            <Setter Property="MinHeight" Value="0" />
+            <Setter Property="Foreground" Value="{DynamicResource Cora.Text}" />
+        </Style>
+        <Style Selector="TextBox.beat-field:focus /template/ Border#PART_BorderElement">
+            <Setter Property="Background" Value="{DynamicResource Cora.Surface.Void}" />
+        </Style>
+        <Style Selector="Button.scene-link">
+            <Setter Property="Background" Value="Transparent" />
+            <Setter Property="BorderThickness" Value="0" />
+            <Setter Property="Padding" Value="0,2" />
+            <Setter Property="Cursor" Value="Hand" />
+            <Setter Property="Foreground" Value="{DynamicResource Cora.Accent.Store}" />
+        </Style>
+        <Style Selector="Button.plan-link">
+            <Setter Property="Background" Value="Transparent" />
+            <Setter Property="BorderBrush" Value="{DynamicResource Cora.Border.Subtle}" />
+            <Setter Property="BorderThickness" Value="1" />
+            <Setter Property="CornerRadius" Value="6" />
+            <Setter Property="Padding" Value="10,4" />
+            <Setter Property="Foreground" Value="{DynamicResource Cora.Accent.Store}" />
+        </Style>
+    </UserControl.Styles>
+
+    <Panel>
+        <!-- No story: the open file belongs to none (anthology with nothing selected, or an excluded file) -->
+        <TextBlock Text="Open a story to see its beats."
+                   IsVisible="{Binding !HasStory}"
+                   VerticalAlignment="Center"
+                   HorizontalAlignment="Center"
+                   TextAlignment="Center"
+                   TextWrapping="Wrap"
+                   FontSize="12"
+                   Margin="16"
+                   Foreground="{DynamicResource Cora.Text.Disabled}" />
+
+        <!-- The story has no beats yet -->
+        <StackPanel IsVisible="{Binding ShowsEmptyState}"
+                    VerticalAlignment="Center"
+                    HorizontalAlignment="Center"
+                    Spacing="10"
+                    Margin="16">
+            <TextBlock Text="{Binding StoryTitle, StringFormat='{}{0} has no beats yet.'}"
+                       TextAlignment="Center"
+                       TextWrapping="Wrap"
+                       FontSize="12"
+                       Foreground="{DynamicResource Cora.Text.Secondary}" />
+            <TextBlock Text="Outline it in Plan, and the beats stay here beside your draft."
+                       TextAlignment="Center"
+                       TextWrapping="Wrap"
+                       FontSize="11"
+                       Foreground="{DynamicResource Cora.Text.Disabled}" />
+            <Button Classes="plan-link"
+                    HorizontalAlignment="Center"
+                    Content="Plan this story"
+                    Command="{Binding PlanStoryCommand}" />
+        </StackPanel>
+
+        <!-- The beats -->
+        <DockPanel IsVisible="{Binding HasBeats}">
+            <TextBlock DockPanel.Dock="Top"
+                       Text="{Binding StoryTitle}"
+                       FontSize="13"
+                       FontWeight="SemiBold"
+                       TextTrimming="CharacterEllipsis"
+                       Margin="12,10,12,2"
+                       Foreground="{DynamicResource Cora.Text}" />
+            <TextBlock DockPanel.Dock="Top"
+                       IsVisible="{Binding Board.IsReadOnly}"
+                       Text="This beat board couldn't be read, so it is read-only."
+                       TextWrapping="Wrap"
+                       FontSize="11"
+                       Margin="12,0,12,4"
+                       Foreground="{DynamicResource Cora.Accent.Error}" />
+            <ScrollViewer HorizontalScrollBarVisibility="Disabled">
+                <ItemsControl x:Name="BeatItems"
+                              ItemsSource="{Binding Board.Beats}"
+                              Margin="8,6,8,8">
+                    <ItemsControl.ItemTemplate>
+                        <DataTemplate DataType="vm:BeatCardViewModel">
+                            <Border Classes="write-beat"
+                                    Classes.current="{Binding IsCurrent}">
+                                <StackPanel Spacing="2">
+                                    <TextBox Classes="beat-field"
+                                             Text="{Binding Title, Mode=TwoWay}"
+                                             IsReadOnly="{Binding !#Root.((vm:WriteBeatsViewModel)DataContext).Board.CanEdit}"
+                                             FontSize="13"
+                                             FontWeight="SemiBold"
+                                             TextWrapping="Wrap"
+                                             PlaceholderText="Beat title" />
+                                    <TextBox Classes="beat-field"
+                                             Text="{Binding Note, Mode=TwoWay}"
+                                             IsReadOnly="{Binding !#Root.((vm:WriteBeatsViewModel)DataContext).Board.CanEdit}"
+                                             FontSize="12"
+                                             AcceptsReturn="True"
+                                             TextWrapping="Wrap"
+                                             PlaceholderText="What happens in this beat"
+                                             Foreground="{DynamicResource Cora.Text.Secondary}" />
+                                    <Button Classes="scene-link"
+                                            IsVisible="{Binding ScenePath, Converter={x:Static ObjectConverters.IsNotNull}}"
+                                            IsEnabled="{Binding !IsSceneMissing}"
+                                            Command="{Binding #Root.((vm:WriteBeatsViewModel)DataContext).OpenSceneCommand}"
+                                            CommandParameter="{Binding}"
+                                            ToolTip.Tip="Open this scene">
+                                        <TextBlock FontSize="11"
+                                                   TextTrimming="CharacterEllipsis"
+                                                   Text="{Binding SceneTitle, StringFormat='→ {0}'}" />
+                                    </Button>
+                                    <TextBlock IsVisible="{Binding IsSceneMissing}"
+                                               FontSize="11"
+                                               TextWrapping="Wrap"
+                                               Foreground="{DynamicResource Cora.Accent.Unknown}"
+                                               Text="Its scene is no longer in the story." />
+                                </StackPanel>
+                            </Border>
+                        </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                </ItemsControl>
+            </ScrollViewer>
+        </DockPanel>
+    </Panel>
+</UserControl>

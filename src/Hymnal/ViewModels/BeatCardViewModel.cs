@@ -139,6 +139,17 @@ public sealed class BeatCardViewModel : ViewModelBase, IDisposable
         private set => this.RaiseAndSetIfChanged(ref _isSceneMissing, value);
     }
 
+    private bool _isCurrent;
+    /// <summary>
+    /// True when this beat is linked to the scene open in the editor (Write mode's Beats panel). Display
+    /// only: never saved and never counts as an edit.
+    /// </summary>
+    public bool IsCurrent
+    {
+        get => _isCurrent;
+        set => this.RaiseAndSetIfChanged(ref _isCurrent, value);
+    }
+
     public Beat ToBeat() => new(Id, Title, Note, ScenePath, SceneId);
 
     /// <summary>Changes the link; the owner then attaches the matching scene and saves.</summary>

@@ -246,6 +246,17 @@ public partial class App : Application
                 sp.GetRequiredService<WorkspaceViewModel>(),
                 sp.GetRequiredService<INotificationService>()));
 
+        // Write mode's Beats panel has its own board, so it never changes the one Plan shows.
+        services.AddSingleton<WriteBeatsViewModel>(sp =>
+            new WriteBeatsViewModel(
+                sp.GetRequiredService<WorkspaceViewModel>(),
+                new BeatBoardViewModel(
+                    sp.GetRequiredService<WorkspaceViewModel>(),
+                    sp.GetRequiredService<INotificationService>()),
+                sp.GetRequiredService<BeatBoardViewModel>(),
+                sp.GetRequiredService<IAppSettingsStore>(),
+                sp.GetRequiredService<INotificationService>()));
+
         services.AddSingleton<PlanHostViewModel>(sp =>
             new PlanHostViewModel(
                 sp.GetRequiredService<WorkspaceViewModel>(),
@@ -288,7 +299,8 @@ public partial class App : Application
                 {
                     var notes = await sp.GetRequiredService<NotesViewModel>().FlushAsync();
                     var schedule = await sp.GetRequiredService<ChapterInfoViewModel>().FlushScheduleAsync();
-                    return notes && schedule;
+                    var writeBeats = await sp.GetRequiredService<WriteBeatsViewModel>().FlushAsync();
+                    return notes && schedule && writeBeats;
                 },
                 sp.GetRequiredService<SoundPreferences>(),
                 sp.GetRequiredService<TypingSoundPlayer>(),
@@ -312,7 +324,8 @@ public partial class App : Application
                 () => sp.GetRequiredService<SettingsViewModel>(),
                 sp.GetRequiredService<IdeasViewModel>(),
                 sp.GetRequiredService<PlanHostViewModel>(),
-                sp.GetRequiredService<SoundPreferences>()));
+                sp.GetRequiredService<SoundPreferences>(),
+                sp.GetRequiredService<WriteBeatsViewModel>()));
 
         _serviceProvider = services.BuildServiceProvider();
         Services = _serviceProvider;
