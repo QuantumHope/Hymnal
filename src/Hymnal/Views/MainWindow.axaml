@@ -24,6 +24,76 @@
     </Window.Resources>
 
     <Window.Styles>
+        <!-- Splitters: a 6px grab area drawn as a 1px hairline, which brightens to the accent while hovered or
+             dragged. "rail" splitters size the Write rails (columns); "section" splitters the panes inside a rail
+             (rows). A rail splitter shows "snap" while letting go would collapse or expand its rail. -->
+        <Style Selector="GridSplitter.rail">
+            <Setter Property="Width" Value="6" />
+            <Setter Property="MinWidth" Value="6" />
+            <Setter Property="Cursor" Value="SizeWestEast" />
+            <Setter Property="Background">
+                <LinearGradientBrush StartPoint="0%,0%" EndPoint="100%,0%">
+                    <GradientStop Offset="0" Color="Transparent" />
+                    <GradientStop Offset="0.42" Color="Transparent" />
+                    <GradientStop Offset="0.42" Color="{DynamicResource Cora.Border.Subtle.Color}" />
+                    <GradientStop Offset="0.58" Color="{DynamicResource Cora.Border.Subtle.Color}" />
+                    <GradientStop Offset="0.58" Color="Transparent" />
+                    <GradientStop Offset="1" Color="Transparent" />
+                </LinearGradientBrush>
+            </Setter>
+        </Style>
+        <Style Selector="GridSplitter.rail:pointerover, GridSplitter.rail:pressed">
+            <Setter Property="Background">
+                <LinearGradientBrush StartPoint="0%,0%" EndPoint="100%,0%">
+                    <GradientStop Offset="0" Color="Transparent" />
+                    <GradientStop Offset="0.25" Color="Transparent" />
+                    <GradientStop Offset="0.25" Color="{DynamicResource Cora.Accent.Store.Color}" />
+                    <GradientStop Offset="0.75" Color="{DynamicResource Cora.Accent.Store.Color}" />
+                    <GradientStop Offset="0.75" Color="Transparent" />
+                    <GradientStop Offset="1" Color="Transparent" />
+                </LinearGradientBrush>
+            </Setter>
+        </Style>
+        <Style Selector="GridSplitter.rail.snap">
+            <Setter Property="Background">
+                <LinearGradientBrush StartPoint="0%,0%" EndPoint="100%,0%">
+                    <GradientStop Offset="0" Color="Transparent" />
+                    <GradientStop Offset="0.17" Color="Transparent" />
+                    <GradientStop Offset="0.17" Color="{DynamicResource Cora.Accent.Create.Color}" />
+                    <GradientStop Offset="0.83" Color="{DynamicResource Cora.Accent.Create.Color}" />
+                    <GradientStop Offset="0.83" Color="Transparent" />
+                    <GradientStop Offset="1" Color="Transparent" />
+                </LinearGradientBrush>
+            </Setter>
+        </Style>
+        <Style Selector="GridSplitter.section">
+            <Setter Property="Height" Value="6" />
+            <Setter Property="MinHeight" Value="6" />
+            <Setter Property="Cursor" Value="SizeNorthSouth" />
+            <Setter Property="Background">
+                <LinearGradientBrush StartPoint="0%,0%" EndPoint="0%,100%">
+                    <GradientStop Offset="0" Color="Transparent" />
+                    <GradientStop Offset="0.42" Color="Transparent" />
+                    <GradientStop Offset="0.42" Color="{DynamicResource Cora.Border.Subtle.Color}" />
+                    <GradientStop Offset="0.58" Color="{DynamicResource Cora.Border.Subtle.Color}" />
+                    <GradientStop Offset="0.58" Color="Transparent" />
+                    <GradientStop Offset="1" Color="Transparent" />
+                </LinearGradientBrush>
+            </Setter>
+        </Style>
+        <Style Selector="GridSplitter.section:pointerover, GridSplitter.section:pressed">
+            <Setter Property="Background">
+                <LinearGradientBrush StartPoint="0%,0%" EndPoint="0%,100%">
+                    <GradientStop Offset="0" Color="Transparent" />
+                    <GradientStop Offset="0.25" Color="Transparent" />
+                    <GradientStop Offset="0.25" Color="{DynamicResource Cora.Accent.Store.Color}" />
+                    <GradientStop Offset="0.75" Color="{DynamicResource Cora.Accent.Store.Color}" />
+                    <GradientStop Offset="0.75" Color="Transparent" />
+                    <GradientStop Offset="1" Color="Transparent" />
+                </LinearGradientBrush>
+            </Setter>
+        </Style>
+
         <!-- nav-icon: borderless icon button used in collapsed rail and expanded pane headers -->
         <Style Selector="Button.nav-icon">
             <Setter Property="Background" Value="Transparent" />
@@ -94,14 +164,15 @@
 
     <Window.KeyBindings>
         <KeyBinding Gesture="Ctrl+B" Command="{Binding ToggleSidebarCommand}" />
+        <KeyBinding Gesture="Ctrl+Alt+B" Command="{Binding ToggleRightRailCommand}" />
         <KeyBinding Gesture="Ctrl+OemComma" Command="{Binding OpenSettingsCommand}" />
-        <KeyBinding Gesture="Ctrl+Shift+A" Command="{Binding ToggleAiChatCommand}" />
+        <KeyBinding Gesture="Ctrl+Shift+A" Command="{Binding ToggleRightPaneCommand}" CommandParameter="chat" />
         <KeyBinding Gesture="F1" Command="{Binding ShowAboutCommand}" />
-        <KeyBinding Gesture="F3" Command="{Binding ChapterInfoViewModel.ToggleCommand}" />
-        <KeyBinding Gesture="F4" Command="{Binding NotesViewModel.ToggleCommand}" />
+        <KeyBinding Gesture="F3" Command="{Binding ToggleRightPaneCommand}" CommandParameter="info" />
+        <KeyBinding Gesture="F4" Command="{Binding ToggleRightPaneCommand}" CommandParameter="notes" />
         <KeyBinding Gesture="F5" Command="{Binding ToggleGanttCommand}" />
         <KeyBinding Gesture="F6" Command="{Binding EditorViewModel.CycleViewModeCommand}" />
-        <KeyBinding Gesture="F7" Command="{Binding WriteBeatsViewModel.ToggleCommand}" />
+        <KeyBinding Gesture="F7" Command="{Binding ToggleRightPaneCommand}" CommandParameter="beats" />
         <KeyBinding Gesture="F11" Command="{Binding ToggleFocusModeCommand}" />
         <KeyBinding Gesture="Escape" Command="{Binding ExitFocusModeCommand}" />
         <KeyBinding Gesture="Ctrl+Shift+I" Command="{Binding QuickCaptureIdeaCommand}" />
@@ -138,21 +209,24 @@
                                   Command="{Binding ExitCommand}" />
                     </MenuItem>
                     <MenuItem Header="_View" Foreground="{DynamicResource Cora.Text}">
-                        <MenuItem Header="Toggle _Sidebar"
+                        <MenuItem Header="Toggle _Left Sidebar"
                                   Command="{Binding ToggleSidebarCommand}"
                                   InputGesture="Ctrl+B" />
+                        <MenuItem Header="Toggle _Right Sidebar"
+                                  Command="{Binding ToggleRightRailCommand}"
+                                  InputGesture="Ctrl+Alt+B" />
                         <MenuItem Header="{Binding ChapterInfoViewModel.ToggleMenuHeader}"
-                                  Command="{Binding ChapterInfoViewModel.ToggleCommand}"
+                                  Command="{Binding ToggleRightPaneCommand}" CommandParameter="info"
                                   InputGesture="F3" />
                         <MenuItem Header="Toggle _Notes"
-                                  Command="{Binding NotesViewModel.ToggleCommand}"
+                                  Command="{Binding ToggleRightPaneCommand}" CommandParameter="notes"
                                   InputGesture="F4" />
                         <MenuItem Header="Toggle _Manage View"
                                   Command="{Binding ToggleGanttCommand}"
                                   InputGesture="F5" />
                         <MenuItem Header="Toggle _Beats"
                                   IsVisible="{Binding IsBeatsSectionAvailable}"
-                                  Command="{Binding WriteBeatsViewModel.ToggleCommand}"
+                                  Command="{Binding ToggleRightPaneCommand}" CommandParameter="beats"
                                   InputGesture="F7" />
                         <MenuItem Header="_Focus Mode"
                                   Command="{Binding ToggleFocusModeCommand}"
@@ -319,7 +393,7 @@
 
             <!-- Layout: [left pane] [editor] [splitter] [right pane] — Write mode only -->
             <Grid x:Name="ShellGrid"
-                  ColumnDefinitions="220,4,*,4,280"
+                  ColumnDefinitions="220,6,*,6,280"
                   IsVisible="{Binding IsEditorVisible}">
 
                 <!-- ── LEFT PANE ─────────────────────────────────────────────── -->
@@ -335,7 +409,7 @@
                                     IsVisible="{Binding !IsAnyLeftPaneOpen}"
                                     Margin="0,8,0,0">
                             <Button Classes="nav-icon"
-                                    Command="{Binding WorkspaceViewModel.ToggleChaptersPaneCommand}"
+                                    Command="{Binding OpenLeftPaneCommand}" CommandParameter="chapters"
                                     ToolTip.Tip="{Binding WorkspaceViewModel.Profile.UnitPlural, StringFormat='{}{0} (Ctrl+B)'}">
                                 <Path Data="M3 12h18M3 6h18M3 18h18"
                                       Stroke="{DynamicResource Cora.Text.Secondary}"
@@ -345,7 +419,7 @@
                                       Stretch="Uniform" />
                             </Button>
                             <Button Classes="nav-icon"
-                                    Command="{Binding SupplementalDocsViewModel.ToggleCommand}"
+                                    Command="{Binding OpenLeftPaneCommand}" CommandParameter="docs"
                                     ToolTip.Tip="Supplemental docs">
                                 <Path Data="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8zM14 2v6h6M16 13H8M16 17H8M10 9H8"
                                       Stroke="{DynamicResource Cora.Text.Secondary}"
@@ -440,11 +514,11 @@
                                                    IsVisible="{Binding IsChaptersPaneVisible}" />
                             </Grid>
 
-                            <GridSplitter Grid.Row="1"
-                                          Height="4"
+                            <GridSplitter Classes="section" Grid.Row="1"
+                                          ResizeBehavior="PreviousAndNext"
                                           ResizeDirection="Rows"
                                           IsVisible="{Binding IsBothLeftPanesOpen}"
-                                          Background="{DynamicResource Cora.Border.Subtle}" />
+                                          />
 
                             <!-- Docs section -->
                             <Grid Grid.Row="2"
@@ -487,10 +561,10 @@
                 </Border>
 
                 <!-- ── SPLITTER BETWEEN LEFT PANE AND EDITOR ─────────────── -->
-                <GridSplitter Grid.Column="1" IsVisible="{Binding !IsFocusMode}"
-                              Width="4"
+                <GridSplitter x:Name="LeftRailSplitter" Classes="rail" ToolTip.Tip="Drag to resize · drag closed or double-click to collapse" ToolTip.ShowDelay="900" Grid.Column="1" IsVisible="{Binding !IsFocusMode}"
+                              ResizeBehavior="PreviousAndNext"
                               ResizeDirection="Columns"
-                              Background="{DynamicResource Cora.Border.Subtle}" />
+                              />
 
                 <!-- ── EDITOR ─────────────────────────────────────── -->
                 <!-- The chapter status bar shares the editor's header row with the Write / Split / Preview switch. -->
@@ -506,10 +580,10 @@
                 </views:EditorView>
 
                 <!-- ── SPLITTER (visible when any right pane is open) ─────────── -->
-                <GridSplitter Grid.Column="3" IsVisible="{Binding !IsFocusMode}"
-                              Width="4"
+                <GridSplitter x:Name="RightRailSplitter" Classes="rail" ToolTip.Tip="Drag to resize · drag closed or double-click to collapse" ToolTip.ShowDelay="900" Grid.Column="3" IsVisible="{Binding !IsFocusMode}"
+                              ResizeBehavior="PreviousAndNext"
                               ResizeDirection="Columns"
-                              Background="{DynamicResource Cora.Border.Subtle}" />
+                              />
 
                 <!-- ── RIGHT PANE ─────────────────────────────────────────────── -->
                 <Border Grid.Column="4" IsVisible="{Binding !IsFocusMode}"
@@ -524,7 +598,7 @@
                                     Margin="0,8,0,0">
                             <!-- F3: Chapter Info -->
                             <Button Classes="nav-icon"
-                                    Command="{Binding ChapterInfoViewModel.ToggleCommand}"
+                                    Command="{Binding OpenRightPaneCommand}" CommandParameter="info"
                                     ToolTip.Tip="{Binding ChapterInfoViewModel.ToggleToolTip}">
                                 <Path Data="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-6h2v6zm0-8h-2V7h2v2z"
                                       Fill="{DynamicResource Cora.Text.Secondary}"
@@ -534,7 +608,7 @@
                             <!-- F7: Beats (story/anthology) -->
                             <Button Classes="nav-icon"
                                     IsVisible="{Binding IsBeatsSectionAvailable}"
-                                    Command="{Binding WriteBeatsViewModel.ToggleCommand}"
+                                    Command="{Binding OpenRightPaneCommand}" CommandParameter="beats"
                                     ToolTip.Tip="Beats (F7)">
                                 <Path Data="M4 6h16M4 12h10M4 18h13"
                                       Stroke="{DynamicResource Cora.Text.Secondary}"
@@ -545,7 +619,7 @@
                             </Button>
                             <!-- F4: Notes -->
                             <Button Classes="nav-icon"
-                                    Command="{Binding NotesViewModel.ToggleCommand}"
+                                    Command="{Binding OpenRightPaneCommand}" CommandParameter="notes"
                                     ToolTip.Tip="Notes (F4)">
                                 <Path Data="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8zM14 2v6h6M16 13H8M16 17H8M10 9H8"
                                       Stroke="{DynamicResource Cora.Text.Secondary}"
@@ -556,7 +630,7 @@
                             </Button>
                             <!-- AI Chat (Ctrl+Shift+A) -->
                             <Button Classes="nav-icon"
-                                    Command="{Binding ToggleAiChatCommand}"
+                                    Command="{Binding OpenRightPaneCommand}" CommandParameter="chat"
                                     ToolTip.Tip="AI Chat (Ctrl+Shift+A)">
                                 <Path Data="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z"
                                       Stroke="{DynamicResource Cora.Text.Secondary}"
@@ -616,11 +690,11 @@
                             </DockPanel>
 
                             <!-- Row 1: GridSplitter between Info and Beats (visible when both content areas open) -->
-                            <GridSplitter Grid.Row="1"
-                                          Height="4"
+                            <GridSplitter Classes="section" Grid.Row="1"
+                                          ResizeBehavior="PreviousAndNext"
                                           ResizeDirection="Rows"
                                           IsVisible="{Binding IsInfoBeatsSplitterVisible}"
-                                          Background="{DynamicResource Cora.Border.Subtle}" />
+                                          />
 
                             <!-- Row 2: Beats DockPanel (story/anthology only): the story's beats beside the draft -->
                             <DockPanel Grid.Row="2"
@@ -668,11 +742,11 @@
                             </DockPanel>
 
                             <!-- Row 3: GridSplitter above Notes (visible when Notes and Info or Beats are open) -->
-                            <GridSplitter Grid.Row="3"
-                                          Height="4"
+                            <GridSplitter Classes="section" Grid.Row="3"
+                                          ResizeBehavior="PreviousAndNext"
                                           ResizeDirection="Rows"
                                           IsVisible="{Binding IsAboveNotesSplitterVisible}"
-                                          Background="{DynamicResource Cora.Border.Subtle}" />
+                                          />
 
                             <!-- Row 4: Notes DockPanel (header pinned top + content fills rest) -->
                             <DockPanel Grid.Row="4">
@@ -707,11 +781,11 @@
                             </DockPanel>
 
                             <!-- Row 5: GridSplitter between Notes and AI (visible when both content areas open) -->
-                            <GridSplitter Grid.Row="5"
-                                          Height="4"
+                            <GridSplitter Classes="section" Grid.Row="5"
+                                          ResizeBehavior="PreviousAndNext"
                                           ResizeDirection="Rows"
                                           IsVisible="{Binding IsNotesChatSplitterVisible}"
-                                          Background="{DynamicResource Cora.Border.Subtle}" />
+                                          />
 
                             <!-- Row 6: AI Chat DockPanel (header always visible; content collapses) -->
                             <DockPanel Grid.Row="6">

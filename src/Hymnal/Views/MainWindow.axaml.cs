@@ -58,6 +58,7 @@ public partial class MainWindow : Window
                 SetupRightPaneRowHeights(vm);
                 SetupLayoutPersistence(vm);
                 SetupFocusMode(vm);
+                SetupRailInteractions(vm);
 
                 vm.ShowQuickIdeaDialogAsync = () => QuickIdeaDialog.ShowAsync(this);
 
@@ -144,26 +145,35 @@ public partial class MainWindow : Window
             // capture never saves a rail narrower than MinSidebarWidth, so the zero widths aren't persisted).
             if (mode is ShellMode.Manage or ShellMode.Plan or ShellMode.Research or ShellMode.Ideas || vm.IsFocusMode)
             {
-                grid.ColumnDefinitions[0].Width = new GridLength(0);
-                grid.ColumnDefinitions[1].Width = new GridLength(0);
-                grid.ColumnDefinitions[3].Width = new GridLength(0);
-                grid.ColumnDefinitions[4].Width = new GridLength(0);
+                foreach (var i in new[] { 0, 1, 3, 4 })
+                {
+                    StopRailAnimation(grid.ColumnDefinitions[i]);
+                    SetRailConstraints(grid.ColumnDefinitions[i], RailState.Hidden);
+                    grid.ColumnDefinitions[i].Width = new GridLength(0);
+                }
+                grid.ColumnDefinitions[2].MinWidth = 0;
+                _railsShown = false;
                 return;
             }
 
-            // Splitter columns are always 4px in Write mode.
-            grid.ColumnDefinitions[1].Width = new GridLength(4);
-            grid.ColumnDefinitions[3].Width = new GridLength(4);
+            grid.ColumnDefinitions[1].Width = new GridLength(RailSplitterWidth);
+            grid.ColumnDefinitions[3].Width = new GridLength(RailSplitterWidth);
+            grid.ColumnDefinitions[2].MinWidth = EditorMinWidth;
 
-            // Left sidebar: expanded uses stored width; collapsed uses 48px icon rail.
-            grid.ColumnDefinitions[0].Width = anyLeftOpen
-                ? new GridLength(layout.LeftSidebarWidth)
-                : new GridLength(48);
+            // A rail is only re-applied when its own state changes (or the stored layout does, or Write comes
+            // back), so toggling one rail never snaps the other back while it is being dragged. Opening and
+            // closing animate; anything else (startup, returning to Write, a reset) is immediate.
+            var reapplyAll = !_railsShown || !ReferenceEquals(layout, _lastRailLayout);
+            var animate = _railsShown;
+            ApplyRail(grid.ColumnDefinitions[0], anyLeftOpen, layout.LeftSidebarWidth,
+                reapplyAll || anyLeftOpen != _lastLeftOpen, animate && anyLeftOpen != _lastLeftOpen);
+            ApplyRail(grid.ColumnDefinitions[4], anyRightOpen, layout.RightSidebarWidth,
+                reapplyAll || anyRightOpen != _lastRightOpen, animate && anyRightOpen != _lastRightOpen);
 
-            // Right sidebar: expanded uses stored width; collapsed uses 48px icon rail.
-            grid.ColumnDefinitions[4].Width = anyRightOpen
-                ? new GridLength(layout.RightSidebarWidth)
-                : new GridLength(48);
+            _railsShown = true;
+            _lastLeftOpen = anyLeftOpen;
+            _lastRightOpen = anyRightOpen;
+            _lastRailLayout = layout;
         }
 
         ApplyColumnWidths(vm.ActiveMode, vm.IsAnyLeftPaneOpen, vm.IsAnyRightPaneOpen, vm.CurrentWriteLayout);
@@ -239,6 +249,9 @@ public partial class MainWindow : Window
                 chaptersVisible ? new GridLength(1, GridUnitType.Star) : new GridLength(0);
             docsSection.RowDefinitions[1].Height =
                 docsVisible ? new GridLength(1, GridUnitType.Star) : new GridLength(0);
+            // An open section keeps room for its header and a few rows when the splitter is dragged.
+            outerGrid.RowDefinitions[0].MinHeight = chaptersVisible && docsVisible ? SectionMinHeight : 0;
+            outerGrid.RowDefinitions[2].MinHeight = chaptersVisible && docsVisible ? SectionMinHeight : 0;
 
             if (chaptersVisible && docsVisible)
             {
@@ -338,6 +351,10 @@ public partial class MainWindow : Window
             grid.RowDefinitions[2].MinHeight = beatsVisible ? BeatsRowMinHeight : 0;
             grid.RowDefinitions[4].Height = Row(notesVisible, layout.RightPaneBottomStar);
             grid.RowDefinitions[6].Height = Row(chatVisible, layout.RightPaneChatStar);
+            // Every open section keeps room for its header and some content when a splitter is dragged.
+            grid.RowDefinitions[0].MinHeight = chPanelVisible && openCount > 1 ? SectionMinHeight : 0;
+            grid.RowDefinitions[4].MinHeight = notesVisible && openCount > 1 ? SectionMinHeight : 0;
+            grid.RowDefinitions[6].MinHeight = chatVisible && openCount > 1 ? SectionMinHeight : 0;
         }
 
         ApplyRowHeights(
@@ -403,7 +420,7 @@ public partial class MainWindow : Window
 
     private void OnShellGridLayoutUpdated(object? sender, EventArgs e)
     {
-        if (_suppressLayoutCapture) return;
+        if (_suppressLayoutCapture || _railAnimations.Count > 0) return;
         if (DataContext is not MainWindowViewModel vm) return;
         if (vm.ActiveMode != ShellMode.Write) return;
         _layoutChangedSubject.OnNext(Unit.Default);

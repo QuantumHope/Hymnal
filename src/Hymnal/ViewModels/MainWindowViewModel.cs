@@ -233,6 +233,126 @@ public class MainWindowViewModel : ViewModelBase
 
     public ReactiveCommand<Unit, Unit> ToggleSidebarCommand { get; }
 
+    // ── Rail collapse (Write mode) ────────────────────────────────────────────
+    // A rail collapses to its 48px icon strip without closing its panes, so expanding it (Ctrl+B / Ctrl+Alt+B, a
+    // double-click on its splitter, dragging it back out, or an icon) brings back exactly what was open.
+
+    internal const string LeftRailCollapsedKey = "leftRailCollapsed";
+    internal const string RightRailCollapsedKey = "rightRailCollapsed";
+
+    private bool _isLeftRailCollapsed;
+    public bool IsLeftRailCollapsed
+    {
+        get => _isLeftRailCollapsed;
+        private set => this.RaiseAndSetIfChanged(ref _isLeftRailCollapsed, value);
+    }
+
+    private bool _isRightRailCollapsed;
+    public bool IsRightRailCollapsed
+    {
+        get => _isRightRailCollapsed;
+        private set => this.RaiseAndSetIfChanged(ref _isRightRailCollapsed, value);
+    }
+
+    public ReactiveCommand<Unit, Unit> ToggleRightRailCommand { get; }
+
+    /// <summary>F3 / F7 / F4 / Ctrl+Shift+A: toggles that pane, or on a collapsed rail expands it with the pane shown.</summary>
+    public ReactiveCommand<string, Unit> ToggleRightPaneCommand { get; }
+
+    /// <summary>The left icon strip's buttons: "chapters" or "docs". Expands the rail and shows that pane.</summary>
+    public ReactiveCommand<string, Unit> OpenLeftPaneCommand { get; }
+
+    /// <summary>The right icon strip's buttons: "info", "beats", "notes" or "chat". Expands the rail and shows that pane.</summary>
+    public ReactiveCommand<string, Unit> OpenRightPaneCommand { get; }
+
+    public void SetLeftRailCollapsed(bool collapsed)
+    {
+        IsLeftRailCollapsed = collapsed;
+        _ = SaveRailFlagAsync(LeftRailCollapsedKey, collapsed);
+    }
+
+    public void SetRightRailCollapsed(bool collapsed)
+    {
+        IsRightRailCollapsed = collapsed;
+        _ = SaveRailFlagAsync(RightRailCollapsedKey, collapsed);
+    }
+
+    /// <summary>Expands the left rail; with no pane open, it opens the sidebar's list.</summary>
+    public void ExpandLeftRail()
+    {
+        SetLeftRailCollapsed(false);
+        if (!_workspaceVm.IsChaptersPaneVisible && !_supplementalDocsVm.IsVisible)
+            _workspaceVm.IsChaptersPaneVisible = true;
+    }
+
+    /// <summary>Expands the right rail; with no pane open, it opens the Beats panel (story/anthology) or the info panel.</summary>
+    public void ExpandRightRail()
+    {
+        SetRightRailCollapsed(false);
+        if (IsAnyRightPaneOpen)
+            return;
+        if (IsBeatsSectionAvailable)
+            OpenRightPane("beats");
+        else
+            OpenRightPane("info");
+        if (!IsAnyRightPaneOpen)
+            OpenRightPane("notes");
+    }
+
+    private void OpenLeftPane(string pane)
+    {
+        SetLeftRailCollapsed(false);
+        if (pane == "docs")
+            _supplementalDocsVm.IsVisible = true;
+        else
+            _workspaceVm.IsChaptersPaneVisible = true;
+    }
+
+    private void OpenRightPane(string pane)
+    {
+        SetRightRailCollapsed(false);
+        switch (pane)
+        {
+            case "info" when !IsChapterPanelOpen:
+                _chapterInfoVm.ToggleCommand.Execute().Subscribe(_ => { }, _ => { });
+                break;
+            case "beats" when WriteBeatsViewModel is { IsVisible: false } beats:
+                beats.ToggleCommand.Execute().Subscribe(_ => { }, _ => { });
+                break;
+            case "notes" when !_notesVm.IsVisible:
+                _notesVm.ToggleCommand.Execute().Subscribe(_ => { }, _ => { });
+                break;
+            case "chat":
+                AiChatViewModel.IsVisible = true;
+                break;
+        }
+    }
+
+    private async Task SaveRailFlagAsync(string key, bool value)
+    {
+        try { await _settingsStore.SetAsync(key, value).ConfigureAwait(false); }
+        catch { /* Non-fatal: the rail just reopens expanded next time. */ }
+    }
+
+    private async Task RestoreRailStateAsync()
+    {
+        try
+        {
+            var left = await _settingsStore.GetAsync<bool?>(LeftRailCollapsedKey).ConfigureAwait(false);
+            var right = await _settingsStore.GetAsync<bool?>(RightRailCollapsedKey).ConfigureAwait(false);
+            if (left == true || right == true)
+                await Avalonia.Threading.Dispatcher.UIThread.InvokeAsync(() =>
+                {
+                    IsLeftRailCollapsed = left == true;
+                    IsRightRailCollapsed = right == true;
+                });
+        }
+        catch
+        {
+            // Non-fatal: both rails start expanded.
+        }
+    }
+
     // ── Right-rail pane aggregates ────────────────────────────────────────────
 
     private readonly ObservableAsPropertyHelper<object?> _chapterPanelContent;
@@ -408,10 +528,12 @@ public class MainWindowViewModel : ViewModelBase
         Disposables.Add(CloseSettingsCommand.ThrownExceptions
             .Subscribe(ex => notificationService.ShowError($"Failed to close settings: {ex.Message}")));
 
+        // A collapsed rail shows its icon strip whatever panes are open, and expanding it brings them back.
         _isAnyLeftPaneOpen = Observable.CombineLatest(
                 workspaceViewModel.WhenAnyValue(x => x.IsChaptersPaneVisible),
                 supplementalDocsViewModel.WhenAnyValue(x => x.IsVisible),
-                (chapters, docs) => chapters || docs)
+                this.WhenAnyValue(x => x.IsLeftRailCollapsed),
+                (chapters, docs, collapsed) => (chapters || docs) && !collapsed)
             .ToProperty(this, x => x.IsAnyLeftPaneOpen);
         Disposables.Add(_isAnyLeftPaneOpen);
 
@@ -422,17 +544,13 @@ public class MainWindowViewModel : ViewModelBase
             .ToProperty(this, x => x.IsBothLeftPanesOpen);
         Disposables.Add(_isBothLeftPanesOpen);
 
+        // Ctrl+B / Ctrl+Alt+B: collapse a rail to its icon strip (its panes are kept), or expand it again.
         ToggleSidebarCommand = ReactiveCommand.Create(() =>
         {
             if (IsAnyLeftPaneOpen)
-            {
-                workspaceViewModel.IsChaptersPaneVisible = false;
-                supplementalDocsViewModel.IsVisible = false;
-            }
+                SetLeftRailCollapsed(true);
             else
-            {
-                workspaceViewModel.IsChaptersPaneVisible = true;
-            }
+                ExpandLeftRail();
         });
 
         SelectResearchCommand = ReactiveCommand.CreateFromTask(EnterResearchModeAsync);
@@ -553,8 +671,46 @@ public class MainWindowViewModel : ViewModelBase
                 NotesViewModel.WhenAnyValue(x => x.IsVisible),
                 AiChatViewModel.WhenAnyValue(x => x.IsVisible),
                 beatsOpenObs,
-                (chPanel, notes, ai, beats) => chPanel || notes || ai || beats)
+                this.WhenAnyValue(x => x.IsRightRailCollapsed),
+                (chPanel, notes, ai, beats, collapsed) => (chPanel || notes || ai || beats) && !collapsed)
             .ToProperty(this, x => x.IsAnyRightPaneOpen);
+
+        ToggleRightRailCommand = ReactiveCommand.Create(() =>
+        {
+            if (IsAnyRightPaneOpen)
+                SetRightRailCollapsed(true);
+            else
+                ExpandRightRail();
+        });
+        OpenLeftPaneCommand = ReactiveCommand.Create<string>(OpenLeftPane);
+        OpenRightPaneCommand = ReactiveCommand.Create<string>(OpenRightPane);
+        ToggleRightPaneCommand = ReactiveCommand.Create<string>(pane =>
+        {
+            if (IsRightRailCollapsed)
+            {
+                OpenRightPane(pane);
+                return;
+            }
+            switch (pane)
+            {
+                case "info": _chapterInfoVm.ToggleCommand.Execute().Subscribe(_ => { }, _ => { }); break;
+                case "beats": WriteBeatsViewModel?.ToggleCommand.Execute().Subscribe(_ => { }, _ => { }); break;
+                case "notes": _notesVm.ToggleCommand.Execute().Subscribe(_ => { }, _ => { }); break;
+                case "chat": AiChatViewModel.IsVisible = !AiChatViewModel.IsVisible; break;
+            }
+        });
+
+        // Whatever opens a pane (a shortcut, the Beats panel's own links, a reset) also expands its rail.
+        void ExpandWhenShown(IObservable<bool> shown, Action expand) =>
+            Disposables.Add(shown.Skip(1).Where(v => v).Subscribe(_ => expand()));
+        ExpandWhenShown(workspaceViewModel.WhenAnyValue(x => x.IsChaptersPaneVisible),
+            () => { if (IsLeftRailCollapsed) SetLeftRailCollapsed(false); });
+        ExpandWhenShown(supplementalDocsViewModel.WhenAnyValue(x => x.IsVisible),
+            () => { if (IsLeftRailCollapsed) SetLeftRailCollapsed(false); });
+        foreach (var shown in new[] { chapterInfoViewModel.WhenAnyValue(x => x.IsVisible), NotesViewModel.WhenAnyValue(x => x.IsVisible),
+                     AiChatViewModel.WhenAnyValue(x => x.IsVisible), beatsOpenObs })
+            ExpandWhenShown(shown, () => { if (IsRightRailCollapsed) SetRightRailCollapsed(false); });
+        _ = RestoreRailStateAsync();
         Disposables.Add(_isAnyRightPaneOpen);
 
         _isBothRightPanesOpen = Observable.CombineLatest(
@@ -855,6 +1011,9 @@ public class MainWindowViewModel : ViewModelBase
     private async Task ResetWriteLayoutAsync()
     {
         var defaults = WriteLayoutSettings.CreateDefault();
+
+        SetLeftRailCollapsed(false);
+        SetRightRailCollapsed(false);
 
         // WorkspaceViewModel and SupplementalDocsViewModel auto-persist on setter.
         _workspaceVm.IsChaptersPaneVisible = true;
