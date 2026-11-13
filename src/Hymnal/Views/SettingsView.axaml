@@ -39,6 +39,12 @@
                            FontWeight="SemiBold"
                            Foreground="{DynamicResource SynthwavePurpleBrush}"
                            Padding="8,6" />
+                <TextBlock Text="Sound"
+                           IsVisible="{Binding HasSound}"
+                           FontSize="12"
+                           FontWeight="SemiBold"
+                           Foreground="{DynamicResource SynthwavePurpleBrush}"
+                           Padding="8,6" />
                 <TextBlock Text="AI Providers"
                            FontSize="12"
                            FontWeight="SemiBold"
@@ -125,6 +131,58 @@
                             Background="{DynamicResource SynthwavePurpleBrush}"
                             Foreground="White"
                             CornerRadius="5" />
+                </StackPanel>
+
+                <!-- Sound section -->
+                <StackPanel x:Name="PART_SoundSection" Spacing="10" IsVisible="{Binding HasSound}">
+                    <TextBlock Text="Sound"
+                               FontSize="18"
+                               FontWeight="SemiBold"
+                               Foreground="{DynamicResource OnSurfaceBrush}" />
+                    <StackPanel Spacing="4">
+                        <CheckBox x:Name="PART_TypingSoundsCheckBox"
+                                  Content="Typewriter sounds while writing"
+                                  IsChecked="{Binding Sound.TypingSoundsEnabled}"
+                                  Foreground="{DynamicResource OnSurfaceBrush}" />
+                        <TextBlock Text="A typewriter plays as you type and delete on the Write surface. Moving the caret stays quiet. Each theme has its own typewriter."
+                                   FontSize="12"
+                                   TextWrapping="Wrap"
+                                   Foreground="{DynamicResource OnSurfaceMutedBrush}" />
+                    </StackPanel>
+                    <Grid ColumnDefinitions="Auto,Auto,Auto,Auto"
+                          IsEnabled="{Binding Sound.TypingSoundsEnabled}"
+                          HorizontalAlignment="Left">
+                        <TextBlock Grid.Column="0"
+                                   Text="Volume"
+                                   VerticalAlignment="Center"
+                                   Margin="0,0,12,0"
+                                   Foreground="{DynamicResource OnSurfaceBrush}" />
+                        <Slider x:Name="PART_TypingVolumeSlider"
+                                Grid.Column="1"
+                                Width="240"
+                                Minimum="0"
+                                Maximum="1"
+                                SmallChange="0.05"
+                                LargeChange="0.1"
+                                Value="{Binding Sound.TypingVolume}" />
+                        <TextBlock Grid.Column="2"
+                                   Text="{Binding Sound.TypingVolume, StringFormat={}{0:P0}}"
+                                   MinWidth="44"
+                                   VerticalAlignment="Center"
+                                   Margin="12,0"
+                                   Foreground="{DynamicResource OnSurfaceDimBrush}" />
+                        <Button Grid.Column="3"
+                                Content="Preview"
+                                Command="{Binding PreviewTypingSoundsCommand}"
+                                Padding="12,6"
+                                FontSize="12"
+                                CornerRadius="5" />
+                    </Grid>
+                    <TextBlock Text="{Binding TypingSoundStatusMessage}"
+                               IsVisible="{Binding TypingSoundStatusMessage, Converter={x:Static ObjectConverters.IsNotNull}}"
+                               FontSize="12"
+                               TextWrapping="Wrap"
+                               Foreground="{DynamicResource OnSurfaceMutedBrush}" />
                 </StackPanel>
 
                 <!-- Section header -->

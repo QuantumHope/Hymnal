@@ -6,6 +6,7 @@ using System.Collections.Specialized;
 using System.Reactive;
 using System.Reactive.Linq;
 using System.Threading.Tasks;
+using Hymnal.Audio;
 using Hymnal.Core.Common;
 using Hymnal.Core.Interfaces;
 using Hymnal.Core.Models;
@@ -61,6 +62,26 @@ public class SettingsViewModel : ViewModelBase
 
     /// <summary>Why "Keep everything in the story file" can't be turned on.</summary>
     public const string StorageOptionUnavailable = "Available when Book.txt lists exactly one story file.";
+
+    /// <summary>Shown under the typing sounds option while the typewriter is getting ready.</summary>
+    public const string TypingSoundsStarting = "Getting the typewriter ready…";
+
+    /// <summary>Shown under the typing sounds option when there is no audio output to play them on.</summary>
+    public const string TypingSoundsUnavailable = "No audio output is available, so typing sounds can't play.";
+
+    /// <summary>The app's sound preferences; null when the host has no sound (the Sound section is hidden).</summary>
+    public SoundPreferences? Sound { get; }
+
+    /// <summary>True when the Sound section applies.</summary>
+    public bool HasSound => Sound is not null;
+
+    /// <summary>A line about the typing sounds' state (starting, no audio output); null when there's nothing to say.</summary>
+    public string? TypingSoundStatusMessage => _typingSoundStatusMessage.Value;
+
+    /// <summary>Types a short phrase so the sounds and volume can be heard. Enabled while typing sounds are on.</summary>
+    public ReactiveCommand<Unit, Unit> PreviewTypingSoundsCommand { get; }
+
+    private readonly ObservableAsPropertyHelper<string?> _typingSoundStatusMessage;
 
     public ObservableCollection<ProviderProfileViewModel> Profiles { get; } = new();
 
@@ -131,7 +152,9 @@ public class SettingsViewModel : ViewModelBase
         IBeatBoardService? beatBoards = null,
         BeatBoardViewModel? beatBoard = null,
         StorageMigrator? storageMigrator = null,
-        Func<Task<bool>>? flushStoryEdits = null)
+        Func<Task<bool>>? flushStoryEdits = null,
+        SoundPreferences? sound = null,
+        TypingSoundPlayer? typingSounds = null)
     {
         _profileService = profileService;
         _credentials = credentials;
@@ -143,6 +166,21 @@ public class SettingsViewModel : ViewModelBase
         _beatBoard = beatBoard;
         _storageMigrator = storageMigrator;
         _flushStoryEdits = flushStoryEdits;
+        Sound = sound;
+
+        var typingSoundsOn = sound is null
+            ? Observable.Return(false)
+            : sound.WhenAnyValue(s => s.TypingSoundsEnabled);
+        PreviewTypingSoundsCommand = ReactiveCommand.CreateFromTask(
+            () => typingSounds?.PreviewAsync() ?? Task.CompletedTask,
+            typingSoundsOn);
+        Disposables.Add(PreviewTypingSoundsCommand.ThrownExceptions.Subscribe(_ => { }));
+
+        _typingSoundStatusMessage = (typingSounds is null
+                ? Observable.Return<string?>(null)
+                : typingSounds.WhenAnyValue(p => p.Status).Select(TypingSoundStatusText))
+            .ToProperty(this, x => x.TypingSoundStatusMessage);
+        Disposables.Add(_typingSoundStatusMessage);
 
         AddProfileCommand = ReactiveCommand.CreateFromTask(AddProfileAsync);
         Disposables.Add(AddProfileCommand.ThrownExceptions
@@ -536,4 +574,11 @@ public class SettingsViewModel : ViewModelBase
         this.RaisePropertyChanged(nameof(Profiles));
         await _aiChatService.RefreshClientAsync().ConfigureAwait(false);
     }
+
+    internal static string? TypingSoundStatusText(TypingSoundStatus status) => status switch
+    {
+        TypingSoundStatus.Starting => TypingSoundsStarting,
+        TypingSoundStatus.Unavailable => TypingSoundsUnavailable,
+        _ => null,
+    };
 }
