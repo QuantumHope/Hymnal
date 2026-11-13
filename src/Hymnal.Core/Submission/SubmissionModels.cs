@@ -1,4 +1,5 @@
 using System.Globalization;
+using System.Text.Json.Serialization;
 using Hymnal.Core.Markua;
 
 namespace Hymnal.Core.Submission;
@@ -34,8 +35,10 @@ public sealed record AuthorProfile
 
     public ManuscriptFont Font { get; init; } = ManuscriptFont.TimesNewRoman;
 
+    [JsonIgnore]
     public string EffectiveByline => !string.IsNullOrWhiteSpace(Byline) ? Byline.Trim() : LegalName.Trim();
 
+    [JsonIgnore]
     public string EffectiveSurname
     {
         get
@@ -48,6 +51,7 @@ public sealed record AuthorProfile
     }
 
     /// <summary>The contact block's lines, blank lines dropped.</summary>
+    [JsonIgnore]
     public IReadOnlyList<string> ContactLines =>
         Contact.Replace("\r\n", "\n").Split('\n')
             .Select(l => l.Trim())

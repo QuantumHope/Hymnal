@@ -53,6 +53,9 @@ public class MainWindowViewModel : ViewModelBase
     /// <summary>Naming, switching and publishing collections; null when the shell has none.</summary>
     public CollectionsViewModel? CollectionsViewModel { get; }
 
+    /// <summary>Export for submission (Standard Manuscript Format); null when the shell has none.</summary>
+    public SubmissionExportViewModel? SubmissionExportViewModel { get; }
+
     // ── Settings overlay ──────────────────────────────────────────────────────
 
     private bool _isSettingsOpen;
@@ -329,9 +332,11 @@ public class MainWindowViewModel : ViewModelBase
         PlanHostViewModel? planHostViewModel = null,
         Hymnal.Audio.SoundPreferences? soundPreferences = null,
         WriteBeatsViewModel? writeBeatsViewModel = null,
-        CollectionsViewModel? collectionsViewModel = null)
+        CollectionsViewModel? collectionsViewModel = null,
+        SubmissionExportViewModel? submissionExportViewModel = null)
     {
         CollectionsViewModel = collectionsViewModel;
+        SubmissionExportViewModel = submissionExportViewModel;
         _settingsStore = settingsStore;
         _workspaceVm = workspaceViewModel;
         _supplementalDocsVm = supplementalDocsViewModel;

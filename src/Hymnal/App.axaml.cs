@@ -8,6 +8,7 @@ using Hymnal.Core.Infrastructure;
 using Hymnal.Core.Infrastructure.Ai;
 using Hymnal.Core.Interfaces;
 using Hymnal.Core.Services;
+using Hymnal.Core.Submission;
 using Hymnal.Core.Services.Ai;
 using Hymnal.Infrastructure;
 using Hymnal.Theming;
@@ -146,6 +147,25 @@ public partial class App : Application
                 App.Current?.ApplicationLifetime is IClassicDesktopStyleApplicationLifetime dl
                     ? TopLevel.GetTopLevel(dl.MainWindow)
                     : null));
+
+        services.AddSingleton<ISaveFilePickerService>(sp => (FilePickerService)sp.GetRequiredService<IFilePickerService>());
+
+        services.AddSingleton<SubmissionExportService>();
+        services.AddSingleton<SubmissionExportViewModel>(sp =>
+            new SubmissionExportViewModel(
+                sp.GetRequiredService<WorkspaceViewModel>(),
+                sp.GetRequiredService<SubmissionExportService>(),
+                sp.GetRequiredService<IAppSettingsStore>(),
+                sp.GetRequiredService<ISaveFilePickerService>(),
+                sp.GetRequiredService<INotificationService>(),
+                async () =>
+                {
+                    var notes = await sp.GetRequiredService<NotesViewModel>().FlushAsync();
+                    var schedule = await sp.GetRequiredService<ChapterInfoViewModel>().FlushScheduleAsync();
+                    var writeBeats = await sp.GetRequiredService<WriteBeatsViewModel>().FlushAsync();
+                    return notes && schedule && writeBeats;
+                },
+                sp.GetRequiredService<EditorViewModel>()));
 
         services.AddSingleton<ProjectSettingsService>();
         services.AddSingleton<ProjectInitializer>();
@@ -343,7 +363,8 @@ public partial class App : Application
                 sp.GetRequiredService<PlanHostViewModel>(),
                 sp.GetRequiredService<SoundPreferences>(),
                 sp.GetRequiredService<WriteBeatsViewModel>(),
-                sp.GetRequiredService<CollectionsViewModel>()));
+                sp.GetRequiredService<CollectionsViewModel>(),
+                sp.GetRequiredService<SubmissionExportViewModel>()));
 
         _serviceProvider = services.BuildServiceProvider();
         Services = _serviceProvider;

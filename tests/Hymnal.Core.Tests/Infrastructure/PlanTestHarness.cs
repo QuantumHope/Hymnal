@@ -131,6 +131,7 @@ internal sealed class PlanTestContext : IDisposable
     public IBeatBoardService Boards { get; }
     public WorkspaceViewModel Workspace { get; }
     public EditorViewModel Editor => _editor;
+    public IAppSettingsStore Settings => _settings;
     public CorkboardViewModel Corkboard { get; }
     public BeatBoardViewModel Board { get; }
     public StorageMigrator Migrator { get; }

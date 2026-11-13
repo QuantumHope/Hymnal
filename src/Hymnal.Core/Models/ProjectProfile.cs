@@ -143,6 +143,12 @@ public sealed class ProjectProfile
     /// </summary>
     public bool SupportsStoryFocus => Kind == ProjectKind.Anthology;
 
+    /// <summary>
+    /// True when a story can be exported as a Standard Manuscript Format .docx for submission to a market
+    /// (short fiction: Short Story and Anthology projects).
+    /// </summary>
+    public bool SupportsSubmissionExport => Kind != ProjectKind.Novel;
+
     /// <summary>True when one workspace can hold several collections over one folder of stories.</summary>
     public bool SupportsMultipleCollections => Kind == ProjectKind.Anthology;
 

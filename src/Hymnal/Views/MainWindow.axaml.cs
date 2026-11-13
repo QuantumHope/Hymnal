@@ -484,6 +484,15 @@ public partial class MainWindow : Window
         flyout.Items.Add(new Separator());
         flyout.Items.Add(CollectionMenuItem("Publish to LeanPub…",
             () => PublishDialog.ShowAsync(this, collections, workspace.CollectionDisplayName)));
+        if (mainVm.SubmissionExportViewModel is { IsAvailable: true } export)
+        {
+            // Short Story: the story. Anthology: the story being written (or focused); a story's own
+            // right-click menu in the sidebar exports any other.
+            var label = workspace.Profile.Kind == Hymnal.Core.Models.ProjectKind.Story
+                ? "Export for submission…"
+                : "Export this story for submission…";
+            flyout.Items.Add(CollectionMenuItem(label, () => SubmissionExportDialog.ShowAsync(this, export)));
+        }
         flyout.ShowAt(button);
     }
 

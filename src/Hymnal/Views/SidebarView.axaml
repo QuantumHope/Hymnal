@@ -205,6 +205,9 @@
                                     <MenuItem Header="Focus on this story"
                                               IsVisible="{Binding Profile.SupportsStoryFocus}"
                                               Click="FocusStory_Click" />
+                                    <MenuItem Header="Export for submission…"
+                                              IsVisible="{Binding Profile.SupportsSubmissionExport}"
+                                              Click="ExportForSubmission_Click" />
                                     <MenuItem Name="RenameMenuItem"
                                               Header="Rename…"
                                               Click="RenameNode_Click" />

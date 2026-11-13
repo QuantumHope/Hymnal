@@ -109,6 +109,13 @@ public partial class SidebarView : UserControl
             vm.FocusStory(chapter);
     }
 
+    private async void ExportForSubmission_Click(object? sender, RoutedEventArgs e)
+    {
+        if (sender is MenuItem { DataContext: ChapterViewModel chapter }
+            && TopLevel.GetTopLevel(this) is Window { DataContext: MainWindowViewModel { SubmissionExportViewModel: { } export } } owner)
+            await SubmissionExportDialog.ShowAsync(owner, export, chapter);
+    }
+
     private async void IncludeInBook_Click(object? sender, RoutedEventArgs e)
     {
         if (DataContext is not WorkspaceViewModel vm) return;

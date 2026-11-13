@@ -76,6 +76,29 @@ public class SubmissionExportServiceTests : IDisposable
         Assert.False(File.Exists(Path.Combine(_root, "x.docx")));
     }
 
+    [Fact]
+    public async Task AuthorProfile_RoundTripsThroughTheAppSettingsStore()
+    {
+        var author = new AuthorProfile
+        {
+            LegalName = "Jo Writer", Byline = "J. W.", Surname = "Writer",
+            Contact = "1 Road\njo@example.com", Font = ManuscriptFont.CourierNew,
+        };
+        using (var store = new Hymnal.Core.Infrastructure.AppSettingsStore(Path.Combine(_root, "settings.json")))
+        {
+            await store.SetAsync(AuthorProfile.SettingsKey, author);
+            await store.FlushPendingAsync();
+        }
+
+        using var reopened = new Hymnal.Core.Infrastructure.AppSettingsStore(Path.Combine(_root, "settings.json"));
+        var read = await reopened.GetAsync<AuthorProfile>(AuthorProfile.SettingsKey);
+        Assert.NotNull(read);
+        Assert.Equal(
+            (author.LegalName, author.Byline, author.Surname, author.Contact, author.Font),
+            (read.LegalName, read.Byline, read.Surname, read.Contact, read.Font));
+        Assert.DoesNotContain("effective", File.ReadAllText(Path.Combine(_root, "settings.json")), StringComparison.OrdinalIgnoreCase);
+    }
+
     [Theory]
     [InlineData("Grounds for Termination", "Jo Writer", "Grounds for Termination - Writer.docx")]
     [InlineData("What? No: \"Really\"", "Jo Writer", "What No Really - Writer.docx")]
