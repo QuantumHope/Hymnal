@@ -63,6 +63,10 @@
         <Style Selector="Border.compact ToggleButton.view-mode">
             <Setter Property="Padding" Value="7,4" />
         </Style>
+        <!-- The chapter bar's phase dates (EditorChapterBar) make way for the status and Complete button. -->
+        <Style Selector="Border.compact StackPanel.phase-dates">
+            <Setter Property="IsVisible" Value="False" />
+        </Style>
     </UserControl.Styles>
 
     <Grid RowDefinitions="Auto,Auto,Auto,*">

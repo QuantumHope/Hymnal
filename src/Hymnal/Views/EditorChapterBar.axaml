@@ -28,10 +28,14 @@
             </StackPanel>
         </Border>
 
+        <!-- Clipped so a narrow editor column never draws the dates over the Complete button; a compact header
+             (EditorView, under CompactHeaderWidth) hides them altogether. -->
         <StackPanel Grid.Column="1"
+                    Classes="phase-dates"
                     Orientation="Horizontal"
                     Spacing="16"
-                    Margin="16,0,0,0"
+                    Margin="16,0,8,0"
+                    ClipToBounds="True"
                     VerticalAlignment="Center">
             <TextBlock FontSize="11"
                        Foreground="{DynamicResource Cora.Text.Secondary}"
