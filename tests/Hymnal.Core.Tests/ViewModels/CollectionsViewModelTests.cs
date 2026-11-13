@@ -32,6 +32,16 @@ public sealed class CollectionsViewModelTests
                 Assert.True(collections.SupportsMultiple);
                 Assert.Equal("Collection", workspace.CollectionDisplayName);
 
+                // Plan's shelf: the unnamed open collection still gets a card, and the story in no list shows.
+                await Within(collections.RefreshAsync());
+                Assert.True(collections.CanHoldSeveral);
+                var unnamed = Assert.Single(collections.Cards);
+                Assert.True(unnamed.IsActive);
+                Assert.False(unnamed.IsNamed);
+                Assert.False(unnamed.CanOpen);
+                Assert.Equal(["Lighthouse"], unnamed.Stories);
+                Assert.Equal(["harbour.md"], collections.Unassigned);
+
                 Assert.True(await Within(collections.RenameOpenAsync("Night Shifts")));
                 Assert.Equal("Night Shifts", workspace.CollectionDisplayName);
                 Assert.Equal(["harbour.md"], await Within(collections.UnassignedAsync()));
@@ -42,6 +52,10 @@ public sealed class CollectionsViewModelTests
                 Assert.NotNull(harbourSlug);
                 await Within(collections.RefreshAsync());
                 Assert.True(collections.HasSeveral);
+                Assert.Equal(["Night Shifts", "Harbour Tales"], collections.Cards.Select(c => c.Title));
+                Assert.Equal("1 story", collections.Cards[0].CountText);
+                Assert.True(collections.Cards[1].CanOpen);
+                Assert.True(collections.Cards[1].IsEmpty);
                 Assert.True(await Within(collections.OpenAsync(harbourSlug!)));
                 await PumpUntilAsync(() => workspace.CollectionTitle == "Harbour Tales");
                 Assert.Equal("", await File.ReadAllTextAsync(Path.Combine(root, "Book.txt")));

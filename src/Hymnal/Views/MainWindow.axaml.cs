@@ -509,6 +509,29 @@ public partial class MainWindow : Window
     // Name the open collection (book, story), open another collection, add a story that is in no collection,
     // publish to LeanPub.
 
+    // ── Rail section headers ──────────────────────────────────────────────────
+    // The whole header of a rail section toggles it: a tap anywhere but on one of its buttons runs the header's
+    // toggle icon (its first nav-icon button), with that button's command and parameter.
+
+    private void PaneHeader_Tapped(object? sender, Avalonia.Input.TappedEventArgs e)
+    {
+        if (sender is not Border header || e.Source is not Avalonia.Visual source)
+            return;
+        // Taps on the header's own buttons (the toggle icon itself, ⋯, +, Plan) are theirs.
+        for (Avalonia.Visual? v = source; v != null && v != header; v = Avalonia.VisualTree.VisualExtensions.GetVisualParent(v))
+            if (v is Button)
+                return;
+
+        var toggle = Avalonia.VisualTree.VisualExtensions.GetVisualDescendants(header)
+            .OfType<Button>()
+            .FirstOrDefault(b => b.Classes.Contains("nav-icon"));
+        if (toggle?.Command is { } command && command.CanExecute(toggle.CommandParameter))
+        {
+            command.Execute(toggle.CommandParameter);
+            e.Handled = true;
+        }
+    }
+
     private async void CollectionButton_Click(object? sender, RoutedEventArgs e)
     {
         if (sender is Button button && DataContext is MainWindowViewModel mainVm)

@@ -94,6 +94,16 @@
             </Setter>
         </Style>
 
+        <!-- A rail section's whole header collapses / expands that section (PaneHeader_Tapped runs the header's
+             toggle icon); its other buttons (⋯, +, Plan) keep their own actions. -->
+        <Style Selector="Border.pane-header">
+            <Setter Property="Background" Value="Transparent" />
+            <Setter Property="Cursor" Value="Hand" />
+        </Style>
+        <Style Selector="Border.pane-header:pointerover">
+            <Setter Property="Background" Value="{DynamicResource Cora.Wash.Hover}" />
+        </Style>
+
         <!-- nav-icon: borderless icon button used in collapsed rail and expanded pane headers -->
         <Style Selector="Button.nav-icon">
             <Setter Property="Background" Value="Transparent" />
@@ -447,7 +457,7 @@
                             <Grid Grid.Row="0"
                                   x:Name="LeftChaptersSectionGrid"
                                   RowDefinitions="48,*">
-                                <Border Grid.Row="0"
+                                <Border Classes="pane-header" Tapped="PaneHeader_Tapped" Grid.Row="0"
                                         BorderBrush="{DynamicResource Cora.Border.Subtle}"
                                         BorderThickness="0,0,0,1">
                                     <Grid ColumnDefinitions="48,*,Auto,Auto">
@@ -524,7 +534,7 @@
                             <Grid Grid.Row="2"
                                   x:Name="LeftDocsSectionGrid"
                                   RowDefinitions="48,*">
-                                <Border Grid.Row="0"
+                                <Border Classes="pane-header" Tapped="PaneHeader_Tapped" Grid.Row="0"
                                         BorderBrush="{DynamicResource Cora.Border.Subtle}"
                                         BorderThickness="0,1,0,1">
                                     <Grid ColumnDefinitions="48,*">
@@ -660,7 +670,7 @@
 
                             <!-- Row 0: Chapter panel DockPanel (header pinned top + content fills rest) -->
                             <DockPanel Grid.Row="0">
-                                <Border DockPanel.Dock="Top"
+                                <Border Classes="pane-header" Tapped="PaneHeader_Tapped" DockPanel.Dock="Top"
                                         Height="48"
                                         BorderBrush="{DynamicResource Cora.Border.Subtle}"
                                         BorderThickness="0,0,0,1">
@@ -699,7 +709,7 @@
                             <!-- Row 2: Beats DockPanel (story/anthology only): the story's beats beside the draft -->
                             <DockPanel Grid.Row="2"
                                        IsVisible="{Binding IsBeatsSectionAvailable}">
-                                <Border DockPanel.Dock="Top"
+                                <Border Classes="pane-header" Tapped="PaneHeader_Tapped" DockPanel.Dock="Top"
                                         Height="48"
                                         BorderBrush="{DynamicResource Cora.Border.Subtle}"
                                         BorderThickness="0,1,0,1">
@@ -750,7 +760,7 @@
 
                             <!-- Row 4: Notes DockPanel (header pinned top + content fills rest) -->
                             <DockPanel Grid.Row="4">
-                                <Border DockPanel.Dock="Top"
+                                <Border Classes="pane-header" Tapped="PaneHeader_Tapped" DockPanel.Dock="Top"
                                         Height="48"
                                         BorderBrush="{DynamicResource Cora.Border.Subtle}"
                                         BorderThickness="0,1,0,1">
@@ -789,7 +799,7 @@
 
                             <!-- Row 6: AI Chat DockPanel (header always visible; content collapses) -->
                             <DockPanel Grid.Row="6">
-                                <Border DockPanel.Dock="Top"
+                                <Border Classes="pane-header" Tapped="PaneHeader_Tapped" DockPanel.Dock="Top"
                                         Height="48"
                                         BorderBrush="{DynamicResource Cora.Border.Subtle}"
                                         BorderThickness="0,1,0,1">
@@ -840,6 +850,8 @@
             <DockPanel IsVisible="{Binding !IsEditorVisible}">
                 <views:CollectionBar DockPanel.Dock="Top"
                                      IsVisible="{Binding ShowsCollectionBar}" />
+                <views:CollectionShelf DockPanel.Dock="Top"
+                                       IsVisible="{Binding ShowsCollectionShelf}" />
                 <ContentControl Content="{Binding SecondaryCentreContent}" />
             </DockPanel>
 

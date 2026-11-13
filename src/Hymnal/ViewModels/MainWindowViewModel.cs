@@ -195,6 +195,13 @@ public class MainWindowViewModel : ViewModelBase
     /// </summary>
     public bool ShowsCollectionBar => _showsCollectionBar.Value;
 
+    private readonly ObservableAsPropertyHelper<bool> _showsCollectionShelf;
+    /// <summary>
+    /// True when Plan shows the collections shelf under the collection bar: a workspace that can hold several
+    /// collections, on its collection (not inside a story's beat board).
+    /// </summary>
+    public bool ShowsCollectionShelf => _showsCollectionShelf.Value;
+
     /// <summary>True when the research surface is the active centre-panel view.</summary>
     public bool IsResearchVisible => ActiveMode == ShellMode.Research;
 
@@ -577,6 +584,18 @@ public class MainWindowViewModel : ViewModelBase
                 (mode, hasWorkspace) => hasWorkspace && mode is ShellMode.Plan or ShellMode.Manage)
             .ToProperty(this, x => x.ShowsCollectionBar);
         Disposables.Add(_showsCollectionBar);
+
+        _showsCollectionShelf = Observable.CombineLatest(
+                this.WhenAnyValue(x => x.ShowsCollectionBar, x => x.ActiveMode, (bar, mode) => bar && mode == ShellMode.Plan),
+                collectionsViewModel == null
+                    ? Observable.Return(false)
+                    : collectionsViewModel.WhenAnyValue(x => x.CanHoldSeveral),
+                planHostViewModel == null
+                    ? Observable.Return(false)
+                    : planHostViewModel.WhenAnyValue(x => x.ShowBreadcrumb),
+                (plan, several, inStoryBoard) => plan && several && !inStoryBoard)
+            .ToProperty(this, x => x.ShowsCollectionShelf);
+        Disposables.Add(_showsCollectionShelf);
 
         SelectIdeasCommand = ReactiveCommand.Create(
             () => { LeaveSettings(); ActiveMode = ShellMode.Ideas; },

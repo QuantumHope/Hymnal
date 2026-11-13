@@ -78,6 +78,12 @@ public static class CollectionMenu
             ? OpenCollectionAsync(owner, collections, mainVm.WorkspaceViewModel, slug)
             : Task.CompletedTask;
 
+    /// <summary>Starts a new collection and offers to open it.</summary>
+    public static Task NewAsync(Window owner, MainWindowViewModel mainVm) =>
+        mainVm.CollectionsViewModel is { } collections
+            ? NewCollectionAsync(owner, collections, mainVm.WorkspaceViewModel)
+            : Task.CompletedTask;
+
     private static MenuItem Item(string header, Func<Task> action)
     {
         var item = new MenuItem { Header = header };
