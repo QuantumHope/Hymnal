@@ -57,6 +57,7 @@ public sealed class CollectionsViewModel : ViewModelBase
         if (!_workspace.HasWorkspace)
         {
             Collections.Clear();
+            HasSeveral = false;
             return;
         }
         var list = await _service.ListAsync(Root);
@@ -64,6 +65,16 @@ public sealed class CollectionsViewModel : ViewModelBase
         if (list.IsSuccess)
             foreach (var c in list.Value!)
                 Collections.Add(c);
+        HasSeveral = Collections.Count > 1;
+    }
+
+    private bool _hasSeveral;
+
+    /// <summary>True when the workspace holds two or more collections (the collection bar shows them all).</summary>
+    public bool HasSeveral
+    {
+        get => _hasSeveral;
+        private set => this.RaiseAndSetIfChanged(ref _hasSeveral, value);
     }
 
     /// <summary>Names (or renames) the open collection, book or story.</summary>

@@ -188,6 +188,13 @@ public class MainWindowViewModel : ViewModelBase
     /// <summary>True when the Gantt/manage surface is the active centre-panel view.</summary>
     public bool IsGanttVisible => ActiveMode == ShellMode.Manage;
 
+    private readonly ObservableAsPropertyHelper<bool> _showsCollectionBar;
+    /// <summary>
+    /// True when the collection bar shows over the centre: Plan and Manage with a workspace open. (Write shows the
+    /// collection as its sidebar's root row.)
+    /// </summary>
+    public bool ShowsCollectionBar => _showsCollectionBar.Value;
+
     /// <summary>True when the research surface is the active centre-panel view.</summary>
     public bool IsResearchVisible => ActiveMode == ShellMode.Research;
 
@@ -446,6 +453,12 @@ public class MainWindowViewModel : ViewModelBase
             this.WhenAnyValue(x => x.IsIdeasModeAvailable)
                 .Where(available => !available && ActiveMode == ShellMode.Ideas)
                 .Subscribe(_ => ActiveMode = ShellMode.Write));
+
+        _showsCollectionBar = this.WhenAnyValue(x => x.ActiveMode)
+            .CombineLatest(workspaceViewModel.WhenAnyValue(x => x.HasWorkspace),
+                (mode, hasWorkspace) => hasWorkspace && mode is ShellMode.Plan or ShellMode.Manage)
+            .ToProperty(this, x => x.ShowsCollectionBar);
+        Disposables.Add(_showsCollectionBar);
 
         SelectIdeasCommand = ReactiveCommand.Create(
             () => { LeaveSettings(); ActiveMode = ShellMode.Ideas; },

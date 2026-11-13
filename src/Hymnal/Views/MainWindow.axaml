@@ -761,9 +761,13 @@
 
             </Grid>
 
-            <!-- Research / Ideas / Plan / Manage — lazy-loaded via ViewLocator, full width -->
-            <ContentControl IsVisible="{Binding !IsEditorVisible}"
-                            Content="{Binding SecondaryCentreContent}" />
+            <!-- Research / Ideas / Plan / Manage — lazy-loaded via ViewLocator, full width. Plan and Manage carry
+                 the collection bar on top (Write shows the collection as its sidebar's root row). -->
+            <DockPanel IsVisible="{Binding !IsEditorVisible}">
+                <views:CollectionBar DockPanel.Dock="Top"
+                                     IsVisible="{Binding ShowsCollectionBar}" />
+                <ContentControl Content="{Binding SecondaryCentreContent}" />
+            </DockPanel>
 
             <!-- Settings overlay — covers full shell area when IsSettingsOpen -->
             <Border IsVisible="{Binding IsSettingsOpen}"

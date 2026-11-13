@@ -36,8 +36,12 @@ public sealed class CollectionsViewModelTests
                 Assert.Equal("Night Shifts", workspace.CollectionDisplayName);
                 Assert.Equal(["harbour.md"], await Within(collections.UnassignedAsync()));
 
+                await Within(collections.RefreshAsync());
+                Assert.False(collections.HasSeveral);
                 var harbourSlug = await Within(collections.CreateAsync("Harbour Tales"));
                 Assert.NotNull(harbourSlug);
+                await Within(collections.RefreshAsync());
+                Assert.True(collections.HasSeveral);
                 Assert.True(await Within(collections.OpenAsync(harbourSlug!)));
                 await PumpUntilAsync(() => workspace.CollectionTitle == "Harbour Tales");
                 Assert.Equal("", await File.ReadAllTextAsync(Path.Combine(root, "Book.txt")));
