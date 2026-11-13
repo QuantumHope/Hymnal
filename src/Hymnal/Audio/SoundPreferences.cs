@@ -12,7 +12,8 @@ namespace Hymnal.Audio;
 public sealed class SoundPreferences : ReactiveObject
 {
     private readonly SoundSettingsService _service;
-    private bool _typingSoundsEnabled;
+    private bool _soundEnabled;
+    private string _typingSound = SoundSettings.MatchTheme;
     private double _typingVolume = SoundSettings.DefaultTypingVolume;
     private bool _changedBeforeLoad;
     private bool _applyingLoaded;
@@ -26,14 +27,31 @@ public sealed class SoundPreferences : ReactiveObject
     /// <summary>Completes once the saved settings are applied.</summary>
     public Task Loaded { get; }
 
-    public bool TypingSoundsEnabled
+    /// <summary>Whether Hymnal makes any sound (Settings → Sound, View → Sound).</summary>
+    public bool SoundEnabled
     {
-        get => _typingSoundsEnabled;
+        get => _soundEnabled;
         set
         {
-            if (_typingSoundsEnabled == value)
+            if (_soundEnabled == value)
                 return;
-            this.RaiseAndSetIfChanged(ref _typingSoundsEnabled, value);
+            this.RaiseAndSetIfChanged(ref _soundEnabled, value);
+            OnChanged();
+        }
+    }
+
+    /// <summary>
+    /// The typing sound: <see cref="SoundSettings.MatchTheme"/>, <see cref="SoundSettings.Silent"/>, or a scheme id.
+    /// </summary>
+    public string TypingSound
+    {
+        get => _typingSound;
+        set
+        {
+            value = SoundSettings.NormalizeTypingSound(value);
+            if (_typingSound == value)
+                return;
+            this.RaiseAndSetIfChanged(ref _typingSound, value);
             OnChanged();
         }
     }
@@ -52,12 +70,13 @@ public sealed class SoundPreferences : ReactiveObject
         }
     }
 
-    /// <summary>Turns typing sounds on or off (View → Typewriter Sounds).</summary>
-    public void ToggleTypingSounds() => TypingSoundsEnabled = !TypingSoundsEnabled;
+    /// <summary>Turns sound on or off (View → Sound).</summary>
+    public void ToggleSound() => SoundEnabled = !SoundEnabled;
 
     public SoundSettings ToSettings() => new()
     {
-        TypingSoundsEnabled = TypingSoundsEnabled,
+        SoundEnabled = SoundEnabled,
+        TypingSound = TypingSound,
         TypingVolume = TypingVolume,
     };
 
@@ -73,7 +92,8 @@ public sealed class SoundPreferences : ReactiveObject
         try
         {
             TypingVolume = saved.TypingVolume;
-            TypingSoundsEnabled = saved.TypingSoundsEnabled;
+            TypingSound = saved.TypingSound;
+            SoundEnabled = saved.SoundEnabled;
         }
         finally
         {

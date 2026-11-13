@@ -130,7 +130,7 @@ public sealed class TypingSoundHookTests
     }
 
     [Fact]
-    public async Task TypewriterSoundsMenuItem_TogglesThePreference()
+    public async Task SoundMenuItem_TogglesSound()
     {
         await ReactiveUiTestBootstrap.RunOnUiThreadAsync(async () =>
         {
@@ -142,9 +142,9 @@ public sealed class TypingSoundHookTests
                 Header = "Typewriter Sounds",
                 ToggleType = MenuItemToggleType.CheckBox,
                 DataContext = prefs,
-                Command = new ToggleCommand(prefs.ToggleTypingSounds),
+                Command = new ToggleCommand(prefs.ToggleSound),
             };
-            item.Bind(MenuItem.IsCheckedProperty, new Binding(nameof(SoundPreferences.TypingSoundsEnabled)) { Mode = BindingMode.OneWay });
+            item.Bind(MenuItem.IsCheckedProperty, new Binding(nameof(SoundPreferences.SoundEnabled)) { Mode = BindingMode.OneWay });
             var window = new Window { Content = new Menu { Items = { item } } };
             window.Show();
             try
@@ -153,14 +153,14 @@ public sealed class TypingSoundHookTests
                 // Avalonia doesn't toggle IsChecked itself, so the command does it and the binding shows it.
                 Click(item);
                 await Pump();
-                Assert.True(prefs.TypingSoundsEnabled);
+                Assert.True(prefs.SoundEnabled);
                 Assert.True(item.IsChecked);
                 Click(item);
                 await Pump();
-                Assert.False(prefs.TypingSoundsEnabled);
+                Assert.False(prefs.SoundEnabled);
                 Assert.False(item.IsChecked);
 
-                prefs.TypingSoundsEnabled = true;
+                prefs.SoundEnabled = true;
                 Assert.True(item.IsChecked);
             }
             finally
@@ -180,8 +180,29 @@ public sealed class TypingSoundHookTests
 
         Assert.Contains("PlaysTypingSounds=\"True\"", mainWindow);
         Assert.DoesNotContain("PlaysTypingSounds", research);
-        Assert.Contains("Command=\"{Binding ToggleTypingSoundsCommand}\"", mainWindow);
-        Assert.Contains("IsChecked=\"{Binding SoundPreferences.TypingSoundsEnabled, Mode=OneWay}\"", mainWindow);
+        Assert.Contains("Command=\"{Binding ToggleSoundCommand}\"", mainWindow);
+        Assert.Contains("IsChecked=\"{Binding SoundPreferences.SoundEnabled, Mode=OneWay}\"", mainWindow);
+    }
+
+    [Fact]
+    public void SettingsSoundSection_HasTheSoundSwitch_TypingSoundChoice_AndAPreviewButtonWithAPlayIcon()
+    {
+        var settings = File.ReadAllText(FindRepositoryFile("src/Hymnal/Views/SettingsView.axaml"));
+        var icons = File.ReadAllText(FindRepositoryFile("src/Hymnal/Themes/Icons.axaml"));
+
+        Assert.Contains("IsChecked=\"{Binding Sound.Preferences.SoundEnabled}\"", settings);
+        Assert.Contains("ItemsSource=\"{Binding Sound.TypingSoundOptions}\"", settings);
+        Assert.Contains("SelectedItem=\"{Binding Sound.SelectedTypingSound}\"", settings);
+        Assert.Contains("Value=\"{Binding Sound.Preferences.TypingVolume}\"", settings);
+
+        var button = settings.IndexOf("x:Name=\"PART_PreviewSoundButton\"", StringComparison.Ordinal);
+        Assert.True(button >= 0, "the Preview button is missing");
+        var buttonEnd = settings.IndexOf("</Button>", button, StringComparison.Ordinal);
+        var markup = settings[button..buttonEnd];
+        Assert.Contains("Command=\"{Binding Sound.PreviewCommand}\"", markup);
+        Assert.Contains("Data=\"{StaticResource Icon.Play}\"", markup);
+        Assert.Contains("Text=\"Preview\"", markup);
+        Assert.Contains("x:Key=\"Icon.Play\"", icons);
     }
 
     /// <summary>

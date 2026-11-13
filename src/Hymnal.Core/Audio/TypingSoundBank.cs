@@ -1,43 +1,42 @@
 namespace Hymnal.Core.Audio;
 
-/// <summary>Every rendered variant of every typing sound for one profile.</summary>
+/// <summary>Every rendered variant of every typing sound for one scheme.</summary>
 public sealed class TypingSoundBank
 {
     private readonly Dictionary<TypingSoundKind, IReadOnlyList<float[]>> _variants;
 
-    private TypingSoundBank(TypewriterProfile profile, Dictionary<TypingSoundKind, IReadOnlyList<float[]>> variants)
+    private TypingSoundBank(SoundScheme scheme, Dictionary<TypingSoundKind, IReadOnlyList<float[]>> variants)
     {
-        Profile = profile;
+        Scheme = scheme;
         _variants = variants;
     }
 
-    public TypewriterProfile Profile { get; }
+    public SoundScheme Scheme { get; }
 
-    public int SampleRate => TypewriterSynth.SampleRate;
+    public int SampleRate => SoundVoice.SampleRate;
 
     public IReadOnlyList<float[]> this[TypingSoundKind kind] => _variants[kind];
 
     public static IReadOnlyList<TypingSoundKind> Kinds { get; } = Enum.GetValues<TypingSoundKind>();
 
     /// <summary>
-    /// Renders <see cref="TypewriterProfile.Variants"/> variants of each kind. Seeds come from the profile id,
-    /// so a profile renders identically on every launch. Takes a few tens of milliseconds; call it off the UI thread.
+    /// Renders <see cref="SoundScheme.Variants"/> variants of each kind. Seeds come from the scheme id, so a scheme
+    /// renders identically on every launch. Takes a few tens of milliseconds; call it off the UI thread.
     /// </summary>
-    public static TypingSoundBank Render(TypewriterProfile profile)
+    public static TypingSoundBank Render(SoundScheme scheme)
     {
-        var synth = new TypewriterSynth(profile);
-        var baseSeed = StableHash(profile.Id);
-        var count = Math.Max(1, profile.Variants);
+        var baseSeed = StableHash(scheme.Id);
+        var count = Math.Max(1, scheme.Variants);
         var variants = new Dictionary<TypingSoundKind, IReadOnlyList<float[]>>();
         foreach (var kind in Kinds)
         {
             var renders = new float[count][];
             for (var i = 0; i < count; i++)
-                renders[i] = synth.Render(kind, unchecked(baseSeed + (int)kind * 7919 + i * 104729));
+                renders[i] = scheme.Render(kind, unchecked(baseSeed + (int)kind * 7919 + i * 104729));
             variants[kind] = renders;
         }
 
-        return new TypingSoundBank(profile, variants);
+        return new TypingSoundBank(scheme, variants);
     }
 
     /// <summary>FNV-1a: unlike string.GetHashCode, the same on every run.</summary>

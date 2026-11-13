@@ -41,11 +41,11 @@ public class MainWindowViewModel : ViewModelBase
     /// <summary>Plan mode for story and anthology projects (beat boards); null when the app runs without it.</summary>
     public PlanHostViewModel? PlanHostViewModel { get; }
 
-    /// <summary>App-wide sound preferences (View → Typewriter Sounds); null when the host has no sound.</summary>
+    /// <summary>App-wide sound preferences (View → Sound); null when the host has no sound.</summary>
     public Hymnal.Audio.SoundPreferences? SoundPreferences { get; }
 
-    /// <summary>View → Typewriter Sounds.</summary>
-    public ReactiveCommand<Unit, Unit> ToggleTypingSoundsCommand { get; }
+    /// <summary>View → Sound: turns all of Hymnal's sound on or off.</summary>
+    public ReactiveCommand<Unit, Unit> ToggleSoundCommand { get; }
 
     // ── Settings overlay ──────────────────────────────────────────────────────
 
@@ -307,7 +307,7 @@ public class MainWindowViewModel : ViewModelBase
         IdeasViewModel = ideasViewModel;
         PlanHostViewModel = planHostViewModel;
         SoundPreferences = soundPreferences;
-        ToggleTypingSoundsCommand = ReactiveCommand.Create(() => soundPreferences?.ToggleTypingSounds());
+        ToggleSoundCommand = ReactiveCommand.Create(() => soundPreferences?.ToggleSound());
         _settingsVmFactory = settingsVmFactory;
 
         CorkboardViewModel.SetViewActive(false);

@@ -13,22 +13,23 @@ namespace Hymnal.Audio;
 /// <summary>Whether typing sounds can play right now.</summary>
 public enum TypingSoundStatus
 {
-    /// <summary>Turned off in settings.</summary>
+    /// <summary>Sound is off, or the typing sound is Silent.</summary>
     Off,
 
-    /// <summary>Turned on; opening the audio device and rendering the sounds.</summary>
+    /// <summary>Opening the audio device and rendering the sounds.</summary>
     Starting,
 
     Ready,
 
-    /// <summary>Turned on, but there is no usable audio output.</summary>
+    /// <summary>Sound is on, but there is no usable audio output.</summary>
     Unavailable,
 }
 
 /// <summary>
-/// Plays the typewriter sounds for keystrokes on the Write surface. Follows <see cref="SoundPreferences"/>:
-/// when typing sounds are turned on it opens the audio engine and renders the theme's sounds in the
-/// background; when they are turned off it closes the engine again, so the app holds no audio device.
+/// Plays the typing sounds for keystrokes on the Write surface. Follows <see cref="SoundPreferences"/> and the
+/// theme: while sound is on and the typing sound isn't Silent, it opens the audio engine and renders the chosen
+/// scheme (or the theme's) in the background; otherwise it closes the engine again, so the app holds no audio
+/// device it isn't using.
 /// </summary>
 public sealed class TypingSoundPlayer : ReactiveObject, IDisposable
 {
@@ -41,6 +42,8 @@ public sealed class TypingSoundPlayer : ReactiveObject, IDisposable
 
     private Task _work = Task.CompletedTask;
     private string _themeId;
+    private SoundScheme? _scheme;
+    private SoundScheme? _loadedScheme;
     private Dictionary<TypingSoundKind, IAudioClip[]>? _clips;
     private TypingSoundVoicer _voicer = new(1);
     private TimeSpan _lastKeystroke = TimeSpan.MinValue;
@@ -50,7 +53,7 @@ public sealed class TypingSoundPlayer : ReactiveObject, IDisposable
     public TypingSoundPlayer(
         IAudioEngine engine,
         SoundPreferences preferences,
-        string themeId = ThemeSoundProfiles.SynthwaveThemeId,
+        string themeId = ThemeSoundSchemes.SynthwaveThemeId,
         Func<TimeSpan>? clock = null)
     {
         _engine = engine;
@@ -62,14 +65,8 @@ public sealed class TypingSoundPlayer : ReactiveObject, IDisposable
         _subscriptions = new System.Reactive.Disposables.CompositeDisposable(
             preferences.WhenAnyValue(p => p.TypingVolume)
                 .Subscribe(volume => _engine.SetBusGain(AudioBus.Effects, PerceivedGain(volume))),
-            preferences.WhenAnyValue(p => p.TypingSoundsEnabled)
-                .Subscribe(enabled =>
-                {
-                    if (enabled)
-                        Start();
-                    else
-                        Shutdown();
-                }));
+            preferences.WhenAnyValue(p => p.SoundEnabled, p => p.TypingSound)
+                .Subscribe(_ => Update()));
     }
 
     public TypingSoundStatus Status
@@ -78,10 +75,20 @@ public sealed class TypingSoundPlayer : ReactiveObject, IDisposable
         private set => this.RaiseAndSetIfChanged(ref _status, value);
     }
 
-    /// <summary>The theme whose typewriter is playing.</summary>
+    /// <summary>The scheme keystrokes play; null while sound is off or the typing sound is Silent.</summary>
+    public SoundScheme? Scheme
+    {
+        get => _scheme;
+        private set => this.RaiseAndSetIfChanged(ref _scheme, value);
+    }
+
+    /// <summary>The scheme the current theme sounds like (what "Match the theme" plays).</summary>
+    public SoundScheme ThemeScheme => ThemeSoundSchemes.ForTheme(_themeId);
+
+    /// <summary>The theme the typing sound follows when it matches the theme.</summary>
     public string ThemeId => _themeId;
 
-    /// <summary>Completes when the last start, stop or theme change has finished.</summary>
+    /// <summary>Completes when the last start, stop or scheme change has finished.</summary>
     public Task WhenIdle
     {
         get { lock (_gate) return _work; }
@@ -89,7 +96,7 @@ public sealed class TypingSoundPlayer : ReactiveObject, IDisposable
 
     /// <summary>
     /// Plays the sound for one keystroke. <paramref name="pan"/> places it left to right (see
-    /// <see cref="TypingSoundVoicer.CarriagePan"/>). Does nothing while sounds are off or still starting.
+    /// <see cref="TypingSoundVoicer.CarriagePan"/>). Does nothing while sound is off, silent or still starting.
     /// </summary>
     public void Play(TypingSoundKind kind, float pan = 0f)
     {
@@ -98,7 +105,7 @@ public sealed class TypingSoundPlayer : ReactiveObject, IDisposable
         lock (_gate)
         {
             clips = _clips;
-            if (clips == null || !_preferences.TypingSoundsEnabled)
+            if (clips == null)
                 return;
 
             var now = _clock();
@@ -113,12 +120,12 @@ public sealed class TypingSoundPlayer : ReactiveObject, IDisposable
     }
 
     /// <summary>
-    /// Types a short phrase so the user can hear the current sounds and volume: a few words, a correction
-    /// and a carriage return. Plays nothing while sounds are off.
+    /// Types a short phrase so the user can hear the current sound and volume: a few words, a correction and a
+    /// carriage return. Plays nothing while sound is off or silent. Cancelling stops it between keystrokes.
     /// </summary>
-    public async Task PreviewAsync()
+    public async Task PreviewAsync(System.Threading.CancellationToken cancellationToken = default)
     {
-        await WhenIdle.ConfigureAwait(true);
+        await WhenIdle.WaitAsync(cancellationToken).ConfigureAwait(true);
 
         // Each keystroke and the milliseconds before it; the caret moves right along the line as it types.
         (TypingSoundKind Kind, int DelayMs)[] phrase =
@@ -133,13 +140,13 @@ public sealed class TypingSoundPlayer : ReactiveObject, IDisposable
         {
             var (kind, delay) = phrase[i];
             if (delay > 0)
-                await Task.Delay(delay).ConfigureAwait(true);
+                await Task.Delay(delay, cancellationToken).ConfigureAwait(true);
             var position = kind == TypingSoundKind.Return ? 0 : (i + 4) / 20.0;
             Play(kind, TypingSoundVoicer.CarriagePan(position));
         }
     }
 
-    /// <summary>Switches to another theme's typewriter.</summary>
+    /// <summary>Follows another theme: when the typing sound matches the theme, switches to that theme's scheme.</summary>
     public void SetTheme(string themeId)
     {
         lock (_gate)
@@ -149,8 +156,9 @@ public sealed class TypingSoundPlayer : ReactiveObject, IDisposable
             _themeId = themeId;
         }
 
-        if (_preferences.TypingSoundsEnabled)
-            Enqueue(LoadSounds);
+        this.RaisePropertyChanged(nameof(ThemeId));
+        this.RaisePropertyChanged(nameof(ThemeScheme));
+        Update();
     }
 
     public void Dispose()
@@ -160,61 +168,86 @@ public sealed class TypingSoundPlayer : ReactiveObject, IDisposable
             if (_disposed)
                 return;
             _disposed = true;
+            _clips = null;
         }
 
         _subscriptions.Dispose();
-        lock (_gate)
-            _clips = null;
         Enqueue(() => _engine.Stop());
     }
 
     /// <summary>Volume sliders feel even when the gain follows the square of the position.</summary>
     internal static float PerceivedGain(double volume) => (float)Math.Pow(Math.Clamp(volume, 0, 1), 2);
 
-    private void Start()
+    /// <summary>The scheme the preferences and theme ask for; null for no sound.</summary>
+    private SoundScheme? WantedScheme()
     {
-        SetStatus(TypingSoundStatus.Starting);
-        Enqueue(() =>
-        {
-            if (!_preferences.TypingSoundsEnabled)
-                return;
+        if (!_preferences.SoundEnabled)
+            return null;
+        lock (_gate)
+            return SoundSettings.ResolveTypingSound(_preferences.TypingSound, _themeId);
+    }
 
-            if (!_engine.TryStart())
+    /// <summary>Starts, switches or stops to match the preferences and theme.</summary>
+    private void Update()
+    {
+        var wanted = WantedScheme();
+        Scheme = wanted;
+
+        if (wanted is null)
+        {
+            lock (_gate)
             {
-                SetStatus(TypingSoundStatus.Unavailable);
-                return;
+                _clips = null;
+                _loadedScheme = null;
             }
 
-            _engine.SetBusGain(AudioBus.Effects, PerceivedGain(_preferences.TypingVolume));
-            LoadSounds();
-        });
-    }
+            SetStatus(TypingSoundStatus.Off);
+            Enqueue(() =>
+            {
+                if (WantedScheme() is null)
+                    _engine.Stop();
+            });
+            return;
+        }
 
-    private void Shutdown()
-    {
         lock (_gate)
-            _clips = null;
-        SetStatus(TypingSoundStatus.Off);
-        Enqueue(() =>
         {
-            if (!_preferences.TypingSoundsEnabled)
-                _engine.Stop();
-        });
+            if (_loadedScheme == wanted && _clips != null)
+                return;
+        }
+
+        SetStatus(TypingSoundStatus.Starting);
+        Enqueue(Load);
     }
 
-    /// <summary>Renders (once per profile) and uploads the current theme's sounds. Runs on the work queue.</summary>
-    private void LoadSounds()
+    /// <summary>Opens the engine and uploads the wanted scheme's sounds. Runs on the work queue.</summary>
+    private void Load()
     {
-        if (!_engine.IsRunning)
+        var scheme = WantedScheme();
+        if (scheme is null)
             return;
 
-        string themeId;
         lock (_gate)
-            themeId = _themeId;
+        {
+            if (_loadedScheme == scheme && _clips != null)
+            {
+                SetStatus(TypingSoundStatus.Ready);
+                return;
+            }
+        }
 
-        var profile = ThemeSoundProfiles.ForTheme(themeId);
-        if (!_banks.TryGetValue(profile.Id, out var bank))
-            _banks[profile.Id] = bank = TypingSoundBank.Render(profile);
+        // A fresh start drops the clips of the previous scheme along with the device.
+        _engine.Stop();
+        if (!_engine.TryStart())
+        {
+            SetStatus(TypingSoundStatus.Unavailable);
+            return;
+        }
+
+        _engine.SetBusGain(AudioBus.Effects, PerceivedGain(_preferences.TypingVolume));
+
+        if (!_banks.TryGetValue(scheme.Id, out var bank))
+            _banks[scheme.Id] = bank = TypingSoundBank.Render(scheme);
 
         var clips = new Dictionary<TypingSoundKind, IAudioClip[]>();
         foreach (var kind in TypingSoundBank.Kinds)
@@ -238,10 +271,12 @@ public sealed class TypingSoundPlayer : ReactiveObject, IDisposable
 
         lock (_gate)
         {
-            if (!_preferences.TypingSoundsEnabled || _disposed)
+            // The choice changed while this was loading: the next queued load picks it up.
+            if (_disposed || WantedScheme() != scheme)
                 return;
             _clips = clips;
-            _voicer = new TypingSoundVoicer(profile.Variants);
+            _loadedScheme = scheme;
+            _voicer = new TypingSoundVoicer(scheme.Variants);
         }
 
         SetStatus(TypingSoundStatus.Ready);
@@ -269,8 +304,8 @@ public sealed class TypingSoundPlayer : ReactiveObject, IDisposable
 
     private void SetStatus(TypingSoundStatus status)
     {
-        // Background work can finish after the user has turned sounds off again: Off then wins.
-        void Apply() => Status = status != TypingSoundStatus.Off && !_preferences.TypingSoundsEnabled
+        // Background work can finish after the user has turned sound off again: Off then wins.
+        void Apply() => Status = status != TypingSoundStatus.Off && WantedScheme() is null
             ? TypingSoundStatus.Off
             : status;
 

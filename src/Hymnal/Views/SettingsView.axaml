@@ -140,46 +140,86 @@
                                FontWeight="SemiBold"
                                Foreground="{DynamicResource OnSurfaceBrush}" />
                     <StackPanel Spacing="4">
-                        <CheckBox x:Name="PART_TypingSoundsCheckBox"
-                                  Content="Typewriter sounds while writing"
-                                  IsChecked="{Binding Sound.TypingSoundsEnabled}"
+                        <CheckBox x:Name="PART_SoundEnabledCheckBox"
+                                  Content="Play sounds"
+                                  IsChecked="{Binding Sound.Preferences.SoundEnabled}"
                                   Foreground="{DynamicResource OnSurfaceBrush}" />
-                        <TextBlock Text="A typewriter plays as you type and delete on the Write surface. Moving the caret stays quiet. Each theme has its own typewriter."
+                        <TextBlock Text="Hymnal's sounds, starting with a typing sound as you type and delete on the Write surface. Moving the caret stays quiet."
                                    FontSize="12"
                                    TextWrapping="Wrap"
                                    Foreground="{DynamicResource OnSurfaceMutedBrush}" />
                     </StackPanel>
-                    <Grid ColumnDefinitions="Auto,Auto,Auto,Auto"
-                          IsEnabled="{Binding Sound.TypingSoundsEnabled}"
+                    <Grid ColumnDefinitions="110,Auto,Auto,Auto"
+                          RowDefinitions="Auto,Auto,Auto"
+                          RowSpacing="8"
                           HorizontalAlignment="Left">
-                        <TextBlock Grid.Column="0"
+                        <TextBlock Grid.Row="0" Grid.Column="0"
+                                   Text="Typing sound"
+                                   VerticalAlignment="Center"
+                                   IsEnabled="{Binding Sound.CanChooseTypingSound}"
+                                   Foreground="{DynamicResource OnSurfaceBrush}" />
+                        <ComboBox x:Name="PART_TypingSoundComboBox"
+                                  Grid.Row="0" Grid.Column="1" Grid.ColumnSpan="3"
+                                  MinWidth="300"
+                                  ItemsSource="{Binding Sound.TypingSoundOptions}"
+                                  SelectedItem="{Binding Sound.SelectedTypingSound}"
+                                  IsEnabled="{Binding Sound.CanChooseTypingSound}">
+                            <ComboBox.ItemTemplate>
+                                <DataTemplate x:DataType="vm:TypingSoundOption">
+                                    <TextBlock Text="{Binding Label}" />
+                                </DataTemplate>
+                            </ComboBox.ItemTemplate>
+                        </ComboBox>
+                        <TextBlock Grid.Row="1" Grid.Column="1" Grid.ColumnSpan="3"
+                                   Text="{Binding Sound.SelectedTypingSound.Description}"
+                                   MaxWidth="460"
+                                   HorizontalAlignment="Left"
+                                   FontSize="12"
+                                   TextWrapping="Wrap"
+                                   IsEnabled="{Binding Sound.CanChooseTypingSound}"
+                                   Foreground="{DynamicResource OnSurfaceMutedBrush}" />
+                        <TextBlock Grid.Row="2" Grid.Column="0"
                                    Text="Volume"
                                    VerticalAlignment="Center"
-                                   Margin="0,0,12,0"
+                                   IsEnabled="{Binding Sound.IsTypingSoundAudible}"
                                    Foreground="{DynamicResource OnSurfaceBrush}" />
                         <Slider x:Name="PART_TypingVolumeSlider"
-                                Grid.Column="1"
+                                Grid.Row="2" Grid.Column="1"
                                 Width="240"
                                 Minimum="0"
                                 Maximum="1"
                                 SmallChange="0.05"
                                 LargeChange="0.1"
-                                Value="{Binding Sound.TypingVolume}" />
-                        <TextBlock Grid.Column="2"
-                                   Text="{Binding Sound.TypingVolume, StringFormat={}{0:P0}}"
+                                IsEnabled="{Binding Sound.IsTypingSoundAudible}"
+                                Value="{Binding Sound.Preferences.TypingVolume}" />
+                        <TextBlock Grid.Row="2" Grid.Column="2"
+                                   Text="{Binding Sound.Preferences.TypingVolume, StringFormat={}{0:P0}}"
                                    MinWidth="44"
                                    VerticalAlignment="Center"
                                    Margin="12,0"
                                    Foreground="{DynamicResource OnSurfaceDimBrush}" />
-                        <Button Grid.Column="3"
-                                Content="Preview"
-                                Command="{Binding PreviewTypingSoundsCommand}"
+                        <Button x:Name="PART_PreviewSoundButton"
+                                Grid.Row="2" Grid.Column="3"
+                                Command="{Binding Sound.PreviewCommand}"
+                                ToolTip.Tip="Play a few typed words with this sound"
                                 Padding="12,6"
                                 FontSize="12"
-                                CornerRadius="5" />
+                                CornerRadius="5">
+                            <StackPanel Orientation="Horizontal" Spacing="6">
+                                <Path Data="{StaticResource Icon.Play}"
+                                      Width="12" Height="12"
+                                      Stretch="Uniform"
+                                      VerticalAlignment="Center"
+                                      Stroke="{DynamicResource SynthwavePurpleBrush}"
+                                      Fill="{DynamicResource SynthwavePurpleBrush}"
+                                      StrokeThickness="1.5"
+                                      StrokeJoin="Round" />
+                                <TextBlock Text="Preview" VerticalAlignment="Center" />
+                            </StackPanel>
+                        </Button>
                     </Grid>
-                    <TextBlock Text="{Binding TypingSoundStatusMessage}"
-                               IsVisible="{Binding TypingSoundStatusMessage, Converter={x:Static ObjectConverters.IsNotNull}}"
+                    <TextBlock Text="{Binding Sound.StatusMessage}"
+                               IsVisible="{Binding Sound.StatusMessage, Converter={x:Static ObjectConverters.IsNotNull}}"
                                FontSize="12"
                                TextWrapping="Wrap"
                                Foreground="{DynamicResource OnSurfaceMutedBrush}" />

@@ -153,11 +153,11 @@
                                       InputGesture="F6" />
                         </MenuItem>
                         <Separator />
-                        <MenuItem x:Name="PART_TypewriterSoundsMenuItem"
-                                  Header="Typewriter S_ounds"
+                        <MenuItem x:Name="PART_SoundMenuItem"
+                                  Header="S_ound"
                                   ToggleType="CheckBox"
-                                  Command="{Binding ToggleTypingSoundsCommand}"
-                                  IsChecked="{Binding SoundPreferences.TypingSoundsEnabled, Mode=OneWay}"
+                                  Command="{Binding ToggleSoundCommand}"
+                                  IsChecked="{Binding SoundPreferences.SoundEnabled, Mode=OneWay}"
                                   IsVisible="{Binding SoundPreferences, Converter={x:Static ObjectConverters.IsNotNull}}"
                                   Foreground="{DynamicResource OnSurfaceBrush}" />
                         <MenuItem Header="_Reset Write Layout"

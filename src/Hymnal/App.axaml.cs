@@ -51,7 +51,7 @@ public partial class App : Application
         services.AddSingleton<TypingSoundPlayer>(sp => new TypingSoundPlayer(
             sp.GetRequiredService<IAudioEngine>(),
             sp.GetRequiredService<SoundPreferences>(),
-            ThemeSoundProfiles.SynthwaveThemeId));
+            ThemeSoundSchemes.SynthwaveThemeId));
 
         // S03 services
         services.AddSingleton<IProcessRunner, GitProcessRunner>();

@@ -15,7 +15,7 @@ public sealed class TypingSoundPlayerTests
     static TypingSoundPlayerTests() => Hymnal.Core.Tests.Infrastructure.ReactiveUiTestBootstrap.EnsureInitialized();
 
     [Fact]
-    public async Task WhileOff_NothingOpensTheAudioDevice_OrPlays()
+    public async Task WhileSoundIsOff_NothingOpensTheAudioDevice_OrPlays()
     {
         var engine = new FakeAudioEngine();
         var (prefs, _) = await PreferencesAsync();
@@ -26,22 +26,23 @@ public sealed class TypingSoundPlayerTests
 
         Assert.Equal(0, engine.Starts);
         Assert.Empty(engine.Plays);
+        Assert.Null(player.Scheme);
         Assert.Equal(TypingSoundStatus.Off, player.Status);
     }
 
     [Fact]
-    public async Task TurningOn_OpensTheDevice_UploadsEveryVariant_AndPlays()
+    public async Task TurningSoundOn_PlaysTheThemesScheme()
     {
         var engine = new FakeAudioEngine();
         var (prefs, _) = await PreferencesAsync();
-        using var player = new TypingSoundPlayer(engine, prefs);
+        using var player = new TypingSoundPlayer(engine, prefs, ThemeSoundSchemes.SynthwaveThemeId);
 
-        prefs.TypingSoundsEnabled = true;
+        prefs.SoundEnabled = true;
         await player.WhenIdle;
 
         Assert.Equal(TypingSoundStatus.Ready, player.Status);
-        Assert.Equal(1, engine.Starts);
-        Assert.Equal(TypingSoundBank.Kinds.Count * TypewriterProfile.Manual.Variants, engine.Clips.Count);
+        Assert.Same(SoundSchemes.ElectricTypewriter, player.Scheme);
+        Assert.Equal(TypingSoundBank.Kinds.Count * SoundSchemes.ElectricTypewriter.Variants, engine.Clips.Count);
 
         player.Play(TypingSoundKind.Return, pan: -0.2f);
         var play = Assert.Single(engine.Plays);
@@ -52,7 +53,40 @@ public sealed class TypingSoundPlayerTests
     }
 
     [Fact]
-    public async Task TurningOff_ClosesTheDevice_AndSilencesKeystrokes()
+    public async Task ChoosingAScheme_SwitchesToIt_AndMatchingTheThemeFollowsThemeChanges()
+    {
+        var engine = new FakeAudioEngine();
+        var (prefs, _) = await PreferencesAsync(enabled: true);
+        using var player = new TypingSoundPlayer(engine, prefs, ThemeSoundSchemes.SynthwaveThemeId);
+        await player.WhenIdle;
+
+        prefs.TypingSound = SoundSchemes.Forge.Id;
+        await player.WhenIdle;
+        Assert.Same(SoundSchemes.Forge, player.Scheme);
+        Assert.Equal(TypingSoundStatus.Ready, player.Status);
+
+        // A chosen scheme ignores the theme...
+        player.SetTheme("cora-hc-dark");
+        await player.WhenIdle;
+        Assert.Same(SoundSchemes.Forge, player.Scheme);
+
+        // ...matching the theme follows it.
+        prefs.TypingSound = SoundSettings.MatchTheme;
+        await player.WhenIdle;
+        Assert.Same(SoundSchemes.SoftKeys, player.Scheme);
+        player.SetTheme("mordor-scriptorium");
+        await player.WhenIdle;
+        Assert.Same(SoundSchemes.Forge, player.Scheme);
+        Assert.Same(SoundSchemes.Forge, player.ThemeScheme);
+
+        player.Play(TypingSoundKind.Key);
+        Assert.Single(engine.Plays);
+    }
+
+    [Theory]
+    [InlineData(false, SoundSettings.MatchTheme)]
+    [InlineData(true, SoundSettings.Silent)]
+    public async Task SoundOffOrSilent_ClosesTheDevice_AndSilencesKeystrokes(bool soundEnabled, string typingSound)
     {
         var engine = new FakeAudioEngine();
         var (prefs, _) = await PreferencesAsync(enabled: true);
@@ -60,12 +94,14 @@ public sealed class TypingSoundPlayerTests
         await player.WhenIdle;
         Assert.True(engine.IsRunning);
 
-        prefs.TypingSoundsEnabled = false;
+        prefs.SoundEnabled = soundEnabled;
+        prefs.TypingSound = typingSound;
         player.Play(TypingSoundKind.Key);
         await player.WhenIdle;
 
         Assert.False(engine.IsRunning);
         Assert.Empty(engine.Plays);
+        Assert.Null(player.Scheme);
         Assert.Equal(TypingSoundStatus.Off, player.Status);
     }
 
@@ -81,7 +117,7 @@ public sealed class TypingSoundPlayerTests
 
         Assert.Equal(TypingSoundStatus.Unavailable, player.Status);
         Assert.Empty(engine.Plays);
-        Assert.Equal(SettingsViewModel.TypingSoundsUnavailable, SettingsViewModel.TypingSoundStatusText(player.Status));
+        Assert.Equal(SoundSettingsViewModel.Unavailable, SoundSettingsViewModel.StatusText(player.Status));
     }
 
     [Fact]
@@ -121,58 +157,137 @@ public sealed class TypingSoundPlayerTests
     {
         var (prefs, store) = await PreferencesAsync();
 
-        prefs.TypingSoundsEnabled = true;
+        prefs.SoundEnabled = true;
+        prefs.TypingSound = "soft-keys";
         prefs.TypingVolume = 0.8;
 
         var reloaded = new SoundPreferences(new SoundSettingsService(store));
         await reloaded.Loaded;
-        Assert.True(reloaded.TypingSoundsEnabled);
+        Assert.True(reloaded.SoundEnabled);
+        Assert.Equal("soft-keys", reloaded.TypingSound);
         Assert.Equal(0.8, reloaded.TypingVolume);
+
+        reloaded.TypingSound = "not-a-scheme";
+        Assert.Equal(SoundSettings.MatchTheme, reloaded.TypingSound);
+    }
+
+    // ── Settings → Sound ─────────────────────────────────────────────────
+
+    [Fact]
+    public async Task SoundSection_OffersMatchTheme_Silent_AndEveryScheme()
+    {
+        var engine = new FakeAudioEngine();
+        var (prefs, _) = await PreferencesAsync();
+        using var player = new TypingSoundPlayer(engine, prefs, ThemeSoundSchemes.SynthwaveThemeId);
+        using var section = new SoundSettingsViewModel(prefs, player);
+
+        Assert.Equal(
+            [SoundSettings.MatchTheme, SoundSettings.Silent, .. SoundSchemes.All.Select(s => s.Id)],
+            section.TypingSoundOptions.Select(o => o.Id));
+        Assert.Equal("Match the theme (Electric typewriter)", section.MatchThemeOption.Label);
+        Assert.Same(section.MatchThemeOption, section.SelectedTypingSound);
+
+        player.SetTheme("mordor-scriptorium");
+        Assert.Equal("Match the theme (Forge)", section.MatchThemeOption.Label);
+        Assert.Contains(SoundSchemes.Forge.Description, section.MatchThemeOption.Description);
     }
 
     [Fact]
-    public async Task SettingsViewModel_ExposesTheSoundPreferences_AndPreviewsOnlyWhileOn()
+    public async Task SoundSection_EnablesChoicesWhileSoundIsOn_AndVolumeWhileAudible()
     {
         var engine = new FakeAudioEngine();
         var (prefs, _) = await PreferencesAsync();
         using var player = new TypingSoundPlayer(engine, prefs);
-        var settings = new SettingsViewModel(
-            NSubstitute.Substitute.For<Hymnal.Core.Interfaces.IProviderProfileService>(),
-            NSubstitute.Substitute.For<Hymnal.Core.Interfaces.ICredentialStore>(),
-            NSubstitute.Substitute.For<Hymnal.Core.Interfaces.IAiChatService>(),
-            NSubstitute.Substitute.For<Hymnal.Core.Interfaces.INotificationService>(),
-            sound: prefs,
-            typingSounds: player);
+        using var section = new SoundSettingsViewModel(prefs, player);
 
-        Assert.True(settings.HasSound);
-        Assert.Same(prefs, settings.Sound);
-        Assert.False(await FirstAsync(settings.PreviewTypingSoundsCommand.CanExecute));
+        Assert.False(section.CanChooseTypingSound);
+        Assert.False(section.IsTypingSoundAudible);
+        Assert.False(await FirstAsync(section.PreviewCommand.CanExecute));
 
-        prefs.TypingSoundsEnabled = true;
+        prefs.SoundEnabled = true;
+        Assert.True(section.CanChooseTypingSound);
+        Assert.True(section.IsTypingSoundAudible);
+        Assert.True(await FirstAsync(section.PreviewCommand.CanExecute));
+
+        section.SelectedTypingSound = section.TypingSoundOptions.Single(o => o.Id == SoundSettings.Silent);
+        Assert.Equal(SoundSettings.Silent, prefs.TypingSound);
+        Assert.True(section.CanChooseTypingSound);
+        Assert.False(section.IsTypingSoundAudible);
+        Assert.False(await FirstAsync(section.PreviewCommand.CanExecute));
+    }
+
+    [Fact]
+    public async Task SoundSection_ChoosingASound_SavesIt_AndPlaysASampleOfIt()
+    {
+        var engine = new FakeAudioEngine();
+        var (prefs, _) = await PreferencesAsync(enabled: true);
+        using var player = new TypingSoundPlayer(engine, prefs);
+        using var section = new SoundSettingsViewModel(prefs, player);
         await player.WhenIdle;
-        Assert.True(await FirstAsync(settings.PreviewTypingSoundsCommand.CanExecute));
-        Assert.Null(settings.TypingSoundStatusMessage);
 
-        await settings.PreviewTypingSoundsCommand.Execute().ToTask();
+        section.SelectedTypingSound = section.TypingSoundOptions.Single(o => o.Id == SoundSchemes.MechanicalKeyboard.Id);
+        Assert.Equal(SoundSchemes.MechanicalKeyboard.Id, prefs.TypingSound);
+
+        await WaitUntil(() => engine.Plays.Count >= 13);
         var kinds = engine.Plays.Select(p => engine.KindOf(p.Clip)).ToList();
         Assert.Contains(TypingSoundKind.Key, kinds);
         Assert.Contains(TypingSoundKind.Space, kinds);
         Assert.Contains(TypingSoundKind.Backspace, kinds);
         Assert.Equal(TypingSoundKind.Return, kinds[^1]);
+        Assert.Same(SoundSchemes.MechanicalKeyboard, player.Scheme);
     }
+
+    [Fact]
+    public async Task SoundSection_FollowsChangesMadeElsewhere_WithoutPreviewing()
+    {
+        var engine = new FakeAudioEngine();
+        var (prefs, _) = await PreferencesAsync(enabled: true);
+        using var player = new TypingSoundPlayer(engine, prefs);
+        using var section = new SoundSettingsViewModel(prefs, player);
+
+        prefs.TypingSound = SoundSchemes.SoftKeys.Id;
+        await player.WhenIdle;
+        await Task.Delay(300);
+
+        Assert.Equal(SoundSchemes.SoftKeys.Id, section.SelectedTypingSound.Id);
+        Assert.Empty(engine.Plays);
+    }
+
+    [Fact]
+    public async Task SettingsViewModel_HasTheSoundSection_OnlyWhenTheHostHasSound()
+    {
+        var (prefs, _) = await PreferencesAsync();
+        Assert.True(Settings(prefs).HasSound);
+        Assert.False(Settings(null).HasSound);
+        Assert.Null(Settings(null).Sound);
+    }
+
+    private static SettingsViewModel Settings(SoundPreferences? prefs) => new(
+        NSubstitute.Substitute.For<Hymnal.Core.Interfaces.IProviderProfileService>(),
+        NSubstitute.Substitute.For<Hymnal.Core.Interfaces.ICredentialStore>(),
+        NSubstitute.Substitute.For<Hymnal.Core.Interfaces.IAiChatService>(),
+        NSubstitute.Substitute.For<Hymnal.Core.Interfaces.INotificationService>(),
+        sound: prefs);
 
     private static async Task<(SoundPreferences Prefs, InMemorySoundStore Store)> PreferencesAsync(bool enabled = false)
     {
         var store = new InMemorySoundStore();
         if (enabled)
-            await store.SetAsync(SoundSettings.StoreKey, new SoundSettings { TypingSoundsEnabled = true });
+            await store.SetAsync(SoundSettings.StoreKey, new SoundSettings { SoundEnabled = true });
         var prefs = new SoundPreferences(new SoundSettingsService(store));
         await prefs.Loaded;
         return (prefs, store);
     }
 
     private static Task<bool> FirstAsync(IObservable<bool> source) =>
-        System.Reactive.Threading.Tasks.TaskObservableExtensions.ToTask(System.Reactive.Linq.Observable.FirstAsync(source));
+        System.Reactive.Linq.Observable.FirstAsync(source).ToTask();
+
+    private static async Task WaitUntil(Func<bool> condition)
+    {
+        for (var i = 0; i < 200 && !condition(); i++)
+            await Task.Delay(25);
+        Assert.True(condition(), "timed out waiting");
+    }
 
     internal sealed class InMemorySoundStore : Hymnal.Core.Interfaces.IAppSettingsStore
     {
@@ -200,9 +315,12 @@ public sealed class TypingSoundPlayerTests
         public List<(IAudioClip Clip, PlaybackOptions Options)> Plays { get; } = new();
         public Dictionary<AudioBus, float> BusGains { get; } = new();
 
-        /// <summary>Which kind a clip holds, recovered from upload order (kinds are uploaded in enum order).</summary>
-        public TypingSoundKind KindOf(IAudioClip clip) =>
-            TypingSoundBank.Kinds[Clips.IndexOf(clip) / TypewriterProfile.Manual.Variants];
+        /// <summary>Which kind a clip holds, recovered from upload order (kinds are uploaded in enum order, 8 variants each).</summary>
+        public TypingSoundKind KindOf(IAudioClip clip)
+        {
+            lock (_gate)
+                return TypingSoundBank.Kinds[Clips.IndexOf(clip) / 8];
+        }
 
         public bool TryStart()
         {
