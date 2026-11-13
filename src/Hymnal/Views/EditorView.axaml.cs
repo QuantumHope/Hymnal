@@ -74,6 +74,22 @@ public partial class EditorView : UserControl
         set => SetValue(HeaderContentProperty, value);
     }
 
+    /// <summary>
+    /// Focus mode (F11): the header row goes, the text sits in a centred column of a comfortable reading width,
+    /// and a quiet line at the bottom keeps the word count in view.
+    /// </summary>
+    public static readonly StyledProperty<bool> IsDistractionFreeProperty =
+        AvaloniaProperty.Register<EditorView, bool>(nameof(IsDistractionFree));
+
+    public bool IsDistractionFree
+    {
+        get => GetValue(IsDistractionFreeProperty);
+        set => SetValue(IsDistractionFreeProperty, value);
+    }
+
+    /// <summary>Widest the text column grows in focus mode (about 75 characters of the editor font).</summary>
+    internal const double FocusColumnWidth = 760;
+
     /// <summary>Below this header width the mode buttons drop their labels and show icons only.</summary>
     internal const double CompactHeaderWidth = 640;
 
@@ -96,7 +112,7 @@ public partial class EditorView : UserControl
     {
         var hasSwitch = DataContext is EditorViewModel { IsPreviewAvailable: true };
         var hasHeader = HeaderContent is { IsVisible: true };
-        PART_HeaderRow.IsVisible = hasSwitch || hasHeader;
+        PART_HeaderRow.IsVisible = (hasSwitch || hasHeader) && !IsDistractionFree;
         PART_HeaderDivider.IsVisible = hasSwitch && hasHeader;
     }
 
@@ -110,6 +126,9 @@ public partial class EditorView : UserControl
         if (change.Property == PlaysTypingSoundsProperty && _isAttached)
             UpdateTypingSoundHook();
 
+        if (change.Property == IsDistractionFreeProperty)
+            ApplyDistractionFree(change.GetNewValue<bool>());
+
         if (change.Property == HeaderContentProperty)
         {
             _headerContentVisibilitySub?.Dispose();
@@ -117,6 +136,20 @@ public partial class EditorView : UserControl
                 .Subscribe(_ => UpdateHeaderRow());
             UpdateHeaderRow();
         }
+    }
+
+    private void ApplyDistractionFree(bool on)
+    {
+        PART_Editor.MaxWidth = on ? FocusColumnWidth : double.PositiveInfinity;
+        PART_Editor.HorizontalAlignment = on
+            ? Avalonia.Layout.HorizontalAlignment.Center
+            : Avalonia.Layout.HorizontalAlignment.Stretch;
+        PART_Editor.Padding = on ? new Thickness(24, 40, 24, 56) : new Thickness(16, 12);
+        PART_Editor.FontSize = on ? 16 : 14;
+        PART_FocusStatus.IsVisible = on;
+        UpdateHeaderRow();
+        if (on)
+            PART_Editor.TextArea.Focus();
     }
 
     protected override void OnAttachedToVisualTree(VisualTreeAttachmentEventArgs e)

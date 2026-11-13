@@ -57,6 +57,7 @@ public partial class MainWindow : Window
                 SetupLeftPaneRowHeights(vm);
                 SetupRightPaneRowHeights(vm);
                 SetupLayoutPersistence(vm);
+                SetupFocusMode(vm);
 
                 vm.ShowQuickIdeaDialogAsync = () => QuickIdeaDialog.ShowAsync(this);
 
@@ -139,7 +140,9 @@ public partial class MainWindow : Window
 
         void ApplyColumnWidths(ShellMode mode, bool anyLeftOpen, bool anyRightOpen, WriteLayoutSettings layout)
         {
-            if (mode is ShellMode.Manage or ShellMode.Plan or ShellMode.Research or ShellMode.Ideas)
+            // Focus mode hides both rails too; the stored widths stay in the layout for when it ends (the layout
+            // capture never saves a rail narrower than MinSidebarWidth, so the zero widths aren't persisted).
+            if (mode is ShellMode.Manage or ShellMode.Plan or ShellMode.Research or ShellMode.Ideas || vm.IsFocusMode)
             {
                 grid.ColumnDefinitions[0].Width = new GridLength(0);
                 grid.ColumnDefinitions[1].Width = new GridLength(0);
@@ -175,6 +178,49 @@ public partial class MainWindow : Window
                 .Subscribe(
                     t => ApplyColumnWidths(t.Item1, t.Item2, t.Item3, t.Item4),
                     _ => { /* non-fatal */ }));
+
+        _layoutDisposables.Add(
+            vm.WhenAnyValue(x => x.IsFocusMode)
+                .Skip(1)
+                .ObserveOn(AvaloniaScheduler.Instance)
+                .Subscribe(
+                    _ => ApplyColumnWidths(vm.ActiveMode, vm.IsAnyLeftPaneOpen, vm.IsAnyRightPaneOpen, vm.CurrentWriteLayout),
+                    _ => { /* non-fatal */ }));
+    }
+
+    // ── Focus mode ────────────────────────────────────────────────────────────
+
+    private WindowState _stateBeforeFocus = WindowState.Normal;
+
+    /// <summary>Focus mode fills the screen; leaving it puts the window back as it was.</summary>
+    private void SetupFocusMode(MainWindowViewModel vm)
+    {
+        _layoutDisposables.Add(
+            vm.WhenAnyValue(x => x.IsFocusMode)
+                .Skip(1)
+                .ObserveOn(AvaloniaScheduler.Instance)
+                .Subscribe(on =>
+                {
+                    // The layout capture runs on LayoutUpdated; keep it from seeing the rails mid-switch.
+                    _suppressLayoutCapture = true;
+                    try
+                    {
+                        if (on)
+                        {
+                            _stateBeforeFocus = WindowState == WindowState.FullScreen ? WindowState.Normal : WindowState;
+                            WindowState = WindowState.FullScreen;
+                        }
+                        else if (WindowState == WindowState.FullScreen)
+                        {
+                            WindowState = _stateBeforeFocus;
+                        }
+                    }
+                    finally
+                    {
+                        Avalonia.Threading.Dispatcher.UIThread.Post(
+                            () => _suppressLayoutCapture = false, Avalonia.Threading.DispatcherPriority.Background);
+                    }
+                }, _ => { /* non-fatal */ }));
     }
 
     // ── Left-pane row heights ──────────────────────────────────────────────────

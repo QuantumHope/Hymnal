@@ -147,6 +147,8 @@ public class MainWindowViewModel : ViewModelBase
                 return;
 
             _activeMode = value;
+            if (value != ShellMode.Write)
+                IsFocusMode = false;
             EditorViewModel.IsResearchSurface = value == ShellMode.Research;
             EditorViewModel.IsEditorSurfaceVisible = value is ShellMode.Write or ShellMode.Research;
             CorkboardViewModel.SetViewActive(value == ShellMode.Plan);
@@ -299,6 +301,25 @@ public class MainWindowViewModel : ViewModelBase
 
     public ReactiveCommand<Unit, Unit> ResetWriteLayoutCommand { get; }
 
+    // ── Focus mode ───────────────────────────────────────────────────────────
+
+    private bool _isFocusMode;
+
+    /// <summary>
+    /// Write mode with nothing but the text: full screen, no menu, mode tabs, rails or status strip (F11 toggles,
+    /// Esc leaves). Leaving Write mode leaves focus mode. The saved Write layout is untouched.
+    /// </summary>
+    public bool IsFocusMode
+    {
+        get => _isFocusMode;
+        private set => this.RaiseAndSetIfChanged(ref _isFocusMode, value);
+    }
+
+    public ReactiveCommand<Unit, Unit> ToggleFocusModeCommand { get; }
+
+    /// <summary>Leaves focus mode; can't run outside it, so Esc is left alone the rest of the time.</summary>
+    public ReactiveCommand<Unit, Unit> ExitFocusModeCommand { get; }
+
     // ── Exit ─────────────────────────────────────────────────────────────────
 
     public ReactiveCommand<Unit, Unit> ExitCommand { get; } =
@@ -448,6 +469,21 @@ public class MainWindowViewModel : ViewModelBase
             LeaveSettings();
             ActiveMode = IsGanttVisible ? ShellMode.Write : ShellMode.Manage;
         });
+
+        ToggleFocusModeCommand = ReactiveCommand.Create(() =>
+        {
+            if (IsFocusMode)
+            {
+                IsFocusMode = false;
+                return;
+            }
+            LeaveSettings();
+            ActiveMode = ShellMode.Write;
+            IsFocusMode = true;
+        });
+        ExitFocusModeCommand = ReactiveCommand.Create(
+            () => { IsFocusMode = false; },
+            this.WhenAnyValue(x => x.IsFocusMode));
 
         ResetWriteLayoutCommand = ReactiveCommand.CreateFromTask(ResetWriteLayoutAsync);
         Disposables.Add(ResetWriteLayoutCommand.ThrownExceptions.Subscribe(ex =>

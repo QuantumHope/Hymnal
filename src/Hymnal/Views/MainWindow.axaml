@@ -102,13 +102,18 @@
         <KeyBinding Gesture="F5" Command="{Binding ToggleGanttCommand}" />
         <KeyBinding Gesture="F6" Command="{Binding EditorViewModel.CycleViewModeCommand}" />
         <KeyBinding Gesture="F7" Command="{Binding WriteBeatsViewModel.ToggleCommand}" />
+        <KeyBinding Gesture="F11" Command="{Binding ToggleFocusModeCommand}" />
+        <KeyBinding Gesture="Escape" Command="{Binding ExitFocusModeCommand}" />
         <KeyBinding Gesture="Ctrl+Shift+I" Command="{Binding QuickCaptureIdeaCommand}" />
     </Window.KeyBindings>
 
-    <Grid RowDefinitions="48,Auto,*,Auto">
+    <!-- Row 0 is Auto (its bar is 48 high) so focus mode, which hides the bar, gives the text the whole window. -->
+    <Grid RowDefinitions="Auto,Auto,*,Auto">
 
         <!-- Row 0: Menu bar + mode tabs in a single row -->
         <Border Grid.Row="0"
+                Height="48"
+                IsVisible="{Binding !IsFocusMode}"
                 Background="{DynamicResource Cora.Surface.Panel}"
                 BorderBrush="{DynamicResource Cora.Border.Subtle}"
                 BorderThickness="0,0,0,1">
@@ -149,6 +154,9 @@
                                   IsVisible="{Binding IsBeatsSectionAvailable}"
                                   Command="{Binding WriteBeatsViewModel.ToggleCommand}"
                                   InputGesture="F7" />
+                        <MenuItem Header="_Focus Mode"
+                                  Command="{Binding ToggleFocusModeCommand}"
+                                  InputGesture="F11" />
                         <Separator />
                         <MenuItem Header="Markua _Preview">
                             <MenuItem Header="_Write Only"
@@ -298,7 +306,7 @@
         </Border>
 
         <!-- Accent band (Row 1 — below the menu/tab bar): Synthwave's neon, a plain rule elsewhere -->
-        <Border Grid.Row="1" Classes="band top" />
+        <Border Grid.Row="1" Classes="band top" IsVisible="{Binding !IsFocusMode}" />
 
         <!-- Main shell (Row 2) -->
         <Panel Grid.Row="2">
@@ -315,7 +323,7 @@
                   IsVisible="{Binding IsEditorVisible}">
 
                 <!-- ── LEFT PANE ─────────────────────────────────────────────── -->
-                <Border Grid.Column="0"
+                <Border Grid.Column="0" IsVisible="{Binding !IsFocusMode}"
                         Background="{DynamicResource Cora.Surface.Panel}"
                         BorderBrush="{DynamicResource Cora.Border.Subtle}"
                         BorderThickness="0,0,1,0"
@@ -479,14 +487,14 @@
                 </Border>
 
                 <!-- ── SPLITTER BETWEEN LEFT PANE AND EDITOR ─────────────── -->
-                <GridSplitter Grid.Column="1"
+                <GridSplitter Grid.Column="1" IsVisible="{Binding !IsFocusMode}"
                               Width="4"
                               ResizeDirection="Columns"
                               Background="{DynamicResource Cora.Border.Subtle}" />
 
                 <!-- ── EDITOR ─────────────────────────────────────── -->
                 <!-- The chapter status bar shares the editor's header row with the Write / Split / Preview switch. -->
-                <views:EditorView Grid.Column="2"
+                <views:EditorView Grid.Column="2" IsDistractionFree="{Binding $parent[Window].((vm:MainWindowViewModel)DataContext).IsFocusMode}"
                                   DataContext="{Binding EditorViewModel}"
                                   PlaysTypingSounds="True"
                                   Background="Transparent">
@@ -498,13 +506,13 @@
                 </views:EditorView>
 
                 <!-- ── SPLITTER (visible when any right pane is open) ─────────── -->
-                <GridSplitter Grid.Column="3"
+                <GridSplitter Grid.Column="3" IsVisible="{Binding !IsFocusMode}"
                               Width="4"
                               ResizeDirection="Columns"
                               Background="{DynamicResource Cora.Border.Subtle}" />
 
                 <!-- ── RIGHT PANE ─────────────────────────────────────────────── -->
-                <Border Grid.Column="4"
+                <Border Grid.Column="4" IsVisible="{Binding !IsFocusMode}"
                         Background="{DynamicResource Cora.Surface.Panel}"
                         BorderBrush="{DynamicResource Cora.Border.Subtle}"
                         BorderThickness="1,0,0,0">
@@ -802,7 +810,7 @@
 
         <!-- Row 3: the accent band, then the status strip with the theme's emblem, the window title, and a CORA
              theme's motto and signature chrome -->
-        <DockPanel Grid.Row="3">
+        <DockPanel Grid.Row="3" IsVisible="{Binding !IsFocusMode}">
             <Border DockPanel.Dock="Top" Classes="band bottom" />
             <Border Classes="statusStrip">
                 <DockPanel>

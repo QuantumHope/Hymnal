@@ -207,6 +207,18 @@
                                       BaseDirectory="{Binding PreviewBaseDirectory}" />
           </Grid>
 
+            <!-- Focus mode's quiet status line: the word count, and how to leave. -->
+            <TextBlock x:Name="PART_FocusStatus"
+                       IsVisible="False"
+                       HorizontalAlignment="Center"
+                       VerticalAlignment="Bottom"
+                       Margin="0,0,0,14"
+                       FontSize="11"
+                       Opacity="0.7"
+                       IsHitTestVisible="False"
+                       Foreground="{DynamicResource Cora.Text.Disabled}"
+                       Text="{Binding LiveWordCount, StringFormat='{}{0:N0} words  ·  Esc or F11 to leave focus'}" />
+
             <Border IsVisible="{Binding ShowWorkspacePrompt}"
                     Background="{DynamicResource Cora.Surface.Void}">
                 <StackPanel HorizontalAlignment="Center"
