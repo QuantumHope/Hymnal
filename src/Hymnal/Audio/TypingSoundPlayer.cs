@@ -214,6 +214,11 @@ public sealed class TypingSoundPlayer : ReactiveObject, IDisposable
         {
             if (_loadedScheme == wanted && _clips != null)
                 return;
+
+            // Another scheme is wanted: the loaded clips are about to be invalidated by the reload, so forget them
+            // now. Otherwise switching back to them (A → B → A while B loads, or after B fails) would reuse dead clips.
+            _clips = null;
+            _loadedScheme = null;
         }
 
         SetStatus(TypingSoundStatus.Starting);
@@ -237,6 +242,12 @@ public sealed class TypingSoundPlayer : ReactiveObject, IDisposable
         }
 
         // A fresh start drops the clips of the previous scheme along with the device.
+        lock (_gate)
+        {
+            _clips = null;
+            _loadedScheme = null;
+        }
+
         _engine.Stop();
         if (!_engine.TryStart())
         {

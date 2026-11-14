@@ -83,6 +83,33 @@ public sealed class TypingSoundPlayerTests
         Assert.Single(engine.Plays);
     }
 
+    [Fact]
+    public async Task SwitchingBackWhileAnotherSchemeLoads_ReloadsInsteadOfKeepingDeadClips()
+    {
+        var engine = new FakeAudioEngine();
+        var (prefs, _) = await PreferencesAsync(enabled: true);
+        using var player = new TypingSoundPlayer(engine, prefs, ThemeSoundSchemes.SynthwaveThemeId);
+        await player.WhenIdle;
+
+        // Choose Forge, and hold its load after it has stopped the engine (invalidating the theme's clips)...
+        using var gate = new System.Threading.ManualResetEventSlim(false);
+        engine.StartGate = gate;
+        engine.StartEntered.Reset();
+        prefs.TypingSound = SoundSchemes.Forge.Id;
+        Assert.True(engine.StartEntered.Wait(TimeSpan.FromSeconds(10)));
+
+        // ...then go back to the theme's scheme before it finishes.
+        prefs.TypingSound = SoundSettings.MatchTheme;
+        engine.StartGate = null;
+        gate.Set();
+        await player.WhenIdle;
+
+        Assert.Same(SoundSchemes.ElectricTypewriter, player.Scheme);
+        Assert.Equal(TypingSoundStatus.Ready, player.Status);
+        player.Play(TypingSoundKind.Key);
+        Assert.Single(engine.Plays);
+    }
+
     [Theory]
     [InlineData(false, SoundSettings.MatchTheme)]
     [InlineData(true, SoundSettings.Silent)]
@@ -322,8 +349,16 @@ public sealed class TypingSoundPlayerTests
                 return TypingSoundBank.Kinds[Clips.IndexOf(clip) / 8];
         }
 
+        /// <summary>While set, TryStart waits for it, so a test can change preferences mid-load.</summary>
+        public System.Threading.ManualResetEventSlim? StartGate { get; set; }
+
+        /// <summary>Signalled when TryStart is entered.</summary>
+        public System.Threading.ManualResetEventSlim StartEntered { get; } = new();
+
         public bool TryStart()
         {
+            StartEntered.Set();
+            StartGate?.Wait(TimeSpan.FromSeconds(10));
             lock (_gate)
             {
                 Starts++;

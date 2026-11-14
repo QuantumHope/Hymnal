@@ -15,6 +15,9 @@ public sealed unsafe class OpenAlAudioEngine : IAudioEngine
     /// <summary>Enough for fast typing with long carriage returns ringing out, plus a few ambient loops.</summary>
     internal const int VoiceCount = 24;
 
+    /// <summary>The serial of a source retired by a shutdown; never matches a voice handle (serials start at 1).</summary>
+    private const long RetiredSerial = -1;
+
     private readonly object _gate = new();
     private readonly float[] _busGains = [1f, 1f];
 
@@ -216,6 +219,11 @@ public sealed unsafe class OpenAlAudioEngine : IAudioEngine
             foreach (var buffer in _buffers)
                 _al.DeleteBuffer(buffer);
         }
+
+        // Voices handed out before this point must stay stopped: OpenAL can reuse a deleted source's id for a new
+        // voice after a restart, and an old handle must never stop or query that one.
+        foreach (var source in _sources)
+            source.Serial = RetiredSerial;
 
         _sources = [];
         _buffers.Clear();
