@@ -93,11 +93,23 @@ public partial class MainWindow : Window
 
         e.Cancel = true;
         if (!await flush
-            && !await ConfirmDialog.ShowAsync(this, "Unsaved Edits", "Idea or beat edits couldn't be saved. Close anyway?", "Close"))
+            && !await ConfirmDialog.ShowAsync(this, "Unsaved Edits", CloseWithUnsavedMessage(vm), "Close anyway"))
             return;
 
         _closeAllowed = true;
         Close();
+    }
+
+    /// <summary>What closing now would lose: the open file's text when it is still unsaved, or other pending edits.</summary>
+    internal static string CloseWithUnsavedMessage(MainWindowViewModel vm)
+    {
+        var editor = vm.EditorViewModel;
+        if (editor.IsDirty && editor.HasConflict)
+            return "The open file changed on disk while you had unsaved edits, so they weren't saved over it. "
+                   + "Closing now loses your edits. Close anyway? (Cancel, then choose Keep my edits or Reload from disk.)";
+        if (editor.IsDirty)
+            return "Your unsaved text couldn't be saved. Closing now loses it. Close anyway?";
+        return "Some notes, schedule, idea or beat edits couldn't be saved. Close anyway?";
     }
 
     public static async Task ExecuteGitSyncActionAsync(GitPanelViewModel gitPanelViewModel, string? commitMessage)

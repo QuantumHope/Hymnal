@@ -926,16 +926,15 @@ public class MainWindowViewModel : ViewModelBase
     }
 
     /// <summary>
-    /// Writes edits still waiting on a debounced save (story ideas, after any in-flight promote finishes,
-    /// and beats) before the window closes, waiting at most <paramref name="timeout"/> in all. False when
-    /// they could not be saved in time, so the view can ask whether to close anyway. Completes
-    /// synchronously when nothing is pending.
+    /// Saves everything not yet on disk before the window closes, waiting at most <paramref name="timeout"/> in
+    /// all: the editor's unsaved text first, then edits still waiting on a debounced save (notes, the schedule,
+    /// story ideas after any in-flight promote, and beats). False when something could not be saved, so the view
+    /// asks whether to close anyway. That includes text whose file changed on disk meanwhile: saving it would
+    /// silently overwrite the other change, so it is left for the author to decide. Completes synchronously when
+    /// nothing is pending.
     /// </summary>
     public async Task<bool> FlushPendingEditsBeforeCloseAsync(TimeSpan timeout)
     {
-        if (IdeasViewModel == null && PlanHostViewModel == null && WriteBeatsViewModel == null)
-            return true;
-
         try
         {
             var flush = FlushAllAsync();
@@ -957,11 +956,39 @@ public class MainWindowViewModel : ViewModelBase
 
     private async Task<bool> FlushAllAsync()
     {
+        // The prose first: it is what the author can least afford to lose.
+        var text = await SaveEditorBeforeCloseAsync();
+
+        var notes = _notesVm.FlushAsync();
+        var schedule = _chapterInfoVm.FlushScheduleAsync();
         var ideas = IdeasViewModel == null ? Task.FromResult(true) : FlushAfterPromoteAsync(IdeasViewModel);
         var beats = PlanHostViewModel == null ? Task.FromResult(true) : PlanHostViewModel.FlushAsync();
         var writeBeats = WriteBeatsViewModel == null ? Task.FromResult(true) : WriteBeatsViewModel.FlushAsync();
-        var results = await Task.WhenAll(ideas, beats, writeBeats);
-        return results.All(ok => ok);
+        var results = await Task.WhenAll(notes, schedule, ideas, beats, writeBeats);
+        return text && results.All(ok => ok);
+    }
+
+    /// <summary>
+    /// Saves the editor's unsaved text. False when it couldn't be saved, or when its file changed on disk while it
+    /// was being edited (an unresolved conflict): that is never overwritten without asking.
+    /// </summary>
+    private async Task<bool> SaveEditorBeforeCloseAsync()
+    {
+        var editor = EditorViewModel;
+        if (!editor.IsDirty)
+            return true;
+        if (editor.HasConflict)
+            return false;
+        try
+        {
+            await editor.SaveAsync();
+        }
+        catch (Exception)
+        {
+            // SaveAsync has already shown the error.
+            return false;
+        }
+        return !editor.IsDirty;
     }
 
     /// <summary>Waits for an in-flight promote (it saves ideas itself), then writes pending idea edits.</summary>
