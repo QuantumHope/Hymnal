@@ -82,6 +82,8 @@ If a file contains the marker {class: part} in its first non-blank lines, Hymnal
 - F4: toggle notes panel
 - F7: toggle the Beats panel (Short Story and Anthology projects): the story's beats beside the draft
 - Ctrl+S: save active chapter
+- Ctrl+P: go to any chapter, scene, story or idea by typing part of its name
+- Ctrl+Shift+P: command palette, every command with its shortcut (or type `>` after Ctrl+P)
 
 ## Architecture Overview
 

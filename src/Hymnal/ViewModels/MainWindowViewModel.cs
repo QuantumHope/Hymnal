@@ -16,7 +16,7 @@ using System.Reactive.Subjects;
 
 namespace Hymnal.ViewModels;
 
-public class MainWindowViewModel : ViewModelBase
+public partial class MainWindowViewModel : ViewModelBase
 {
     private readonly IAppSettingsStore _settingsStore;
     private readonly WorkspaceViewModel _workspaceVm;
@@ -601,6 +601,12 @@ public class MainWindowViewModel : ViewModelBase
             ActiveMode = IsGanttVisible ? ShellMode.Write : ShellMode.Manage;
         });
 
+        // Built before the focus-mode commands: Esc closes an open palette before it leaves focus mode.
+        CommandPalette = new CommandPaletteViewModel(BuildPaletteEntries, notificationService);
+        Disposables.Add(CommandPalette);
+        ShowGoToCommand = ReactiveCommand.Create(() => CommandPalette.OpenGoTo());
+        ShowCommandsCommand = ReactiveCommand.Create(() => CommandPalette.OpenCommands());
+
         ToggleFocusModeCommand = ReactiveCommand.Create(() =>
         {
             if (IsFocusMode)
@@ -614,7 +620,8 @@ public class MainWindowViewModel : ViewModelBase
         });
         ExitFocusModeCommand = ReactiveCommand.Create(
             () => { IsFocusMode = false; },
-            this.WhenAnyValue(x => x.IsFocusMode));
+            this.WhenAnyValue(x => x.IsFocusMode)
+                .CombineLatest(CommandPalette.WhenAnyValue(x => x.IsOpen), (focus, palette) => focus && !palette));
 
         ResetWriteLayoutCommand = ReactiveCommand.CreateFromTask(ResetWriteLayoutAsync);
         Disposables.Add(ResetWriteLayoutCommand.ThrownExceptions.Subscribe(ex =>

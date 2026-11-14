@@ -184,8 +184,12 @@
         <KeyBinding Gesture="F6" Command="{Binding EditorViewModel.CycleViewModeCommand}" />
         <KeyBinding Gesture="F7" Command="{Binding ToggleRightPaneCommand}" CommandParameter="beats" />
         <KeyBinding Gesture="F11" Command="{Binding ToggleFocusModeCommand}" />
+        <!-- Esc closes the command palette first; ExitFocusModeCommand can't run while it is open. -->
+        <KeyBinding Gesture="Escape" Command="{Binding CommandPalette.CloseCommand}" />
         <KeyBinding Gesture="Escape" Command="{Binding ExitFocusModeCommand}" />
         <KeyBinding Gesture="Ctrl+Shift+I" Command="{Binding QuickCaptureIdeaCommand}" />
+        <KeyBinding Gesture="Ctrl+P" Command="{Binding ShowGoToCommand}" />
+        <KeyBinding Gesture="Ctrl+Shift+P" Command="{Binding ShowCommandsCommand}" />
     </Window.KeyBindings>
 
     <!-- Row 0 is Auto (its bar is 48 high) so focus mode, which hides the bar, gives the text the whole window. -->
@@ -219,6 +223,13 @@
                                   Command="{Binding ExitCommand}" />
                     </MenuItem>
                     <MenuItem Header="_View" Foreground="{DynamicResource Cora.Text}">
+                        <MenuItem Header="_Go To…"
+                                  Command="{Binding ShowGoToCommand}"
+                                  InputGesture="Ctrl+P" />
+                        <MenuItem Header="_Command Palette…"
+                                  Command="{Binding ShowCommandsCommand}"
+                                  InputGesture="Ctrl+Shift+P" />
+                        <Separator />
                         <MenuItem Header="Toggle _Left Sidebar"
                                   Command="{Binding ToggleSidebarCommand}"
                                   InputGesture="Ctrl+B" />
@@ -946,6 +957,11 @@
                 </StackPanel>
             </Grid>
         </Border>
+
+        <!-- Command palette (Ctrl+P / Ctrl+Shift+P), over everything including the banner. -->
+        <views:CommandPaletteView Grid.Row="0"
+                                  Grid.RowSpan="4"
+                                  DataContext="{Binding CommandPalette}" />
 
     </Grid>
 
