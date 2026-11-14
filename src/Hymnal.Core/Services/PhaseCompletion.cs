@@ -41,11 +41,11 @@ public static class PhaseCompletion
     public static Result<PhaseData> CompleteAndAdvance(PhaseData current, DateOnly today, ProjectProfile profile)
     {
         if (profile.DisplayStatus(current.Status) == ChapterStatus.Done)
-            return Result<PhaseData>.Fail("Chapter is already done.");
+            return Result<PhaseData>.Fail("It is already done.");
 
         var nextStatus = profile.NextStatus(current.Status);
         if (nextStatus is null)
-            return Result<PhaseData>.Fail("Chapter is already done.");
+            return Result<PhaseData>.Fail("It is already done.");
 
         var todayStr = today.ToString("yyyy-MM-dd");
         var schedule = new Dictionary<string, PhaseScheduleEntry>(

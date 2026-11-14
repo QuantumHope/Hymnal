@@ -7,17 +7,17 @@
         CanResize="False"
         ShowInTaskbar="False"
         WindowStartupLocation="CenterOwner"
-        Background="#0B0820"
-        FontFamily="{DynamicResource InterFont}">
+        Background="{DynamicResource Cora.Surface.Void}"
+        FontFamily="{DynamicResource Cora.Font.Persona}">
 
     <Grid RowDefinitions="5,*">
         <!-- Accent stripe -->
         <Border Grid.Row="0" Height="5">
             <Border.Background>
                 <LinearGradientBrush StartPoint="0%,0%" EndPoint="100%,0%">
-                    <GradientStop Color="#9D4EDD" Offset="0" />
-                    <GradientStop Color="#E91E8C" Offset="0.5" />
-                    <GradientStop Color="#38BDF8" Offset="1" />
+                    <GradientStop Color="{DynamicResource Cora.Accent.Store.Color}" Offset="0" />
+                    <GradientStop Color="{DynamicResource Cora.Accent.Merge.Color}" Offset="0.5" />
+                    <GradientStop Color="{DynamicResource Cora.Accent.Retrieve.Color}" Offset="1" />
                 </LinearGradientBrush>
             </Border.Background>
         </Border>
@@ -36,27 +36,27 @@
             <TextBlock Text="Hymnal"
                        FontSize="28"
                        FontWeight="Bold"
-                       Foreground="{DynamicResource SynthwavePurpleBrush}"
+                       Foreground="{DynamicResource Cora.Accent.Store}"
                        HorizontalAlignment="Center" />
 
             <TextBlock Text="A streamlined editor for authors to plan, write, review, and edit LeanPub / Markua style manuscripts."
                        FontSize="13"
-                       Foreground="{DynamicResource OnSurfaceDimBrush}"
+                       Foreground="{DynamicResource Cora.Text.Secondary}"
                        TextWrapping="Wrap"
                        TextAlignment="Center"
                        MaxWidth="300" />
 
             <TextBlock Text="Created by Matthew Hope-Eland"
                        FontSize="12"
-                       Foreground="{DynamicResource OnSurfaceMutedBrush}"
+                       Foreground="{DynamicResource Cora.Text.Disabled}"
                        HorizontalAlignment="Center" />
 
             <Button Content="Close"
                     HorizontalAlignment="Center"
                     Padding="20,6"
                     CornerRadius="4"
-                    Background="{DynamicResource SurfaceHighBrush}"
-                    Foreground="{DynamicResource OnSurfaceBrush}"
+                    Background="{DynamicResource Cora.Wash.Selected}"
+                    Foreground="{DynamicResource Cora.Text}"
                     Click="CloseButton_Click" />
         </StackPanel>
     </Grid>

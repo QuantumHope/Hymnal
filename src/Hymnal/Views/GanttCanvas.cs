@@ -8,6 +8,7 @@ using Avalonia.Input;
 using Avalonia.Layout;
 using Avalonia.Media;
 using Hymnal.Core.Models;
+using Hymnal.Theming;
 using Hymnal.ViewModels;
 
 namespace Hymnal.Views;
@@ -101,33 +102,58 @@ public sealed class GanttCanvas : Control
 
     // ── Brushes / pens ────────────────────────────────────────────────────────
 
+    // Colours come from the theme and are read at draw time (a theme switch redraws, see the constructor). The
+    // fallbacks are Synthwave's original values, used when no theme is loaded.
+    private static IBrush ThemeBrush(string key, string fallback) => ThemeBrushes.Get(key, fallback);
+    private static Color ThemeColor(string key, string fallback) => ThemeBrushes.Color(key, fallback);
+    private static IBrush Tint(Color c, byte alpha) => new SolidColorBrush(Color.FromArgb(alpha, c.R, c.G, c.B));
+
     // Axis / grid
-    private static readonly IBrush BackgroundBrush  = new SolidColorBrush(Color.Parse("#0D0B22"));
-    private static readonly IBrush HeaderBgBrush    = new SolidColorBrush(Color.Parse("#120932"));
-    private static readonly IBrush LabelColumnBrush = new SolidColorBrush(Color.Parse("#0F0828"));
-    private static readonly IBrush GridLineBrush    = new SolidColorBrush(Color.FromArgb(0x28, 0xFF, 0xFF, 0xFF));
-    private static readonly IBrush AxisTextBrush    = new SolidColorBrush(Color.Parse("#94A3B8"));
-    private static readonly IBrush LabelTextBrush   = new SolidColorBrush(Color.Parse("#CBD5E1"));
-    private static readonly IBrush LabelDimBrush    = new SolidColorBrush(Color.Parse("#64748B"));
-    private static readonly IBrush PartRowBgBrush   = new SolidColorBrush(Color.FromArgb(0x18, 0x9D, 0x4E, 0xDD));
-    private static readonly IBrush EmptyStateBrush  = new SolidColorBrush(Color.Parse("#475569"));
-    private static readonly Pen   SeparatorPen      = new(new SolidColorBrush(Color.FromArgb(0x50, 0x9D, 0x4E, 0xDD)), 1.0);
-    private static readonly Pen   GridLinePen       = new(GridLineBrush, 0.5);
+    private static IBrush BackgroundBrush  => ThemeBrush("Cora.Surface.Void", "#0D0B22");
+    private static IBrush HeaderBgBrush    => ThemeBrush("Cora.Surface.Header", "#120932");
+    private static IBrush LabelColumnBrush => ThemeBrush("Cora.Surface.Panel", "#0F0828");
+    private static IBrush GridLineBrush    => Tint(ThemeColor("Cora.Text", "#FFFFFF"), 0x28);
+    private static IBrush AxisTextBrush    => ThemeBrush("Cora.Text.Secondary", "#94A3B8");
+    private static IBrush LabelTextBrush   => ThemeBrush("Cora.Text", "#CBD5E1");
+    private static IBrush LabelDimBrush    => ThemeBrush("Cora.Text.Disabled", "#64748B");
+    private static IBrush PartRowBgBrush   => Tint(ThemeColor("Cora.Accent.Store", "#9D4EDD"), 0x18);
+    private static IBrush EmptyStateBrush  => ThemeBrush("Cora.Text.Disabled", "#475569");
+    private static Pen    SeparatorPen     => new(Tint(ThemeColor("Cora.Accent.Store", "#9D4EDD"), 0x50), 1.0);
+    private static Pen    GridLinePen      => new(GridLineBrush, 0.5);
 
     // Per-phase fill colours — keyed by the canonical phase name string.
-    private static readonly Dictionary<string, Color> PhaseBarColors = new()
+    private static readonly Dictionary<string, (string Key, string Fallback)> PhaseBarKeys = new()
     {
-        ["Outlining"] = Color.Parse("#9589B0"),
-        ["Drafting"]  = Color.Parse("#38BDF8"),
-        ["Editing"]   = Color.Parse("#9D4EDD"),
-        ["Polishing"] = Color.Parse("#F5C842"),
-        ["Reviewing"] = Color.Parse("#E91E8C"),
+        ["Outlining"] = ("Cora.Text.Secondary", "#9589B0"),
+        ["Drafting"]  = ("Cora.Accent.Retrieve", "#38BDF8"),
+        ["Editing"]   = ("Cora.Accent.Store", "#9D4EDD"),
+        ["Polishing"] = ("Cora.Accent.Create", "#F5C842"),
+        ["Reviewing"] = ("Cora.Accent.Merge", "#E91E8C"),
     };
 
+    private static Color PhaseColor(string phaseName) =>
+        PhaseBarKeys.TryGetValue(phaseName, out var k)
+            ? ThemeColor(k.Key, k.Fallback)
+            : ThemeColor("Cora.Text.Disabled", "#64748B");
+
     // Part rollup colours
-    private static readonly IBrush PartRollupTrackBrush = new SolidColorBrush(Color.FromArgb(0x60, 0x47, 0x55, 0x69));
-    private static readonly IBrush PartRollupFillBrush  = new SolidColorBrush(Color.Parse("#34D399"));
-    private static readonly Pen    PartRollupStrokePen  = new(new SolidColorBrush(Color.FromArgb(0xA0, 0x34, 0xD3, 0x99)), 1.0);
+    private static IBrush PartRollupTrackBrush => Tint(ThemeColor("Cora.Text.Disabled", "#475569"), 0x60);
+    private static IBrush PartRollupFillBrush  => ThemeBrush("Cora.Accent.Success", "#34D399");
+    private static Pen    PartRollupStrokePen  => new(Tint(ThemeColor("Cora.Accent.Success", "#34D399"), 0xA0), 1.0);
+    // Rollup % labels sit over both the track and the fill, so they use body text rather than icon ink.
+    private static IBrush RollupLabelBrush     => ThemeBrush("Cora.Text", "#FFFFFF");
+
+    // ── AvaloniaProperty: ItemHeader ──────────────────────────────────────────
+
+    /// <summary>The first column's header: CHAPTER, SCENE or STORY (the project's profile).</summary>
+    public static readonly StyledProperty<string> ItemHeaderProperty =
+        AvaloniaProperty.Register<GanttCanvas, string>(nameof(ItemHeader), "CHAPTER");
+
+    public string ItemHeader
+    {
+        get => GetValue(ItemHeaderProperty);
+        set => SetValue(ItemHeaderProperty, value);
+    }
 
     // ── AvaloniaProperty: Rows ────────────────────────────────────────────────
 
@@ -152,6 +178,8 @@ public sealed class GanttCanvas : Control
         ToolTip.SetShowDelay(this, 300);
         ToolTip.SetPlacement(this, PlacementMode.Pointer);
         ToolTip.SetHorizontalOffset(this, 24);
+        // A theme switch swaps the app's resources; redraw so the tinted colours follow it.
+        ResourcesChanged += (_, _) => InvalidateVisual();
     }
 
     // ── Property change / collection watching ────────────────────────────────
@@ -315,12 +343,12 @@ public sealed class GanttCanvas : Control
                 transformScope = ctx.PushTransform(Matrix.CreateTranslation(-TimelineLeft, 0));
 
             if (showTable)
-                DrawColumnHeaders(ctx);
+                DrawColumnHeaders(ctx, ItemHeader);
 
             if (rows == null || rows.Count == 0)
             {
                 transformScope?.Dispose();
-                DrawEmptyState(ctx, w, h, "No chapters loaded.");
+                DrawEmptyState(ctx, w, h, "Nothing to schedule yet.");
                 return;
             }
 
@@ -385,11 +413,11 @@ public sealed class GanttCanvas : Control
         }
     }
 
-    private static void DrawColumnHeaders(DrawingContext ctx)
+    private static void DrawColumnHeaders(DrawingContext ctx, string itemHeader)
     {
         try
         {
-            DrawHeaderText(ctx, "CHAPTER", 8);
+            DrawHeaderText(ctx, itemHeader, 8);
             DrawHeaderText(ctx, "STATUS", StatusColumnLeft + 6);
             DrawHeaderText(ctx, "START", StartColumnLeft + 6);
             DrawHeaderText(ctx, "END", EndColumnLeft + 6);
@@ -463,7 +491,7 @@ public sealed class GanttCanvas : Control
             if (isEven)
             {
                 ctx.FillRectangle(
-                    new SolidColorBrush(Color.FromArgb(0x0A, 0xFF, 0xFF, 0xFF)),
+                    Tint(ThemeColor("Cora.Text", "#FFFFFF"), 0x0A),
                     new Rect(TimelineLeft, rowY, chartWidth, RowHeight));
             }
 
@@ -517,8 +545,7 @@ public sealed class GanttCanvas : Control
                 if (!seg.StartDate.HasValue && !seg.EndDate.HasValue)
                     continue;  // phase not scheduled — skip
 
-                if (!PhaseBarColors.TryGetValue(seg.PhaseName, out var barColor))
-                    barColor = Color.Parse("#64748B");
+                var barColor = PhaseColor(seg.PhaseName);
 
                 // If only one date is set, draw a thin marker line instead of a bar.
                 if (!seg.StartDate.HasValue || !seg.EndDate.HasValue)
@@ -569,9 +596,10 @@ public sealed class GanttCanvas : Control
                 // Bar label: show progress % (the bar colour already conveys the phase).
                 if (boxW > 28)
                 {
-                    var whiteBrush = new SolidColorBrush(Colors.White);
+                    // Text on the accent-coloured bar.
+                    var inkBrush = ThemeBrush("Cora.IconInk", "#FFFFFF");
                     string label = $"{(int)Math.Round(seg.Progress * 100)}%";
-                    var ft = MakeFormattedText(label, 8.5, whiteBrush);
+                    var ft = MakeFormattedText(label, 8.5, inkBrush);
                     if (ft.Width + 4 < boxW)
                     {
                         ctx.DrawText(ft,
@@ -599,7 +627,7 @@ public sealed class GanttCanvas : Control
         try
         {
             // Prominent background strip.
-            var bookBgBrush = new SolidColorBrush(Color.FromArgb(0x28, 0x9D, 0x4E, 0xDD));
+            var bookBgBrush = Tint(ThemeColor("Cora.Accent.Store", "#9D4EDD"), 0x28);
             ctx.FillRectangle(bookBgBrush,
                 new Rect(0, rowY, TimelineLeft + chartWidth, RowHeight));
 
@@ -610,8 +638,8 @@ public sealed class GanttCanvas : Control
                 new Point(0, rowY + RowHeight),
                 new Point(TimelineLeft + chartWidth, rowY + RowHeight));
 
-            var ft = MakeFormattedText("BOOK", 10.0,
-                new SolidColorBrush(Color.Parse("#C4B5FD")));
+            var ft = MakeFormattedText(row.Title, 10.0,
+                ThemeBrush("Cora.Accent.Store.Hot", "#C4B5FD"));
             ctx.DrawText(ft, new Point(8, rowY + (RowHeight - ft.Height) / 2));
 
             DrawCellText(ctx, "Rollup", StatusColumnLeft, StatusColumnWidth, rowY, 10.0, LabelTextBrush);
@@ -643,7 +671,7 @@ public sealed class GanttCanvas : Control
                 if (boxW > 36)
                 {
                     string pctLabel = $"{(int)Math.Round(row.CompletionPercentage * 100)}%";
-                    var pctFt = MakeFormattedText(pctLabel, 8.5, new SolidColorBrush(Colors.White));
+                    var pctFt = MakeFormattedText(pctLabel, 8.5, RollupLabelBrush);
                     if (pctFt.Width + 4 < boxW)
                     {
                         ctx.DrawText(pctFt,
@@ -704,7 +732,7 @@ public sealed class GanttCanvas : Control
                 if (boxW > 36)
                 {
                     string pctLabel = $"{(int)Math.Round(row.CompletionPercentage * 100)}%";
-                    var pctFt = MakeFormattedText(pctLabel, 8.5, new SolidColorBrush(Colors.White));
+                    var pctFt = MakeFormattedText(pctLabel, 8.5, RollupLabelBrush);
                     if (pctFt.Width + 4 < boxW)
                     {
                         ctx.DrawText(pctFt,
@@ -734,13 +762,13 @@ public sealed class GanttCanvas : Control
         var row = hit.Row;
         var hoveredSeg = hit.HoveredSegment;
 
-        var tooltipBg     = new SolidColorBrush(Color.Parse("#160E30"));
-        var borderBrush   = new SolidColorBrush(Color.Parse("#3D2B6E"));
-        var titleBrush    = new SolidColorBrush(Color.Parse("#E2DDFF"));
-        var dimBrush      = new SolidColorBrush(Color.Parse("#94A3B8"));
-        var mutedBrush    = new SolidColorBrush(Color.Parse("#64748B"));
-        var contentBrush  = new SolidColorBrush(Color.Parse("#CBD5E1"));
-        var ruleBrush     = new SolidColorBrush(Color.Parse("#2D1B5E"));
+        var tooltipBg     = ThemeBrush("Cora.Surface.Elevated", "#160E30");
+        var borderBrush   = ThemeBrush("Cora.Border.Input", "#3D2B6E");
+        var titleBrush    = ThemeBrush("Cora.Text", "#E2DDFF");
+        var dimBrush      = ThemeBrush("Cora.Text.Secondary", "#94A3B8");
+        var mutedBrush    = ThemeBrush("Cora.Text.Disabled", "#64748B");
+        var contentBrush  = ThemeBrush("Cora.Text", "#CBD5E1");
+        var ruleBrush     = ThemeBrush("Cora.Border.Subtle", "#2D1B5E");
 
         var statusColor   = StatusToColor(row.DisplayStatus);
 
@@ -802,7 +830,7 @@ public sealed class GanttCanvas : Control
             {
                 bool isHovered = seg.PhaseName == hoveredSeg?.PhaseName;
                 bool isActive  = row.IsActivePhase(seg.PhaseName);
-                var phaseColor = PhaseBarColors.TryGetValue(seg.PhaseName, out var c) ? c : Color.Parse("#64748B");
+                var phaseColor = PhaseColor(seg.PhaseName);
 
                 var phaseRow = new Grid { Margin = new Thickness(0, 1, 0, 0) };
                 phaseRow.ColumnDefinitions.Add(new ColumnDefinition(GridLength.Parse("92")));
@@ -963,8 +991,9 @@ public sealed class GanttCanvas : Control
 
         var rowTop = HeaderHeight + targetIndex * RowHeight;
         var y = _previewReorder.DropBeforeTarget ? rowTop : rowTop + RowHeight;
-        var previewBrush = new SolidColorBrush(Color.Parse("#F5C842"));
-        var previewGlow = new SolidColorBrush(Color.FromArgb(0x22, 0xF5, 0xC8, 0x42));
+        var previewColor = ThemeColor("Cora.Accent.Create", "#F5C842");
+        var previewBrush = new SolidColorBrush(previewColor);
+        var previewGlow = Tint(previewColor, 0x22);
         var previewPen = new Pen(previewBrush, 2.0);
 
         ctx.FillRectangle(previewGlow, new Rect(0, rowTop, totalWidth, RowHeight));
@@ -1115,17 +1144,8 @@ public sealed class GanttCanvas : Control
 
     private static Color StatusToColor(ChapterStatus status)
     {
-        return status switch
-        {
-            ChapterStatus.Planned => Color.Parse("#FF6B35"),
-            ChapterStatus.Outlining => Color.Parse("#9589B0"),
-            ChapterStatus.Drafting => Color.Parse("#38BDF8"),
-            ChapterStatus.Editing => Color.Parse("#9D4EDD"),
-            ChapterStatus.Polishing => Color.Parse("#F5C842"),
-            ChapterStatus.Reviewing => Color.Parse("#E91E8C"),
-            ChapterStatus.Done => Color.Parse("#22D3A0"),
-            _ => Color.Parse("#CBD5E1")
-        };
+        var (key, fallback) = GanttRowViewModel.StatusColorKey(status);
+        return ThemeColor(key, fallback);
     }
 
     private static FormattedText MakeFormattedText(string text, double size, IBrush brush)

@@ -147,6 +147,56 @@ public sealed class PlanHostViewModelTests
     }
 
     [Fact]
+    public async Task Anthology_corkboard_speaks_of_stories_and_scenes_not_chapters()
+    {
+        var root = CreateAnthology();
+        try
+        {
+            await Ui(root, 4, async context =>
+            {
+                context.CreateHost();
+                await context.SettleAsync();
+                var board = context.Corkboard;
+
+                var divider = await context.PartDividerAsync(LongPart);
+                Assert.Equal("Scene", divider.Noun);
+                Assert.Equal("(2 scenes)", divider.ChapterCountInParens);
+                Assert.Equal("Add a scene to The Long Story", divider.AddTip);
+                Assert.Equal("Story", (await context.CardAsync(Lighthouse)).Noun);
+                Assert.Equal("Scene", (await context.CardAsync(LongSceneA)).Noun);
+
+                Assert.Equal("Add a story", board.AddButtonTip);
+                Assert.Equal("Double-click a story to plan its beats", board.OpenCardHint);
+                Assert.DoesNotContain("chapter", board.EmptyBoardText, StringComparison.OrdinalIgnoreCase);
+
+                board.BeginInlineCreate(0, null);
+                var create = board.Items.OfType<InlineCreateItemViewModel>().Single();
+                Assert.Equal("NEW STORY", create.Heading);
+                Assert.Equal("Story title...", create.TitlePlaceholder);
+                board.CancelInlineCreate();
+            });
+        }
+        finally { DeleteFolder(root); }
+    }
+
+    [Fact]
+    public async Task Novel_corkboard_keeps_chapter_wording()
+    {
+        var root = CreateWorkspace(NovelJson, ("chapter-one.md", "# Chapter One\n\nText.\n"));
+        try
+        {
+            await Ui(root, 1, async context =>
+            {
+                await context.SettleAsync();
+                Assert.Equal("Chapter", (await context.CardAsync("chapter-one.md")).Noun);
+                Assert.Equal("Add chapter or part", context.Corkboard.AddButtonTip);
+                Assert.Equal("Double-click a card to open in Write mode", context.Corkboard.OpenCardHint);
+            });
+        }
+        finally { DeleteFolder(root); }
+    }
+
+    [Fact]
     public async Task Anthology_part_story_scope_is_its_chapters()
     {
         var root = CreateAnthology();

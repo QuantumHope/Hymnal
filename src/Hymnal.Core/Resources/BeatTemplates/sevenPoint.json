@@ -31,5 +31,14 @@
       "title": "Resolution",
       "note": "Show the final outcome and the state the character ends in."
     }
+  ],
+  "shape": [
+    0.2,
+    0.4,
+    0.55,
+    0.62,
+    0.8,
+    1.0,
+    0.35
   ]
 }

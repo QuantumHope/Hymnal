@@ -7,6 +7,7 @@ using Avalonia.Controls;
 using Avalonia.Controls.Primitives;
 using Avalonia.Layout;
 using Avalonia.Media;
+using Hymnal.Theming;
 using Hymnal.ViewModels;
 
 namespace Hymnal.Views.Controls;
@@ -16,14 +17,15 @@ public class StackedWordCountHistoryChart : Control
     private const double AxisWidth = 44.0;
     private const double LabelAreaHeight = 18.0;
 
-    private static readonly Color[] SegmentPalette =
+    // The theme's chart series; the fallbacks are the purple shades this chart used before themes.
+    private static readonly IBrush[] SegmentPalette =
     {
-        Color.Parse("#9D4EDD"),
-        Color.Parse("#C77DFF"),
-        Color.Parse("#7B2FBE"),
-        Color.Parse("#E0AAFF"),
-        Color.Parse("#5A189A"),
-        Color.Parse("#3C096C"),
+        ThemeBrushes.Get("Cora.Viz.Series1", "#9D4EDD"),
+        ThemeBrushes.Get("Cora.Viz.Series2", "#C77DFF"),
+        ThemeBrushes.Get("Cora.Viz.Series3", "#7B2FBE"),
+        ThemeBrushes.Get("Cora.Viz.Series4", "#E0AAFF"),
+        ThemeBrushes.Get("Cora.Viz.Series5", "#5A189A"),
+        ThemeBrushes.Get("Cora.Viz.Series6", "#3C096C"),
     };
 
     public static readonly StyledProperty<IReadOnlyList<StackedHistoryPoint>?> ItemsProperty =
@@ -60,6 +62,9 @@ public class StackedWordCountHistoryChart : Control
         ItemsProperty.Changed.AddClassHandler<StackedWordCountHistoryChart>((c, _) => c.UpdateTooltip());
     }
 
+    // The theme brushes recolour in place; redraw too when a theme switch swaps the app's resources.
+    public StackedWordCountHistoryChart() => ResourcesChanged += (_, _) => InvalidateVisual();
+
     protected override Size MeasureOverride(Size availableSize)
     {
         var items = Items;
@@ -80,7 +85,7 @@ public class StackedWordCountHistoryChart : Control
             Text = FormatDate(lastPoint.Date),
             FontSize = 11,
             FontWeight = FontWeight.SemiBold,
-            Foreground = new SolidColorBrush(Color.Parse("#EDE8F5"))
+            Foreground = ThemeBrushes.Get("Cora.Text", "#EDE8F5")
         });
         foreach (var seg in lastPoint.Segments)
         {
@@ -90,14 +95,14 @@ public class StackedWordCountHistoryChart : Control
                 Text = seg.Label,
                 Width = 120,
                 FontSize = 11,
-                Foreground = new SolidColorBrush(Color.Parse("#9589B0")),
+                Foreground = ThemeBrushes.Get("Cora.Text.Secondary", "#9589B0"),
                 TextTrimming = TextTrimming.CharacterEllipsis
             });
             row.Children.Add(new TextBlock
             {
                 Text = $"{seg.WordCount:N0} w",
                 FontSize = 11,
-                Foreground = new SolidColorBrush(Color.Parse("#EDE8F5"))
+                Foreground = ThemeBrushes.Get("Cora.Text", "#EDE8F5")
             });
             panel.Children.Add(row);
         }
@@ -107,7 +112,7 @@ public class StackedWordCountHistoryChart : Control
             Text = $"Total: {total:N0} w",
             FontSize = 11,
             FontWeight = FontWeight.SemiBold,
-            Foreground = new SolidColorBrush(Color.Parse("#EDE8F5")),
+            Foreground = ThemeBrushes.Get("Cora.Text", "#EDE8F5"),
             Margin = new Thickness(0, 4, 0, 0)
         });
         ToolTip.SetTip(this, panel);
@@ -138,8 +143,8 @@ public class StackedWordCountHistoryChart : Control
         double barAreaWidth = totalWidth - AxisWidth;
         if (barAreaHeight <= 0 || barAreaWidth <= 0) return;
 
-        var gridBrush = new SolidColorBrush(Color.Parse("#2A2040"));
-        var labelBrush = new SolidColorBrush(Color.Parse("#9589B0"));
+        var gridBrush = ThemeBrushes.Get("Cora.Border.Subtle", "#2A2040");
+        var labelBrush = ThemeBrushes.Get("Cora.Text.Secondary", "#9589B0");
         var typeface = new Typeface("Inter");
 
         // Y-axis
@@ -166,7 +171,7 @@ public class StackedWordCountHistoryChart : Control
                 double segH = barAreaHeight * ((double)seg.WordCount / niceMax);
                 stackY -= segH;
                 int colorIdx = labelToColorIndex.TryGetValue(seg.Label, out var idx) ? idx : 0;
-                var brush = new SolidColorBrush(SegmentPalette[colorIdx % SegmentPalette.Length]);
+                var brush = SegmentPalette[colorIdx % SegmentPalette.Length];
                 context.FillRectangle(brush, new Rect(x, stackY, barWidth, segH));
             }
 
@@ -189,7 +194,7 @@ public class StackedWordCountHistoryChart : Control
         {
             double targetY = barAreaHeight * (1.0 - (double)target / niceMax);
             DrawDashedLine(context, new Point(AxisWidth, targetY), new Point(totalWidth, targetY),
-                Color.Parse("#FFB703"), 1.5);
+                ThemeBrushes.Get("Cora.Accent.Create", "#FFB703"), 1.5);
         }
 
         // Trendline (linear regression on daily totals)
@@ -224,9 +229,9 @@ public class StackedWordCountHistoryChart : Control
         }
     }
 
-    private static void DrawDashedLine(DrawingContext context, Point from, Point to, Color color, double thickness)
+    private static void DrawDashedLine(DrawingContext context, Point from, Point to, IBrush brush, double thickness)
     {
-        var pen = new Pen(new SolidColorBrush(color), thickness);
+        var pen = new Pen(brush, thickness);
         double dx = to.X - from.X;
         double x = from.X;
         const double dashOn = 4.0;
@@ -269,7 +274,7 @@ public class StackedWordCountHistoryChart : Control
         y0 = Math.Clamp(y0, 0, barAreaHeight);
         y1 = Math.Clamp(y1, 0, barAreaHeight);
 
-        var pen = new Pen(new SolidColorBrush(Color.Parse("#9589B0")), 2);
+        var pen = new Pen(ThemeBrushes.Get("Cora.Text.Secondary", "#9589B0"), 2);
         context.DrawLine(pen, new Point(x0, y0), new Point(x1, y1));
     }
 

@@ -3,15 +3,16 @@
              xmlns:vm="using:Hymnal.ViewModels"
              xmlns:aivm="using:Hymnal.ViewModels.Ai"
              xmlns:conv="using:Hymnal.Views.Converters"
+             xmlns:controls="using:Hymnal.Views.Controls"
              xmlns:views="using:Hymnal.Views"
              x:Class="Hymnal.Views.SettingsView"
              x:DataType="vm:SettingsViewModel"
-             Background="{DynamicResource SurfaceBaseBrush}">
+             Background="{DynamicResource Cora.Surface.Void}">
 
     <UserControl.Styles>
         <Style Selector="Button.typeCard">
-            <Setter Property="Background" Value="{DynamicResource SurfaceBaseBrush}" />
-            <Setter Property="BorderBrush" Value="{DynamicResource BorderSubtleBrush}" />
+            <Setter Property="Background" Value="{DynamicResource Cora.Surface.Void}" />
+            <Setter Property="BorderBrush" Value="{DynamicResource Cora.Border.Subtle}" />
             <Setter Property="BorderThickness" Value="2" />
             <Setter Property="Padding" Value="14" />
             <Setter Property="Margin" Value="0,0,12,0" />
@@ -21,7 +22,56 @@
             <Setter Property="HorizontalContentAlignment" Value="Left" />
         </Style>
         <Style Selector="Button.typeCard.selected">
-            <Setter Property="BorderBrush" Value="{DynamicResource SynthwavePurpleBrush}" />
+            <Setter Property="BorderBrush" Value="{DynamicResource Cora.Accent.Store}" />
+        </Style>
+
+        <!-- Section nav: one row per section; the one showing is lit, with an accent edge -->
+        <Style Selector="RadioButton.settingsNav">
+            <Setter Property="Theme" Value="{StaticResource {x:Type ToggleButton}}" />
+            <Setter Property="HorizontalAlignment" Value="Stretch" />
+            <Setter Property="HorizontalContentAlignment" Value="Left" />
+            <Setter Property="Padding" Value="10,7" />
+            <Setter Property="FontSize" Value="12" />
+            <Setter Property="FontWeight" Value="SemiBold" />
+            <Setter Property="Foreground" Value="{DynamicResource Cora.Text.Secondary}" />
+            <Setter Property="Background" Value="Transparent" />
+            <Setter Property="BorderBrush" Value="Transparent" />
+            <Setter Property="BorderThickness" Value="2,0,0,0" />
+            <Setter Property="CornerRadius" Value="0,4,4,0" />
+        </Style>
+        <Style Selector="RadioButton.settingsNav:pointerover /template/ ContentPresenter">
+            <Setter Property="Background" Value="{DynamicResource Cora.Wash.Hover}" />
+            <Setter Property="Foreground" Value="{DynamicResource Cora.Text}" />
+        </Style>
+        <Style Selector="RadioButton.settingsNav:checked /template/ ContentPresenter, RadioButton.settingsNav:checked:pointerover /template/ ContentPresenter">
+            <Setter Property="Background" Value="{DynamicResource Cora.Wash.Selected}" />
+            <Setter Property="BorderBrush" Value="{DynamicResource Cora.Accent.Store}" />
+            <Setter Property="Foreground" Value="{DynamicResource Cora.Accent.Store}" />
+        </Style>
+
+        <!-- Theme gallery tiles (after OneRing's picker): a radio button drawn as a toggle; the applied one is ringed -->
+        <Style Selector="RadioButton.themeTile">
+            <Setter Property="Foreground" Value="{DynamicResource Cora.Text}" />
+            <Setter Property="Width" Value="300" />
+            <Setter Property="Height" Value="80" />
+            <Setter Property="Margin" Value="0,0,8,8" />
+            <Setter Property="Padding" Value="7" />
+            <Setter Property="Background" Value="Transparent" />
+            <Setter Property="BorderBrush" Value="{DynamicResource Cora.Border.Subtle}" />
+            <Setter Property="BorderThickness" Value="1" />
+            <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+            <Setter Property="VerticalContentAlignment" Value="Stretch" />
+            <Setter Property="CornerRadius" Value="{DynamicResource Cora.Radius}" />
+        </Style>
+        <Style Selector="RadioButton.themeTile:pointerover /template/ ContentPresenter, RadioButton.themeTile:pressed /template/ ContentPresenter">
+            <Setter Property="Background" Value="{DynamicResource Cora.Wash.Hover}" />
+            <Setter Property="BorderBrush" Value="{DynamicResource Cora.Border.Input}" />
+            <Setter Property="Foreground" Value="{DynamicResource Cora.Text}" />
+        </Style>
+        <Style Selector="RadioButton.themeTile:checked /template/ ContentPresenter, RadioButton.themeTile:checked:pointerover /template/ ContentPresenter, RadioButton.themeTile:checked:pressed /template/ ContentPresenter">
+            <Setter Property="Background" Value="{DynamicResource Cora.Wash.Selected}" />
+            <Setter Property="BorderBrush" Value="{DynamicResource Cora.Accent.Store}" />
+            <Setter Property="Foreground" Value="{DynamicResource Cora.Text}" />
         </Style>
     </UserControl.Styles>
 
@@ -29,36 +79,40 @@
 
         <!-- Left nav -->
         <Border Grid.Column="0"
-                Background="{DynamicResource SurfaceElevatedBrush}"
-                BorderBrush="{DynamicResource BorderSubtleBrush}"
+                Background="{DynamicResource Cora.Surface.Panel}"
+                BorderBrush="{DynamicResource Cora.Border.Subtle}"
                 BorderThickness="0,0,1,0"
                 Padding="0,16">
             <StackPanel Spacing="2" Margin="8,0">
-                <TextBlock Text="Project"
-                           IsVisible="{Binding HasWorkspace}"
-                           FontSize="12"
-                           FontWeight="SemiBold"
-                           Foreground="{DynamicResource SynthwavePurpleBrush}"
-                           Padding="8,6" />
-                <TextBlock Text="Sound"
-                           IsVisible="{Binding HasSound}"
-                           FontSize="12"
-                           FontWeight="SemiBold"
-                           Foreground="{DynamicResource SynthwavePurpleBrush}"
-                           Padding="8,6" />
-                <TextBlock Text="Updates"
-                           IsVisible="{Binding HasUpdates}"
-                           FontSize="12"
-                           FontWeight="SemiBold"
-                           Foreground="{DynamicResource SynthwavePurpleBrush}"
-                           Padding="8,6" />
-                <TextBlock Text="AI Providers"
-                           FontSize="12"
-                           FontWeight="SemiBold"
-                           Foreground="{DynamicResource SynthwavePurpleBrush}"
-                           Padding="8,6"
-                           Background="{DynamicResource SurfaceOverlayBrush}"
-                           />
+                <RadioButton Classes="settingsNav" GroupName="settingsSection"
+                             Content="Appearance"
+                             IsVisible="{Binding CanPickTheme}"
+                             IsChecked="{Binding IsAppearanceSection, Mode=OneWay}"
+                             Command="{Binding ShowSectionCommand}"
+                             CommandParameter="{x:Static vm:SettingsSection.Appearance}" />
+                <RadioButton Classes="settingsNav" GroupName="settingsSection"
+                             Content="Project"
+                             IsVisible="{Binding HasWorkspace}"
+                             IsChecked="{Binding IsProjectSection, Mode=OneWay}"
+                             Command="{Binding ShowSectionCommand}"
+                             CommandParameter="{x:Static vm:SettingsSection.Project}" />
+                <RadioButton Classes="settingsNav" GroupName="settingsSection"
+                             Content="Sound"
+                             IsVisible="{Binding HasSound}"
+                             IsChecked="{Binding IsSoundSection, Mode=OneWay}"
+                             Command="{Binding ShowSectionCommand}"
+                             CommandParameter="{x:Static vm:SettingsSection.Sound}" />
+                <RadioButton Classes="settingsNav" GroupName="settingsSection"
+                             Content="AI Providers"
+                             IsChecked="{Binding IsAiProvidersSection, Mode=OneWay}"
+                             Command="{Binding ShowSectionCommand}"
+                             CommandParameter="{x:Static vm:SettingsSection.AiProviders}" />
+                <RadioButton Classes="settingsNav" GroupName="settingsSection"
+                             Content="Updates"
+                             IsVisible="{Binding HasUpdates}"
+                             IsChecked="{Binding IsUpdatesSection, Mode=OneWay}"
+                             Command="{Binding ShowSectionCommand}"
+                             CommandParameter="{x:Static vm:SettingsSection.Updates}" />
             </StackPanel>
         </Border>
 
@@ -66,12 +120,93 @@
         <ScrollViewer Grid.Column="1" VerticalScrollBarVisibility="Auto" Padding="24,20">
             <StackPanel Spacing="16" MaxWidth="760">
 
+                <!-- Appearance: the theme gallery, one tile per theme drawn in that theme, grouped -->
+                <StackPanel Spacing="12" IsVisible="{Binding IsAppearanceSection}">
+                    <Panel>
+                    <!-- A wax seal (Scriptorium of the Eye only) -->
+                    <controls:PuritySeal HorizontalAlignment="Right" VerticalAlignment="Top" Margin="0,-14,150,0"
+                                         Tilt="-6" SealSize="28" StripLength="44"
+                                         Text="Rite of Colours|Theme blessed" />
+                    <Grid ColumnDefinitions="*,Auto">
+                        <StackPanel Spacing="2">
+                            <TextBlock Classes="heading"
+                                       Text="Theme"
+                                       FontSize="18"
+                                       FontWeight="SemiBold" />
+                            <TextBlock Text="Applies at once and is remembered on this computer. Each tile is drawn in its own theme."
+                                       FontSize="12"
+                                       TextWrapping="Wrap"
+                                       Foreground="{DynamicResource Cora.Text.Secondary}" />
+                        </StackPanel>
+                        <TextBlock Grid.Column="1"
+                                   Text="{Binding SelectedTheme.DisplayName, FallbackValue=''}"
+                                   FontFamily="{DynamicResource Cora.Font.Machine}"
+                                   FontSize="12"
+                                   Foreground="{DynamicResource Cora.Text.Secondary}"
+                                   VerticalAlignment="Top" />
+                    </Grid>
+                    </Panel>
+                    <ItemsControl ItemsSource="{Binding ThemeSections}">
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate x:DataType="vm:ThemeSection">
+                                <StackPanel Spacing="6" Margin="0,4,0,4">
+                                    <TextBlock Classes="caps" Text="{Binding Heading}"
+                                               FontFamily="{DynamicResource Cora.Font.Caps}"
+                                               FontSize="11"
+                                               LetterSpacing="1"
+                                               Foreground="{DynamicResource Cora.Text.Secondary}" />
+                                    <ItemsControl ItemsSource="{Binding Choices}">
+                                        <ItemsControl.ItemsPanel>
+                                            <ItemsPanelTemplate>
+                                                <WrapPanel Orientation="Horizontal" />
+                                            </ItemsPanelTemplate>
+                                        </ItemsControl.ItemsPanel>
+                                        <ItemsControl.ItemTemplate>
+                                            <DataTemplate x:DataType="vm:ThemeChoice">
+                                                <!-- One radio group, so assistive technology announces which theme is applied;
+                                                     drawn with the toggle-button look rather than a radio circle -->
+                                                <RadioButton Classes="themeTile" GroupName="theme"
+                                                             Theme="{StaticResource {x:Type ToggleButton}}"
+                                                             IsChecked="{Binding IsCurrent, Mode=OneWay}"
+                                                             Command="{Binding $parent[UserControl].((vm:SettingsViewModel)DataContext).ChooseThemeCommand}"
+                                                             CommandParameter="{Binding Theme}"
+                                                             ToolTip.Tip="{Binding Theme.Description}"
+                                                             AutomationProperties.Name="{Binding Theme.DisplayName}">
+                                                    <Grid ColumnDefinitions="Auto,*" RowDefinitions="Auto,*">
+                                                        <controls:ThemeThumbnail Grid.RowSpan="2" ThemeInfo="{Binding Theme}" Width="104" Height="64" />
+                                                        <DockPanel Grid.Column="1" Margin="10,1,0,0">
+                                                            <TextBlock DockPanel.Dock="Right" Text="&#x2713;"
+                                                                       FontWeight="Bold"
+                                                                       Foreground="{DynamicResource Cora.Accent.Store}"
+                                                                       IsVisible="{Binding IsCurrent}" />
+                                                            <TextBlock Text="{Binding Theme.DisplayName}"
+                                                                       FontSize="13"
+                                                                       FontWeight="SemiBold"
+                                                                       TextTrimming="CharacterEllipsis" />
+                                                        </DockPanel>
+                                                        <TextBlock Grid.Row="1" Grid.Column="1" Margin="10,2,0,0"
+                                                                   Text="{Binding Theme.Description}"
+                                                                   FontSize="11"
+                                                                   Foreground="{DynamicResource Cora.Text.Secondary}"
+                                                                   TextWrapping="Wrap" MaxLines="3"
+                                                                   TextTrimming="CharacterEllipsis" />
+                                                    </Grid>
+                                                </RadioButton>
+                                            </DataTemplate>
+                                        </ItemsControl.ItemTemplate>
+                                    </ItemsControl>
+                                </StackPanel>
+                            </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+                </StackPanel>
+
                 <!-- Project section -->
-                <StackPanel Spacing="12" IsVisible="{Binding HasWorkspace}">
-                    <TextBlock Text="Project"
+                <StackPanel Spacing="12" IsVisible="{Binding IsProjectSection}">
+                    <TextBlock Classes="heading"
+                               Text="Project"
                                FontSize="18"
-                               FontWeight="SemiBold"
-                               Foreground="{DynamicResource OnSurfaceBrush}" />
+                               FontWeight="SemiBold" />
                     <ScrollViewer HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Disabled">
                         <ItemsControl ItemsSource="{Binding ProjectCards}">
                             <ItemsControl.ItemsPanel>
@@ -89,19 +224,19 @@
                                             <!-- Outline icons: stroke on a 24x24 canvas (PathIcon would fill the open subpaths). -->
                                             <Viewbox Width="40" Height="40" HorizontalAlignment="Left">
                                                 <Path Width="24" Height="24"
-                                                      Stroke="{DynamicResource SynthwavePurpleBrush}"
+                                                      Stroke="{DynamicResource Cora.Accent.Store}"
                                                       StrokeThickness="1.5"
                                                       StrokeLineCap="Round"
                                                       StrokeJoin="Round"
                                                       Data="{Binding Info.IconKey, Converter={x:Static conv:IconKeyToGeometryConverter.Instance}}" />
                                             </Viewbox>
                                             <TextBlock Text="{Binding Info.Title}" FontSize="18" FontWeight="SemiBold"
-                                                       Foreground="{DynamicResource OnSurfaceBrush}" />
+                                                       Foreground="{DynamicResource Cora.Text}" />
                                             <TextBlock Text="{Binding Info.Description}"
-                                                       Foreground="{DynamicResource OnSurfaceDimBrush}"
+                                                       Foreground="{DynamicResource Cora.Text.Secondary}"
                                                        TextWrapping="Wrap" />
                                             <TextBlock Text="{Binding Info.Impact}" FontSize="12"
-                                                       Foreground="{DynamicResource OnSurfaceBrush}"
+                                                       Foreground="{DynamicResource Cora.Text}"
                                                        TextWrapping="Wrap" />
                                         </StackPanel>
                                     </Button>
@@ -113,48 +248,49 @@
                         <CheckBox Content="Keep everything in the story file"
                                   IsChecked="{Binding KeepInStoryFile}"
                                   IsEnabled="{Binding IsStorageOptionEnabled}"
-                                  Foreground="{DynamicResource OnSurfaceBrush}" />
+                                  Foreground="{DynamicResource Cora.Text}" />
                         <TextBlock Text="{Binding StorageOptionExplanation}"
                                    IsVisible="{Binding StorageOptionExplanation, Converter={x:Static ObjectConverters.IsNotNull}}"
                                    FontSize="12"
                                    TextWrapping="Wrap"
-                                   Foreground="{DynamicResource OnSurfaceMutedBrush}" />
+                                   Foreground="{DynamicResource Cora.Text.Disabled}" />
                     </StackPanel>
                     <TextBlock Text="{Binding ProjectChangeSummary}"
                                IsVisible="{Binding ProjectChangeSummary, Converter={x:Static ObjectConverters.IsNotNull}}"
                                FontSize="12"
                                TextWrapping="Wrap"
-                               Foreground="{DynamicResource OnSurfaceMutedBrush}" />
+                               Foreground="{DynamicResource Cora.Text.Disabled}" />
                     <TextBlock Text="{Binding ReopenRequiredMessage}"
                                IsVisible="{Binding ReopenRequiredMessage, Converter={x:Static ObjectConverters.IsNotNull}}"
                                FontSize="12"
                                TextWrapping="Wrap"
-                               Foreground="{DynamicResource OnSurfaceMutedBrush}" />
+                               Foreground="{DynamicResource Cora.Text.Disabled}" />
                     <Button Content="Apply"
                             Command="{Binding ApplyProjectKindCommand}"
                             HorizontalAlignment="Left"
                             Padding="12,6"
                             FontSize="12"
-                            Background="{DynamicResource SynthwavePurpleBrush}"
-                            Foreground="White"
+                            Background="{DynamicResource Cora.Accent.Store}"
+                            Foreground="{DynamicResource Cora.IconInk}"
                             CornerRadius="5" />
                 </StackPanel>
 
-                <!-- Sound section -->
-                <StackPanel x:Name="PART_SoundSection" Spacing="10" IsVisible="{Binding HasSound}">
-                    <TextBlock Text="Sound"
+                <!-- Sound section (typing sounds on the Write surface) -->
+                <StackPanel x:Name="PART_SoundSection" Spacing="10" IsVisible="{Binding IsSoundSection}">
+                    <TextBlock Classes="heading"
+                               Text="Sound"
                                FontSize="18"
                                FontWeight="SemiBold"
-                               Foreground="{DynamicResource OnSurfaceBrush}" />
+                               Foreground="{DynamicResource Cora.Text}" />
                     <StackPanel Spacing="4">
                         <CheckBox x:Name="PART_SoundEnabledCheckBox"
                                   Content="Play sounds"
                                   IsChecked="{Binding Sound.Preferences.SoundEnabled}"
-                                  Foreground="{DynamicResource OnSurfaceBrush}" />
+                                  Foreground="{DynamicResource Cora.Text}" />
                         <TextBlock Text="Hymnal's sounds, starting with a typing sound as you type and delete on the Write surface. Moving the caret stays quiet."
                                    FontSize="12"
                                    TextWrapping="Wrap"
-                                   Foreground="{DynamicResource OnSurfaceMutedBrush}" />
+                                   Foreground="{DynamicResource Cora.Text.Secondary}" />
                     </StackPanel>
                     <Grid ColumnDefinitions="110,Auto,Auto,Auto"
                           RowDefinitions="Auto,Auto,Auto"
@@ -164,7 +300,7 @@
                                    Text="Typing sound"
                                    VerticalAlignment="Center"
                                    IsEnabled="{Binding Sound.CanChooseTypingSound}"
-                                   Foreground="{DynamicResource OnSurfaceBrush}" />
+                                   Foreground="{DynamicResource Cora.Text}" />
                         <ComboBox x:Name="PART_TypingSoundComboBox"
                                   Grid.Row="0" Grid.Column="1" Grid.ColumnSpan="3"
                                   MinWidth="300"
@@ -184,12 +320,12 @@
                                    FontSize="12"
                                    TextWrapping="Wrap"
                                    IsEnabled="{Binding Sound.CanChooseTypingSound}"
-                                   Foreground="{DynamicResource OnSurfaceMutedBrush}" />
+                                   Foreground="{DynamicResource Cora.Text.Secondary}" />
                         <TextBlock Grid.Row="2" Grid.Column="0"
                                    Text="Volume"
                                    VerticalAlignment="Center"
                                    IsEnabled="{Binding Sound.IsTypingSoundAudible}"
-                                   Foreground="{DynamicResource OnSurfaceBrush}" />
+                                   Foreground="{DynamicResource Cora.Text}" />
                         <Slider x:Name="PART_TypingVolumeSlider"
                                 Grid.Row="2" Grid.Column="1"
                                 Width="240"
@@ -204,7 +340,7 @@
                                    MinWidth="44"
                                    VerticalAlignment="Center"
                                    Margin="12,0"
-                                   Foreground="{DynamicResource OnSurfaceDimBrush}" />
+                                   Foreground="{DynamicResource Cora.Text.Secondary}" />
                         <Button x:Name="PART_PreviewSoundButton"
                                 Grid.Row="2" Grid.Column="3"
                                 Command="{Binding Sound.PreviewCommand}"
@@ -217,8 +353,8 @@
                                       Width="12" Height="12"
                                       Stretch="Uniform"
                                       VerticalAlignment="Center"
-                                      Stroke="{DynamicResource SynthwavePurpleBrush}"
-                                      Fill="{DynamicResource SynthwavePurpleBrush}"
+                                      Stroke="{DynamicResource Cora.Accent.Store}"
+                                      Fill="{DynamicResource Cora.Accent.Store}"
                                       StrokeThickness="1.5"
                                       StrokeJoin="Round" />
                                 <TextBlock Text="Preview" VerticalAlignment="Center" />
@@ -229,207 +365,212 @@
                                IsVisible="{Binding Sound.StatusMessage, Converter={x:Static ObjectConverters.IsNotNull}}"
                                FontSize="12"
                                TextWrapping="Wrap"
-                               Foreground="{DynamicResource OnSurfaceMutedBrush}" />
+                               Foreground="{DynamicResource Cora.Text.Secondary}" />
                 </StackPanel>
 
-                <!-- Updates section -->
-                <views:UpdatesSettingsView DataContext="{Binding Updates}"
-                                           IsVisible="{Binding IsAvailable, FallbackValue=False}" />
+                <!-- Updates section (releases from GitHub, installed in place) -->
+                <Panel IsVisible="{Binding IsUpdatesSection}">
+                    <views:UpdatesSettingsView DataContext="{Binding Updates}"
+                                               IsVisible="{Binding IsAvailable, FallbackValue=False}" />
+                </Panel>
 
-                <!-- Section header -->
-                <Grid ColumnDefinitions="*,Auto">
-                    <TextBlock Grid.Column="0"
-                               Text="AI Providers"
-                               FontSize="18"
-                               FontWeight="SemiBold"
-                               Foreground="{DynamicResource OnSurfaceBrush}" />
-                    <Button Grid.Column="1"
-                            Content="+ Add provider"
-                            Command="{Binding AddProfileCommand}"
-                            Padding="10,6"
-                            FontSize="12"
-                            Background="{DynamicResource SynthwavePurpleBrush}"
-                            Foreground="White"
-                            CornerRadius="5" />
-                </Grid>
+                <!-- AI Providers section -->
+                <StackPanel Spacing="16" IsVisible="{Binding IsAiProvidersSection}">
+                    <!-- Section header -->
+                    <Grid ColumnDefinitions="*,Auto">
+                        <TextBlock Grid.Column="0"
+                                   Classes="heading"
+                                   Text="AI Providers"
+                                   FontSize="18"
+                                   FontWeight="SemiBold" />
+                        <Button Grid.Column="1"
+                                Content="+ Add provider"
+                                Command="{Binding AddProfileCommand}"
+                                Padding="10,6"
+                                FontSize="12"
+                                Background="{DynamicResource Cora.Accent.Store}"
+                                Foreground="{DynamicResource Cora.IconInk}"
+                                CornerRadius="5" />
+                    </Grid>
 
-                <!-- Provider list -->
-                <ItemsControl ItemsSource="{Binding Profiles}">
-                    <ItemsControl.ItemTemplate>
-                        <DataTemplate x:DataType="aivm:ProviderProfileViewModel">
-                            <Border Margin="0,0,0,12"
-                                    Padding="16,14"
-                                    CornerRadius="8"
-                                    Background="{DynamicResource SurfaceElevatedBrush}"
-                                    BorderThickness="1"
-                                    BorderBrush="{DynamicResource BorderDefaultBrush}">
-                                <StackPanel Spacing="10">
+                    <!-- Provider list -->
+                    <ItemsControl ItemsSource="{Binding Profiles}">
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate x:DataType="aivm:ProviderProfileViewModel">
+                                <Border Margin="0,0,0,12"
+                                        Padding="16,14"
+                                        CornerRadius="8"
+                                        Background="{DynamicResource Cora.Surface.Panel}"
+                                        BorderThickness="1"
+                                        BorderBrush="{DynamicResource Cora.Border.Input}">
+                                    <StackPanel Spacing="10">
 
-                                    <!-- Header row -->
-                                    <Grid ColumnDefinitions="*,Auto,Auto">
-                                        <StackPanel Grid.Column="0" Spacing="2">
-                                            <TextBlock Text="{Binding DisplayName}"
-                                                       FontSize="13"
-                                                       FontWeight="SemiBold"
-                                                       Foreground="{DynamicResource OnSurfaceBrush}" />
-                                            <TextBlock FontSize="11"
-                                                       Foreground="{DynamicResource OnSurfaceMutedBrush}">
-                                                <TextBlock.Text>
-                                                    <MultiBinding StringFormat="{}{0} · {1}">
-                                                        <Binding Path="BaseUrl" />
-                                                        <Binding Path="ModelId" />
-                                                    </MultiBinding>
-                                                </TextBlock.Text>
-                                            </TextBlock>
+                                        <!-- Header row -->
+                                        <Grid ColumnDefinitions="*,Auto,Auto">
+                                            <StackPanel Grid.Column="0" Spacing="2">
+                                                <TextBlock Text="{Binding DisplayName}"
+                                                           FontSize="13"
+                                                           FontWeight="SemiBold"
+                                                           Foreground="{DynamicResource Cora.Text}" />
+                                                <TextBlock FontSize="11"
+                                                           Foreground="{DynamicResource Cora.Text.Disabled}">
+                                                    <TextBlock.Text>
+                                                        <MultiBinding StringFormat="{}{0} · {1}">
+                                                            <Binding Path="BaseUrl" />
+                                                            <Binding Path="ModelId" />
+                                                        </MultiBinding>
+                                                    </TextBlock.Text>
+                                                </TextBlock>
+                                            </StackPanel>
+                                            <Button Grid.Column="1"
+                                                    Content="Set active"
+                                                    Command="{Binding SetActiveCommand}"
+                                                    IsVisible="{Binding !IsActive}"
+                                                    Margin="8,0,0,0"
+                                                    Padding="8,4"
+                                                    FontSize="11"
+                                                    Background="{DynamicResource Cora.Surface.Elevated}"
+                                                    Foreground="{DynamicResource Cora.Text.Secondary}"
+                                                    CornerRadius="4" />
+                                            <TextBlock Grid.Column="2"
+                                                       Text="Active ✓"
+                                                       IsVisible="{Binding IsActive}"
+                                                       Foreground="{DynamicResource Cora.Accent.Success}"
+                                                       FontSize="11"
+                                                       Margin="8,0,0,0"
+                                                       VerticalAlignment="Center" />
+                                        </Grid>
+
+                                        <!-- Edit fields -->
+                                        <Grid RowDefinitions="Auto,Auto,Auto,Auto,Auto,Auto" ColumnDefinitions="120,*">
+                                            <TextBlock Grid.Row="0" Grid.Column="0"
+                                                       Text="Provider type"
+                                                       FontSize="11"
+                                                       Foreground="{DynamicResource Cora.Text.Secondary}"
+                                                       VerticalAlignment="Center" />
+                                            <ComboBox Grid.Row="0" Grid.Column="1"
+                                                      ItemsSource="{Binding AvailableTypes}"
+                                                      SelectedItem="{Binding Type, Mode=TwoWay}"
+                                                      FontSize="12"
+                                                      Margin="0,0,0,6"
+                                                      Background="{DynamicResource Cora.Surface.Void}"
+                                                      Foreground="{DynamicResource Cora.Text}"
+                                                      BorderThickness="1"
+                                                      BorderBrush="{DynamicResource Cora.Border.Input}"
+                                                      CornerRadius="4"
+                                                      Padding="6,4"
+                                                      HorizontalAlignment="Stretch" />
+
+                                            <TextBlock Grid.Row="1" Grid.Column="0"
+                                                       Text="{Binding BaseUrlLabel}"
+                                                       FontSize="11"
+                                                       Foreground="{DynamicResource Cora.Text.Secondary}"
+                                                       VerticalAlignment="Center" />
+                                            <TextBox Grid.Row="1" Grid.Column="1"
+                                                     Text="{Binding BaseUrl, Mode=TwoWay}"
+                                                     FontSize="12"
+                                                     Margin="0,0,0,6"
+                                                     Background="{DynamicResource Cora.Surface.Void}"
+                                                     Foreground="{DynamicResource Cora.Text}"
+                                                     BorderThickness="1"
+                                                     BorderBrush="{DynamicResource Cora.Border.Input}"
+                                                     CornerRadius="4"
+                                                     Padding="6,4" />
+
+                                            <TextBlock Grid.Row="2" Grid.Column="0"
+                                                       Text="{Binding ModelIdLabel}"
+                                                       FontSize="11"
+                                                       Foreground="{DynamicResource Cora.Text.Secondary}"
+                                                       VerticalAlignment="Center" />
+                                            <TextBox Grid.Row="2" Grid.Column="1"
+                                                     Text="{Binding ModelId, Mode=TwoWay}"
+                                                     FontSize="12"
+                                                     Margin="0,0,0,6"
+                                                     Background="{DynamicResource Cora.Surface.Void}"
+                                                     Foreground="{DynamicResource Cora.Text}"
+                                                     BorderThickness="1"
+                                                     BorderBrush="{DynamicResource Cora.Border.Input}"
+                                                     CornerRadius="4"
+                                                     Padding="6,4" />
+
+                                            <TextBlock Grid.Row="3" Grid.Column="0"
+                                                       Text="{Binding ApiKeyHint}"
+                                                       FontSize="11"
+                                                       Foreground="{DynamicResource Cora.Text.Secondary}"
+                                                       VerticalAlignment="Center" />
+                                            <TextBox Grid.Row="3" Grid.Column="1"
+                                                     Text="{Binding ApiKey, Mode=TwoWay}"
+                                                     PasswordChar="•"
+                                                     FontSize="12"
+                                                     Margin="0,0,0,6"
+                                                     Background="{DynamicResource Cora.Surface.Void}"
+                                                     Foreground="{DynamicResource Cora.Text}"
+                                                     BorderThickness="1"
+                                                     BorderBrush="{DynamicResource Cora.Border.Input}"
+                                                     CornerRadius="4"
+                                                     Padding="6,4" />
+
+                                            <!-- Test result: success -->
+                                            <TextBlock Grid.Row="4" Grid.Column="0" Grid.ColumnSpan="2"
+                                                       Text="{Binding TestResult}"
+                                                       IsVisible="{Binding TestSucceeded}"
+                                                       FontSize="11"
+                                                       Margin="0,0,0,6"
+                                                       TextWrapping="Wrap"
+                                                       Foreground="{DynamicResource Cora.Accent.Success}" />
+
+                                            <!-- Test result: failure -->
+                                            <TextBlock Grid.Row="4" Grid.Column="0" Grid.ColumnSpan="2"
+                                                       Text="{Binding TestResult}"
+                                                       IsVisible="{Binding TestFailed}"
+                                                       FontSize="11"
+                                                       Margin="0,0,0,6"
+                                                       TextWrapping="Wrap"
+                                                       Foreground="{DynamicResource Cora.Accent.Error}" />
+                                        </Grid>
+
+                                        <!-- Per-type setup help -->
+                                        <Border Padding="10,8"
+                                                CornerRadius="6"
+                                                Background="{DynamicResource Cora.Surface.Elevated}">
+                                            <TextBlock Text="{Binding HelpText}"
+                                                       FontSize="11"
+                                                       TextWrapping="Wrap"
+                                                       Foreground="{DynamicResource Cora.Text.Disabled}" />
+                                        </Border>
+
+                                        <!-- Action buttons -->
+                                        <StackPanel Orientation="Horizontal" Spacing="8">
+                                            <Button Content="Save"
+                                                    Command="{Binding SaveCommand}"
+                                                    Padding="10,5"
+                                                    FontSize="11"
+                                                    Background="{DynamicResource Cora.Accent.Store}"
+                                                    Foreground="{DynamicResource Cora.IconInk}"
+                                                    CornerRadius="4" />
+                                            <Button Content="Test connection"
+                                                    Command="{Binding TestConnectionCommand}"
+                                                    IsEnabled="{Binding !IsTesting}"
+                                                    Padding="10,5"
+                                                    FontSize="11"
+                                                    Background="{DynamicResource Cora.Surface.Elevated}"
+                                                    Foreground="{DynamicResource Cora.Text.Secondary}"
+                                                    CornerRadius="4" />
+                                            <Button Content="Delete"
+                                                    Command="{Binding DeleteCommand}"
+                                                    Padding="10,5"
+                                                    FontSize="11"
+                                                    Background="{DynamicResource Cora.Surface.Void}"
+                                                    Foreground="{DynamicResource Cora.Accent.Error}"
+                                                    CornerRadius="4" />
                                         </StackPanel>
-                                        <Button Grid.Column="1"
-                                                Content="Set active"
-                                                Command="{Binding SetActiveCommand}"
-                                                IsVisible="{Binding !IsActive}"
-                                                Margin="8,0,0,0"
-                                                Padding="8,4"
-                                                FontSize="11"
-                                                Background="{DynamicResource SurfaceOverlayBrush}"
-                                                Foreground="{DynamicResource OnSurfaceDimBrush}"
-                                                CornerRadius="4" />
-                                        <TextBlock Grid.Column="2"
-                                                   Text="Active ✓"
-                                                   IsVisible="{Binding IsActive}"
-                                                   Foreground="{DynamicResource SuccessBrush}"
-                                                   FontSize="11"
-                                                   Margin="8,0,0,0"
-                                                   VerticalAlignment="Center" />
-                                    </Grid>
 
-                                    <!-- Edit fields -->
-                                    <Grid RowDefinitions="Auto,Auto,Auto,Auto,Auto,Auto" ColumnDefinitions="120,*">
-                                        <TextBlock Grid.Row="0" Grid.Column="0"
-                                                   Text="Provider type"
-                                                   FontSize="11"
-                                                   Foreground="{DynamicResource OnSurfaceDimBrush}"
-                                                   VerticalAlignment="Center" />
-                                        <ComboBox Grid.Row="0" Grid.Column="1"
-                                                  ItemsSource="{Binding AvailableTypes}"
-                                                  SelectedItem="{Binding Type, Mode=TwoWay}"
-                                                  FontSize="12"
-                                                  Margin="0,0,0,6"
-                                                  Background="{DynamicResource SurfaceBaseBrush}"
-                                                  Foreground="{DynamicResource OnSurfaceBrush}"
-                                                  BorderThickness="1"
-                                                  BorderBrush="{DynamicResource BorderDefaultBrush}"
-                                                  CornerRadius="4"
-                                                  Padding="6,4"
-                                                  HorizontalAlignment="Stretch" />
-
-                                        <TextBlock Grid.Row="1" Grid.Column="0"
-                                                   Text="{Binding BaseUrlLabel}"
-                                                   FontSize="11"
-                                                   Foreground="{DynamicResource OnSurfaceDimBrush}"
-                                                   VerticalAlignment="Center" />
-                                        <TextBox Grid.Row="1" Grid.Column="1"
-                                                 Text="{Binding BaseUrl, Mode=TwoWay}"
-                                                 FontSize="12"
-                                                 Margin="0,0,0,6"
-                                                 Background="{DynamicResource SurfaceBaseBrush}"
-                                                 Foreground="{DynamicResource OnSurfaceBrush}"
-                                                 BorderThickness="1"
-                                                 BorderBrush="{DynamicResource BorderDefaultBrush}"
-                                                 CornerRadius="4"
-                                                 Padding="6,4" />
-
-                                        <TextBlock Grid.Row="2" Grid.Column="0"
-                                                   Text="{Binding ModelIdLabel}"
-                                                   FontSize="11"
-                                                   Foreground="{DynamicResource OnSurfaceDimBrush}"
-                                                   VerticalAlignment="Center" />
-                                        <TextBox Grid.Row="2" Grid.Column="1"
-                                                 Text="{Binding ModelId, Mode=TwoWay}"
-                                                 FontSize="12"
-                                                 Margin="0,0,0,6"
-                                                 Background="{DynamicResource SurfaceBaseBrush}"
-                                                 Foreground="{DynamicResource OnSurfaceBrush}"
-                                                 BorderThickness="1"
-                                                 BorderBrush="{DynamicResource BorderDefaultBrush}"
-                                                 CornerRadius="4"
-                                                 Padding="6,4" />
-
-                                        <TextBlock Grid.Row="3" Grid.Column="0"
-                                                   Text="{Binding ApiKeyHint}"
-                                                   FontSize="11"
-                                                   Foreground="{DynamicResource OnSurfaceDimBrush}"
-                                                   VerticalAlignment="Center" />
-                                        <TextBox Grid.Row="3" Grid.Column="1"
-                                                 Text="{Binding ApiKey, Mode=TwoWay}"
-                                                 PasswordChar="•"
-                                                 FontSize="12"
-                                                 Margin="0,0,0,6"
-                                                 Background="{DynamicResource SurfaceBaseBrush}"
-                                                 Foreground="{DynamicResource OnSurfaceBrush}"
-                                                 BorderThickness="1"
-                                                 BorderBrush="{DynamicResource BorderDefaultBrush}"
-                                                 CornerRadius="4"
-                                                 Padding="6,4" />
-
-                                        <!-- Test result: success -->
-                                        <TextBlock Grid.Row="4" Grid.Column="0" Grid.ColumnSpan="2"
-                                                   Text="{Binding TestResult}"
-                                                   IsVisible="{Binding TestSucceeded}"
-                                                   FontSize="11"
-                                                   Margin="0,0,0,6"
-                                                   TextWrapping="Wrap"
-                                                   Foreground="{DynamicResource SuccessBrush}" />
-
-                                        <!-- Test result: failure -->
-                                        <TextBlock Grid.Row="4" Grid.Column="0" Grid.ColumnSpan="2"
-                                                   Text="{Binding TestResult}"
-                                                   IsVisible="{Binding TestFailed}"
-                                                   FontSize="11"
-                                                   Margin="0,0,0,6"
-                                                   TextWrapping="Wrap"
-                                                   Foreground="{DynamicResource ErrorBrush}" />
-                                    </Grid>
-
-                                    <!-- Per-type setup help -->
-                                    <Border Padding="10,8"
-                                            CornerRadius="6"
-                                            Background="{DynamicResource SurfaceOverlayBrush}">
-                                        <TextBlock Text="{Binding HelpText}"
-                                                   FontSize="11"
-                                                   TextWrapping="Wrap"
-                                                   Foreground="{DynamicResource OnSurfaceMutedBrush}" />
-                                    </Border>
-
-                                    <!-- Action buttons -->
-                                    <StackPanel Orientation="Horizontal" Spacing="8">
-                                        <Button Content="Save"
-                                                Command="{Binding SaveCommand}"
-                                                Padding="10,5"
-                                                FontSize="11"
-                                                Background="{DynamicResource SynthwavePurpleBrush}"
-                                                Foreground="White"
-                                                CornerRadius="4" />
-                                        <Button Content="Test connection"
-                                                Command="{Binding TestConnectionCommand}"
-                                                IsEnabled="{Binding !IsTesting}"
-                                                Padding="10,5"
-                                                FontSize="11"
-                                                Background="{DynamicResource SurfaceOverlayBrush}"
-                                                Foreground="{DynamicResource OnSurfaceDimBrush}"
-                                                CornerRadius="4" />
-                                        <Button Content="Delete"
-                                                Command="{Binding DeleteCommand}"
-                                                Padding="10,5"
-                                                FontSize="11"
-                                                Background="{DynamicResource SurfaceBaseBrush}"
-                                                Foreground="{DynamicResource ErrorBrush}"
-                                                CornerRadius="4" />
                                     </StackPanel>
-
-                                </StackPanel>
-                            </Border>
-                        </DataTemplate>
-                    </ItemsControl.ItemTemplate>
-                </ItemsControl>
+                                </Border>
+                            </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+                </StackPanel>
 
             </StackPanel>
         </ScrollViewer>

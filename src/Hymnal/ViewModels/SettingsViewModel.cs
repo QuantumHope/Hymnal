@@ -13,6 +13,7 @@ using Hymnal.Core.Models;
 using Hymnal.Core.Models.Ai;
 using Hymnal.Core.Services;
 using Hymnal.Core.Services.Ai;
+using Hymnal.Theming;
 using Hymnal.ViewModels.Ai;
 using MattEland.HopeLab.Updates.ReactiveUI;
 using ReactiveUI;
@@ -36,6 +37,7 @@ public class SettingsViewModel : ViewModelBase
     private readonly BeatBoardViewModel? _beatBoard;
     private readonly StorageMigrator? _storageMigrator;
     private readonly Func<Task<bool>>? _flushStoryEdits;
+    private readonly IThemeService? _themes;
     private readonly ObservableAsPropertyHelper<string?> _projectChangeSummary;
     private readonly ObservableAsPropertyHelper<bool> _isStorageOptionVisible;
     private readonly ObservableAsPropertyHelper<bool> _isStorageOptionEnabled;
@@ -135,6 +137,73 @@ public class SettingsViewModel : ViewModelBase
     public ReactiveCommand<ProjectTypeCardViewModel, Unit> SelectProjectKindCommand { get; }
     public ReactiveCommand<Unit, Unit> ApplyProjectKindCommand { get; }
 
+    private SettingsSection _section;
+    /// <summary>The one section showing; the left nav switches between them.</summary>
+    public SettingsSection Section
+    {
+        get => _section;
+        set
+        {
+            this.RaiseAndSetIfChanged(ref _section, value);
+            this.RaisePropertyChanged(nameof(IsAppearanceSection));
+            this.RaisePropertyChanged(nameof(IsProjectSection));
+            this.RaisePropertyChanged(nameof(IsAiProvidersSection));
+            this.RaisePropertyChanged(nameof(IsSoundSection));
+            this.RaisePropertyChanged(nameof(IsUpdatesSection));
+        }
+    }
+
+    public bool IsAppearanceSection => Section == SettingsSection.Appearance;
+    public bool IsProjectSection => Section == SettingsSection.Project;
+    public bool IsAiProvidersSection => Section == SettingsSection.AiProviders;
+    public bool IsSoundSection => Section == SettingsSection.Sound;
+    public bool IsUpdatesSection => Section == SettingsSection.Updates;
+
+    /// <summary>Shows one section (the nav items' command; the parameter is the section).</summary>
+    public ReactiveCommand<SettingsSection, Unit> ShowSectionCommand { get; }
+
+    /// <summary>True when there is a theme service to pick from (the app always has one; some tests don't).</summary>
+    public bool CanPickTheme => _themes is not null;
+
+    /// <summary>The applied theme.</summary>
+    public ThemeInfo? SelectedTheme => _themes?.Current;
+
+    /// <summary>
+    /// The picker's sections, as CORA groups its picker: the light themes, then the dark ones, each by name. Where a
+    /// theme comes from (Hymnal, OneRing or CORA) doesn't matter when choosing one.
+    /// </summary>
+    public IReadOnlyList<ThemeSection> ThemeSections { get; }
+
+    /// <summary>Applies and remembers the theme a picker tile stands for.</summary>
+    public ReactiveCommand<ThemeInfo, Unit> ChooseThemeCommand { get; }
+
+    private async Task SelectThemeAsync(ThemeInfo theme)
+    {
+        try
+        {
+            await _themes!.SelectAsync(theme.Id);
+        }
+        catch (Exception e) when (e is System.IO.IOException or UnauthorizedAccessException)
+        {
+            _notifications.ShowError($"Theme applied but not saved: {e.Message}");
+        }
+        this.RaisePropertyChanged(nameof(SelectedTheme));
+        foreach (var c in ThemeSections.SelectMany(s => s.Choices)) c.IsCurrent = c.Theme == _themes!.Current;
+    }
+
+    private static IReadOnlyList<ThemeSection> BuildThemeSections(IThemeService? themes)
+    {
+        if (themes is null) return [];
+        var all = themes.Available;
+        ThemeSection Section(string heading, bool light) =>
+            new(heading, all.Where(t => t.IsLight == light)
+                .OrderBy(t => t.DisplayName, StringComparer.CurrentCultureIgnoreCase)
+                .Select(t => new ThemeChoice(t) { IsCurrent = t == themes.Current })
+                .ToList());
+        return new[] { Section("LIGHT THEMES", light: true), Section("DARK THEMES", light: false) }
+            .Where(s => s.Choices.Count > 0).ToList();
+    }
+
     public SettingsViewModel(
         IProviderProfileService profileService,
         ICredentialStore credentials,
@@ -148,8 +217,18 @@ public class SettingsViewModel : ViewModelBase
         Func<Task<bool>>? flushStoryEdits = null,
         SoundPreferences? sound = null,
         TypingSoundPlayer? typingSounds = null,
+        IThemeService? themes = null,
         UpdatesViewModel? updates = null)
     {
+        _themes = themes;
+        ThemeSections = BuildThemeSections(themes);
+        ShowSectionCommand = ReactiveCommand.Create<SettingsSection>(section => Section = section);
+        // Appearance first; without a theme service (some tests), the project or the AI providers
+        Section = themes is not null ? SettingsSection.Appearance
+            : workspace?.HasWorkspace == true ? SettingsSection.Project
+            : SettingsSection.AiProviders;
+        ChooseThemeCommand = ReactiveCommand.CreateFromTask<ThemeInfo>(SelectThemeAsync);
+
         _profileService = profileService;
         _credentials = credentials;
         _aiChatService = aiChatService;
@@ -559,4 +638,31 @@ public class SettingsViewModel : ViewModelBase
         this.RaisePropertyChanged(nameof(Profiles));
         await _aiChatService.RefreshClientAsync().ConfigureAwait(false);
     }
+}
+
+/// <summary>One group of tiles in the theme picker.</summary>
+public sealed record ThemeSection(string Heading, IReadOnlyList<ThemeChoice> Choices);
+
+/// <summary>A tile in the theme picker: the theme, and whether it is the one applied.</summary>
+public sealed class ThemeChoice(ThemeInfo theme) : ViewModelBase
+{
+    private bool _isCurrent;
+
+    public ThemeInfo Theme { get; } = theme;
+
+    public bool IsCurrent
+    {
+        get => _isCurrent;
+        set => this.RaiseAndSetIfChanged(ref _isCurrent, value);
+    }
+}
+
+/// <summary>The sections of the Settings screen, shown one at a time.</summary>
+public enum SettingsSection
+{
+    Appearance,
+    Project,
+    Sound,
+    AiProviders,
+    Updates,
 }

@@ -3,44 +3,83 @@
              xmlns:vm="using:Hymnal.ViewModels"
              x:Class="Hymnal.Views.PlanHostView"
              x:DataType="vm:PlanHostViewModel"
-             Background="#0B0820">
+             Background="{DynamicResource Cora.Surface.Void}">
 
-    <Grid RowDefinitions="Auto,*,Auto">
+    <UserControl.Styles>
+        <Style Selector="ToggleButton.view-switch">
+            <Setter Property="Padding" Value="12,3" />
+            <Setter Property="MinHeight" Value="0" />
+            <Setter Property="FontSize" Value="11" />
+            <Setter Property="CornerRadius" Value="10" />
+            <Setter Property="BorderThickness" Value="1" />
+            <Setter Property="BorderBrush" Value="{DynamicResource Cora.Border.Subtle}" />
+            <Setter Property="Background" Value="Transparent" />
+            <Setter Property="Foreground" Value="{DynamicResource Cora.Text.Secondary}" />
+        </Style>
+        <Style Selector="ToggleButton.view-switch:checked /template/ ContentPresenter#PART_ContentPresenter">
+            <Setter Property="Background" Value="{DynamicResource Cora.Wash.Selected}" />
+            <Setter Property="BorderBrush" Value="{DynamicResource Cora.Accent.Store}" />
+            <Setter Property="Foreground" Value="{DynamicResource Cora.Text}" />
+        </Style>
+    </UserControl.Styles>
+
+    <Grid RowDefinitions="Auto,Auto,*,Auto">
+
+        <!-- Anthology, on the collection: the story planner (every collection) or the open collection's cards -->
+        <Border Grid.Row="0"
+                Padding="12,6"
+                Background="{DynamicResource Cora.Surface.Panel}"
+                BorderBrush="{DynamicResource Cora.Border.Subtle}"
+                BorderThickness="0,0,0,1"
+                IsVisible="{Binding ShowsViewSwitch}">
+            <StackPanel Orientation="Horizontal" Spacing="6">
+                <ToggleButton Classes="view-switch"
+                              Content="Planner"
+                              ToolTip.Tip="Every collection side by side over a library of stories"
+                              IsChecked="{Binding !IsCardsView}"
+                              Click="PlannerView_Click" />
+                <ToggleButton Classes="view-switch"
+                              Content="Cards"
+                              ToolTip.Tip="The open collection's stories as cards"
+                              IsChecked="{Binding IsCardsView}"
+                              Click="CardsView_Click" />
+            </StackPanel>
+        </Border>
 
         <!-- Anthology: breadcrumb back to the collection while a story's board is shown -->
         <Border x:Name="Breadcrumb"
-                Grid.Row="0"
+                Grid.Row="1"
                 Padding="12,6"
-                BorderBrush="{DynamicResource BorderSubtleBrush}"
+                BorderBrush="{DynamicResource Cora.Border.Subtle}"
                 BorderThickness="0,0,0,1"
                 IsVisible="{Binding ShowBreadcrumb}">
             <StackPanel Orientation="Horizontal" Spacing="8">
                 <Button Padding="8,2"
                         Background="Transparent"
                         BorderThickness="0"
-                        Foreground="#9D4EDD"
+                        Foreground="{DynamicResource Cora.Accent.Store}"
                         ToolTip.Tip="Back to the collection"
                         Command="{Binding BackToCollectionCommand}">
                     <TextBlock Text="{Binding BreadcrumbParent, StringFormat='← {0}'}" />
                 </Button>
                 <TextBlock Text="›"
                            VerticalAlignment="Center"
-                           Foreground="{DynamicResource OnSurfaceMutedBrush}" />
+                           Foreground="{DynamicResource Cora.Text.Disabled}" />
                 <TextBlock Text="{Binding BeatBoard.BoardTitle}"
                            VerticalAlignment="Center"
                            FontWeight="SemiBold"
-                           Foreground="{DynamicResource OnSurfaceBrush}" />
+                           Foreground="{DynamicResource Cora.Text}" />
             </StackPanel>
         </Border>
 
         <ContentControl x:Name="PlanContent"
-                        Grid.Row="1"
+                        Grid.Row="2"
                         Content="{Binding Content}" />
 
         <!-- Short Story with several scene files: the file Corkboard, for reordering scenes -->
         <Expander x:Name="FilesStrip"
-                  Grid.Row="2"
-                  Header="Files"
+                  Grid.Row="3"
+                  Header="Scene files"
                   HorizontalAlignment="Stretch"
                   IsVisible="{Binding ShowFilesStrip}"
                   IsExpanded="{Binding IsFilesStripExpanded, Mode=TwoWay}">

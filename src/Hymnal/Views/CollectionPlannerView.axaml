@@ -1,0 +1,480 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:Hymnal.ViewModels"
+             xmlns:conv="using:Hymnal.Views.Converters"
+             x:Class="Hymnal.Views.CollectionPlannerView"
+             x:DataType="vm:CollectionPlannerViewModel"
+             Background="{DynamicResource Cora.Surface.Void}">
+
+    <UserControl.Styles>
+        <!-- Section labels -->
+        <Style Selector="TextBlock.planner-caps">
+            <Setter Property="FontSize" Value="10" />
+            <Setter Property="FontWeight" Value="SemiBold" />
+            <Setter Property="LetterSpacing" Value="1.5" />
+            <Setter Property="Foreground" Value="{DynamicResource Cora.Text.Secondary}" />
+        </Style>
+        <Style Selector="TextBlock.planner-meta">
+            <Setter Property="FontSize" Value="11" />
+            <Setter Property="Foreground" Value="{DynamicResource Cora.Text.Secondary}" />
+        </Style>
+        <Style Selector="TextBlock.planner-hint">
+            <Setter Property="FontSize" Value="11" />
+            <Setter Property="TextWrapping" Value="Wrap" />
+            <Setter Property="Foreground" Value="{DynamicResource Cora.Text.Disabled}" />
+        </Style>
+
+        <!-- A story: a card in the library, an entry in a column. The left edge is its status colour. -->
+        <Style Selector="Border.story">
+            <Setter Property="Background" Value="{DynamicResource Cora.Surface.Elevated}" />
+            <Setter Property="BorderBrush" Value="{DynamicResource Cora.Border.Subtle}" />
+            <Setter Property="BorderThickness" Value="1" />
+            <Setter Property="CornerRadius" Value="6" />
+            <Setter Property="Cursor" Value="Hand" />
+            <Setter Property="ClipToBounds" Value="True" />
+        </Style>
+        <Style Selector="Border.story:pointerover">
+            <Setter Property="BorderBrush" Value="{DynamicResource Cora.Border.Input}" />
+            <Setter Property="Background" Value="{DynamicResource Cora.Wash.Hover}" />
+        </Style>
+        <Style Selector="Border.story.selected">
+            <Setter Property="BorderBrush" Value="{DynamicResource Cora.Accent.Store}" />
+            <Setter Property="Background" Value="{DynamicResource Cora.Wash.Selected}" />
+        </Style>
+        <Style Selector="Border.story.missing TextBlock.story-title">
+            <Setter Property="Foreground" Value="{DynamicResource Cora.Accent.Error}" />
+        </Style>
+        <Style Selector="TextBlock.story-title">
+            <Setter Property="FontSize" Value="13" />
+            <Setter Property="FontWeight" Value="SemiBold" />
+            <Setter Property="TextTrimming" Value="CharacterEllipsis" />
+            <Setter Property="Foreground" Value="{DynamicResource Cora.Text}" />
+        </Style>
+
+        <!-- A collection's column -->
+        <Style Selector="Border.column">
+            <Setter Property="Width" Value="232" />
+            <Setter Property="Background" Value="{DynamicResource Cora.Surface.Panel}" />
+            <Setter Property="BorderBrush" Value="{DynamicResource Cora.Border.Subtle}" />
+            <Setter Property="BorderThickness" Value="1" />
+            <Setter Property="CornerRadius" Value="8" />
+            <Setter Property="ClipToBounds" Value="True" />
+        </Style>
+        <Style Selector="Border.column.open">
+            <Setter Property="BorderBrush" Value="{DynamicResource Cora.Border.Input}" />
+        </Style>
+        <Style Selector="Border.column.drop-target">
+            <Setter Property="BorderBrush" Value="{DynamicResource Cora.Accent.Store}" />
+            <Setter Property="Background" Value="{DynamicResource Cora.Wash.Selected}" />
+        </Style>
+        <Style Selector="Border.library.drop-target">
+            <Setter Property="Background" Value="{DynamicResource Cora.Wash.Error}" />
+        </Style>
+        <Style Selector="Border.entry-gap">
+            <Setter Property="Height" Value="3" />
+            <Setter Property="Margin" Value="4,0" />
+            <Setter Property="CornerRadius" Value="2" />
+            <Setter Property="Background" Value="Transparent" />
+        </Style>
+        <Style Selector="Border.entry-gap.insert">
+            <Setter Property="Background" Value="{DynamicResource Cora.Accent.Store}" />
+        </Style>
+
+        <!-- Filter chips -->
+        <Style Selector="ToggleButton.chip">
+            <Setter Property="Padding" Value="9,2" />
+            <Setter Property="MinHeight" Value="0" />
+            <Setter Property="FontSize" Value="11" />
+            <Setter Property="CornerRadius" Value="10" />
+            <Setter Property="BorderThickness" Value="1" />
+            <Setter Property="BorderBrush" Value="{DynamicResource Cora.Border.Subtle}" />
+            <Setter Property="Background" Value="Transparent" />
+            <Setter Property="Foreground" Value="{DynamicResource Cora.Text.Secondary}" />
+        </Style>
+        <Style Selector="ToggleButton.chip:checked /template/ ContentPresenter#PART_ContentPresenter">
+            <Setter Property="Background" Value="{DynamicResource Cora.Wash.Selected}" />
+            <Setter Property="BorderBrush" Value="{DynamicResource Cora.Accent.Store}" />
+            <Setter Property="Foreground" Value="{DynamicResource Cora.Text}" />
+        </Style>
+    </UserControl.Styles>
+
+    <Grid ColumnDefinitions="260,*,280">
+
+        <!-- ── LIBRARY: every story, once ─────────────────────────────────────── -->
+        <Border x:Name="LibraryPanel"
+                Grid.Column="0"
+                Classes="library"
+                Background="{DynamicResource Cora.Surface.Panel}"
+                BorderBrush="{DynamicResource Cora.Border.Subtle}"
+                BorderThickness="0,0,1,0">
+            <DockPanel>
+                <StackPanel DockPanel.Dock="Top" Margin="14,12,14,8" Spacing="6">
+                    <Grid ColumnDefinitions="*,Auto">
+                        <TextBlock Classes="caps planner-caps" Text="LIBRARY" VerticalAlignment="Center" />
+                        <TextBlock Grid.Column="1" Classes="planner-meta" Text="{Binding LibraryCountText}" />
+                    </Grid>
+                    <StackPanel Orientation="Horizontal" Spacing="6">
+                        <ToggleButton Classes="chip"
+                                      Content="All"
+                                      IsChecked="{Binding !ShowUnshelvedOnly}"
+                                      Click="AllFilter_Click" />
+                        <ToggleButton Classes="chip"
+                                      Content="{Binding UnshelvedText}"
+                                      IsChecked="{Binding ShowUnshelvedOnly}"
+                                      Click="UnshelvedFilter_Click" />
+                    </StackPanel>
+                    <TextBlock x:Name="LibraryHint"
+                               Classes="planner-hint"
+                               Text="Every story in the folder. Drag one onto a collection to add it; a dot marks each collection it's in." />
+                </StackPanel>
+
+                <ScrollViewer HorizontalScrollBarVisibility="Disabled">
+                    <ItemsControl ItemsSource="{Binding VisibleLibrary}" Margin="10,0,10,12">
+                        <ItemsControl.ItemsPanel>
+                            <ItemsPanelTemplate>
+                                <StackPanel Spacing="6" />
+                            </ItemsPanelTemplate>
+                        </ItemsControl.ItemsPanel>
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate x:DataType="vm:PlannerStoryViewModel">
+                                <Border Classes="story"
+                                        Classes.selected="{Binding IsSelected}"
+                                        Classes.missing="{Binding IsMissing}"
+                                        PointerPressed="LibraryCard_PointerPressed"
+                                        PointerMoved="Story_PointerMoved"
+                                        PointerReleased="Story_PointerReleased"
+                                        DoubleTapped="Story_DoubleTapped"
+                                        ToolTip.Tip="{Binding ShelfTip}">
+                                    <Grid ColumnDefinitions="4,*">
+                                        <Border Background="{Binding Status, Converter={x:Static conv:StatusToBrushConverter.Instance}}" />
+                                        <StackPanel Grid.Column="1" Margin="10,8" Spacing="3">
+                                            <TextBlock Classes="story-title" Text="{Binding Title}" />
+                                            <StackPanel Orientation="Horizontal" Spacing="6">
+                                                <TextBlock Classes="planner-meta" Text="{Binding WordsText}" />
+                                                <TextBlock Classes="planner-meta" Text="·" />
+                                                <TextBlock Classes="planner-meta" Text="{Binding Category}" />
+                                                <TextBlock Classes="planner-meta" Text="{Binding ScenesText}" IsVisible="{Binding Story.IsMultiScene}" />
+                                            </StackPanel>
+                                            <!-- Where it lives: a dot per collection, or a hollow ring for none -->
+                                            <StackPanel Orientation="Horizontal" Spacing="6" Margin="0,2,0,0">
+                                                <ItemsControl ItemsSource="{Binding Dots}" VerticalAlignment="Center">
+                                                    <ItemsControl.ItemsPanel>
+                                                        <ItemsPanelTemplate>
+                                                            <StackPanel Orientation="Horizontal" Spacing="4" />
+                                                        </ItemsPanelTemplate>
+                                                    </ItemsControl.ItemsPanel>
+                                                    <ItemsControl.ItemTemplate>
+                                                        <DataTemplate x:DataType="vm:PlannerMembershipDot">
+                                                            <Ellipse Width="9" Height="9"
+                                                                     ToolTip.Tip="{Binding Title}"
+                                                                     Fill="{Binding ColourIndex, Converter={x:Static conv:CollectionColourConverter.Instance}}" />
+                                                        </DataTemplate>
+                                                    </ItemsControl.ItemTemplate>
+                                                </ItemsControl>
+                                                <StackPanel Orientation="Horizontal" Spacing="5" IsVisible="{Binding IsUnshelved}">
+                                                    <Ellipse Width="9" Height="9"
+                                                             VerticalAlignment="Center"
+                                                             StrokeThickness="1.5"
+                                                             Stroke="{DynamicResource Cora.Text.Disabled}" />
+                                                    <TextBlock Classes="planner-hint" Text="in no collection" VerticalAlignment="Center" />
+                                                </StackPanel>
+                                                <TextBlock Classes="planner-meta"
+                                                           Text="{Binding BeatsText}"
+                                                           Margin="6,0,0,0"
+                                                           VerticalAlignment="Center"
+                                                           Opacity="0.8" />
+                                            </StackPanel>
+                                        </StackPanel>
+                                    </Grid>
+                                </Border>
+                            </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+                </ScrollViewer>
+            </DockPanel>
+        </Border>
+
+        <!-- ── COLLECTIONS: side by side ───────────────────────────────────────── -->
+        <DockPanel Grid.Column="1">
+            <Grid DockPanel.Dock="Top" ColumnDefinitions="Auto,*" Margin="16,12,16,4">
+                <TextBlock Classes="caps planner-caps" Text="COLLECTIONS" VerticalAlignment="Center" />
+                <TextBlock Grid.Column="1"
+                           Classes="planner-hint"
+                           Margin="14,0,0,0"
+                           VerticalAlignment="Center"
+                           TextWrapping="NoWrap"
+                           TextTrimming="CharacterEllipsis"
+                           Text="Drag between collections to move a story (hold Ctrl to copy it), within one to reorder, back to the library to take it out." />
+            </Grid>
+            <ScrollViewer HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Disabled">
+                <StackPanel Orientation="Horizontal" Spacing="12" Margin="16,8,16,16">
+                    <ItemsControl ItemsSource="{Binding Columns}">
+                        <ItemsControl.ItemsPanel>
+                            <ItemsPanelTemplate>
+                                <StackPanel Orientation="Horizontal" Spacing="12" />
+                            </ItemsPanelTemplate>
+                        </ItemsControl.ItemsPanel>
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate x:DataType="vm:PlannerColumnViewModel">
+                                <Border Classes="column"
+                                        Classes.open="{Binding IsOpen}"
+                                        DragDrop.AllowDrop="True"
+                                        Loaded="Column_Loaded">
+                                    <DockPanel>
+                                        <!-- The collection's colour runs across the top -->
+                                        <Border DockPanel.Dock="Top"
+                                                Height="4"
+                                                Background="{Binding ColourIndex, Converter={x:Static conv:CollectionColourConverter.Instance}}" />
+                                        <StackPanel DockPanel.Dock="Top" Margin="12,10,12,8" Spacing="2">
+                                            <Grid ColumnDefinitions="*,Auto">
+                                                <TextBlock Classes="heading"
+                                                           Text="{Binding Title}"
+                                                           FontSize="15"
+                                                           FontWeight="Bold"
+                                                           TextTrimming="CharacterEllipsis"
+                                                           Foreground="{DynamicResource Cora.Text}" />
+                                                <TextBlock Text="Unnamed collection"
+                                                           IsVisible="{Binding !IsNamed}"
+                                                           FontSize="13"
+                                                           FontStyle="Italic"
+                                                           Foreground="{DynamicResource Cora.Text.Secondary}" />
+                                                <Border Grid.Column="1"
+                                                        IsVisible="{Binding IsOpen}"
+                                                        Margin="6,0,0,0"
+                                                        Padding="6,1"
+                                                        CornerRadius="8"
+                                                        VerticalAlignment="Center"
+                                                        ToolTip.Tip="The collection Write and the sidebar show"
+                                                        Background="{Binding ColourIndex, Converter={x:Static conv:CollectionColourConverter.Instance}}">
+                                                    <TextBlock Text="OPEN"
+                                                               FontSize="9"
+                                                               FontWeight="Bold"
+                                                               LetterSpacing="1"
+                                                               Foreground="{DynamicResource Cora.IconInk}" />
+                                                </Border>
+                                                <Button Grid.Column="1"
+                                                        IsVisible="{Binding CanOpen}"
+                                                        Content="Open"
+                                                        FontSize="11"
+                                                        Padding="8,1"
+                                                        MinHeight="0"
+                                                        Cursor="Hand"
+                                                        Background="Transparent"
+                                                        BorderBrush="{DynamicResource Cora.Border.Input}"
+                                                        BorderThickness="1"
+                                                        CornerRadius="8"
+                                                        Foreground="{DynamicResource Cora.Accent.Store}"
+                                                        ToolTip.Tip="Open this collection in Write"
+                                                        Click="OpenCollection_Click" />
+                                            </Grid>
+                                            <StackPanel Orientation="Horizontal" Spacing="6">
+                                                <TextBlock Classes="planner-meta" Text="{Binding CountText}" />
+                                                <TextBlock Classes="planner-meta" Text="·" />
+                                                <TextBlock Classes="planner-meta" Text="{Binding WordsText}" />
+                                            </StackPanel>
+                                        </StackPanel>
+
+                                        <!-- What a drop here would do -->
+                                        <Border DockPanel.Dock="Bottom"
+                                                IsVisible="{Binding HasDropHint}"
+                                                Margin="10,0,10,10"
+                                                Padding="8,4"
+                                                CornerRadius="6"
+                                                Background="{DynamicResource Cora.Accent.Store}">
+                                            <TextBlock Text="{Binding DropHint}"
+                                                       FontSize="11"
+                                                       FontWeight="SemiBold"
+                                                       HorizontalAlignment="Center"
+                                                       Foreground="{DynamicResource Cora.IconInk}" />
+                                        </Border>
+
+                                        <ScrollViewer HorizontalScrollBarVisibility="Disabled">
+                                            <StackPanel Margin="8,0,8,10">
+                                                <TextBlock Classes="planner-hint"
+                                                           IsVisible="{Binding IsEmpty}"
+                                                           Margin="6,18"
+                                                           HorizontalAlignment="Center"
+                                                           TextAlignment="Center"
+                                                           Text="Drag stories here from the library or another collection." />
+                                                <ItemsControl ItemsSource="{Binding Entries}">
+                                                    <ItemsControl.ItemTemplate>
+                                                        <DataTemplate x:DataType="vm:PlannerEntryViewModel">
+                                                            <StackPanel>
+                                                                <Border Classes="entry-gap" />
+                                                                <Border Classes="story"
+                                                                        Classes.selected="{Binding Story.IsSelected}"
+                                                                        Classes.missing="{Binding Story.IsMissing}"
+                                                                        Margin="0,2"
+                                                                        PointerPressed="Entry_PointerPressed"
+                                                                        PointerMoved="Story_PointerMoved"
+                                                                        PointerReleased="Story_PointerReleased"
+                                                                        DoubleTapped="Story_DoubleTapped"
+                                                                        ToolTip.Tip="{Binding Story.ShelfTip}">
+                                                                    <Grid ColumnDefinitions="4,Auto,*">
+                                                                        <Border Background="{Binding Story.Status, Converter={x:Static conv:StatusToBrushConverter.Instance}}" />
+                                                                        <TextBlock Grid.Column="1"
+                                                                                   Text="{Binding Number}"
+                                                                                   Width="22"
+                                                                                   Margin="6,0,0,0"
+                                                                                   FontSize="12"
+                                                                                   VerticalAlignment="Center"
+                                                                                   TextAlignment="Right"
+                                                                                   Foreground="{DynamicResource Cora.Text.Disabled}" />
+                                                                        <StackPanel Grid.Column="2" Margin="8,7,10,7" Spacing="2">
+                                                                            <TextBlock Classes="story-title" Text="{Binding Story.Title}" />
+                                                                            <StackPanel Orientation="Horizontal" Spacing="6">
+                                                                                <TextBlock Classes="planner-meta" Text="{Binding Story.WordsText}" />
+                                                                                <TextBlock Classes="planner-meta" Text="{Binding Story.StatusLabel}" IsVisible="{Binding Story.HasStatus}" />
+                                                                                <TextBlock Classes="planner-meta" Text="{Binding Story.ScenesText}" IsVisible="{Binding Story.Story.IsMultiScene}" />
+                                                                            </StackPanel>
+                                                                        </StackPanel>
+                                                                    </Grid>
+                                                                </Border>
+                                                            </StackPanel>
+                                                        </DataTemplate>
+                                                    </ItemsControl.ItemTemplate>
+                                                </ItemsControl>
+                                            </StackPanel>
+                                        </ScrollViewer>
+                                    </DockPanel>
+                                </Border>
+                            </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+
+                    <!-- Start another collection over the same folder of stories -->
+                    <Button Width="170"
+                            VerticalAlignment="Stretch"
+                            Cursor="Hand"
+                            Background="Transparent"
+                            BorderBrush="{DynamicResource Cora.Border.Input}"
+                            BorderThickness="1"
+                            CornerRadius="8"
+                            ToolTip.Tip="Start another collection over the same folder of stories"
+                            Click="NewCollection_Click">
+                        <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center" Spacing="4">
+                            <TextBlock Text="+" FontSize="26" HorizontalAlignment="Center" Foreground="{DynamicResource Cora.Accent.Store}" />
+                            <TextBlock Text="New collection" FontSize="12" HorizontalAlignment="Center" Foreground="{DynamicResource Cora.Text.Secondary}" />
+                        </StackPanel>
+                    </Button>
+                </StackPanel>
+            </ScrollViewer>
+        </DockPanel>
+
+        <!-- ── STORY: where it lives, its beats, and the way into it ──────────── -->
+        <Border Grid.Column="2"
+                Background="{DynamicResource Cora.Surface.Panel}"
+                BorderBrush="{DynamicResource Cora.Border.Subtle}"
+                BorderThickness="1,0,0,0">
+            <Panel>
+                <StackPanel IsVisible="{Binding !HasSelection}"
+                            Margin="20"
+                            VerticalAlignment="Center"
+                            Spacing="8">
+                    <TextBlock Classes="caps planner-caps" Text="STORY" HorizontalAlignment="Center" />
+                    <TextBlock Classes="planner-hint"
+                               TextAlignment="Center"
+                               Text="Select a story to see which collections hold it, tick or untick them, and plan its beats." />
+                </StackPanel>
+
+                <ScrollViewer IsVisible="{Binding HasSelection}" HorizontalScrollBarVisibility="Disabled">
+                    <StackPanel Margin="18,16" Spacing="14">
+                        <StackPanel Spacing="4">
+                            <TextBlock Classes="caps planner-caps" Text="STORY" />
+                            <TextBlock Classes="heading"
+                                       Text="{Binding Selected.Title, FallbackValue=''}"
+                                       FontSize="18"
+                                       FontWeight="Bold"
+                                       TextWrapping="Wrap"
+                                       Foreground="{DynamicResource Cora.Text}" />
+                            <StackPanel Orientation="Horizontal" Spacing="8">
+                                <Border Padding="7,1"
+                                        CornerRadius="8"
+                                        VerticalAlignment="Center"
+                                        IsVisible="{Binding Selected.HasStatus, FallbackValue=False}"
+                                        Background="{Binding Selected.Status, Converter={x:Static conv:StatusToBrushConverter.Instance}, FallbackValue={x:Null}}">
+                                    <TextBlock Text="{Binding Selected.StatusLabel, FallbackValue=''}"
+                                               FontSize="10"
+                                               FontWeight="Bold"
+                                               Foreground="{DynamicResource Cora.IconInk}" />
+                                </Border>
+                                <TextBlock Classes="planner-meta" Text="{Binding Selected.WordsText, FallbackValue=''}" VerticalAlignment="Center" />
+                                <TextBlock Classes="planner-meta" Text="{Binding Selected.Category, FallbackValue=''}" VerticalAlignment="Center" />
+                                <TextBlock Classes="planner-meta" Text="{Binding Selected.ScenesText, FallbackValue=''}" VerticalAlignment="Center" />
+                            </StackPanel>
+                            <TextBlock Classes="planner-hint" Text="{Binding Selected.Key, FallbackValue=''}" />
+                        </StackPanel>
+
+                        <StackPanel Spacing="6">
+                            <TextBlock Classes="caps planner-caps" Text="IN COLLECTIONS" />
+                            <ItemsControl ItemsSource="{Binding Toggles}">
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate x:DataType="vm:PlannerMembershipToggle">
+                                        <CheckBox IsChecked="{Binding IsMember}" Margin="0,1">
+                                            <StackPanel Orientation="Horizontal" Spacing="7">
+                                                <Ellipse Width="9" Height="9"
+                                                         VerticalAlignment="Center"
+                                                         Fill="{Binding ColourIndex, Converter={x:Static conv:CollectionColourConverter.Instance}}" />
+                                                <TextBlock Text="{Binding Title}"
+                                                           VerticalAlignment="Center"
+                                                           TextTrimming="CharacterEllipsis"
+                                                           Foreground="{DynamicResource Cora.Text}" />
+                                                <TextBlock Text="(unnamed)"
+                                                           IsVisible="{Binding !Column.IsNamed}"
+                                                           VerticalAlignment="Center"
+                                                           Foreground="{DynamicResource Cora.Text.Secondary}" />
+                                            </StackPanel>
+                                        </CheckBox>
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+                            <TextBlock Classes="planner-hint"
+                                       Text="A story can sit in any number of collections, or none. Its files stay where they are." />
+                        </StackPanel>
+
+                        <StackPanel Spacing="6">
+                            <Grid ColumnDefinitions="*,Auto">
+                                <TextBlock Classes="caps planner-caps" Text="BEATS" VerticalAlignment="Center" />
+                                <TextBlock Grid.Column="1" Classes="planner-meta" Text="{Binding Selected.BeatsText, FallbackValue=''}" />
+                            </Grid>
+                            <ItemsControl ItemsSource="{Binding SelectedBeatTitles}">
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate x:DataType="x:String">
+                                        <Border BorderBrush="{DynamicResource Cora.Accent.Store}"
+                                                BorderThickness="2,0,0,0"
+                                                Padding="8,3"
+                                                Margin="0,2">
+                                            <TextBlock Text="{Binding}"
+                                                       FontSize="12"
+                                                       TextTrimming="CharacterEllipsis"
+                                                       Foreground="{DynamicResource Cora.Text}" />
+                                        </Border>
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+                        </StackPanel>
+
+                        <StackPanel Orientation="Horizontal" Spacing="8">
+                            <Button Content="Plan beats"
+                                    Padding="12,5"
+                                    IsEnabled="{Binding CanPlanSelectedBeats}"
+                                    Background="{DynamicResource Cora.Accent.Store}"
+                                    Foreground="{DynamicResource Cora.IconInk}"
+                                    BorderThickness="0"
+                                    ToolTip.Tip="Open this story's beat board (double-click a story does the same)"
+                                    Click="PlanBeats_Click" />
+                            <Button Content="Write"
+                                    Padding="12,5"
+                                    IsEnabled="{Binding SelectedIsInOpen}"
+                                    ToolTip.Tip="Open it in Write (it must be in the open collection)"
+                                    Click="Write_Click" />
+                        </StackPanel>
+
+                        <TextBlock Classes="planner-hint"
+                                   Text="In a collection's list, stories told in one file come before stories told in scenes: Book.txt reads the files after a story's divider as its scenes." />
+                    </StackPanel>
+                </ScrollViewer>
+            </Panel>
+        </Border>
+    </Grid>
+</UserControl>

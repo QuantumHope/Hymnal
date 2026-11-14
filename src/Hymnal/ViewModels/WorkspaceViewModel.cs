@@ -36,6 +36,7 @@ public class WorkspaceViewModel : ViewModelBase
     private readonly WordCountHistoryService _historyService;
     private readonly IExclusionManifestService _exclusionManifestService;
     private readonly IOrphanFileDiscoveryService _orphanFileDiscoveryService;
+    private readonly CollectionService _collections;
     private readonly ProjectSettingsService? _projectSettings;
     private readonly ProjectInitializer? _projectInitializer;
     private readonly IProjectInitPrompt? _initPrompt;
@@ -64,11 +65,153 @@ public class WorkspaceViewModel : ViewModelBase
     }
 
     private ProjectProfile _profile = ProjectProfile.Novel;
+
+    // ── Story focus (anthology) ───────────────────────────────────────────────
+
+    /// <summary>Registry id of the story the author is focused on; kept across reloads while it exists.</summary>
+    private string? _focusedStoryUuid;
+
+    private ChapterViewModel? _focusedStory;
+    /// <summary>
+    /// Anthology: the story (a single-file story or a Part) the author is focused on. The sidebar, Plan and
+    /// Schedule show only it until <see cref="ShowWholeCollectionCommand"/>. Null when working on the whole
+    /// collection, and always null for other project kinds.
+    /// </summary>
+    public ChapterViewModel? FocusedStory
+    {
+        get => _focusedStory;
+        private set
+        {
+            this.RaiseAndSetIfChanged(ref _focusedStory, value);
+            this.RaisePropertyChanged(nameof(IsStoryFocused));
+            this.RaisePropertyChanged(nameof(FocusedStoryTitle));
+        }
+    }
+
+    public bool IsStoryFocused => FocusedStory != null;
+
+    public string FocusedStoryTitle => FocusedStory?.Node.Title ?? "";
+
+    /// <summary>Anthology: focus on the story the given file belongs to.</summary>
+    public ReactiveCommand<ChapterViewModel, System.Reactive.Unit> FocusStoryCommand { get; private set; } = null!;
+
+    /// <summary>Leaves the focused story for the whole collection.</summary>
+    public ReactiveCommand<System.Reactive.Unit, System.Reactive.Unit> ShowWholeCollectionCommand { get; private set; } = null!;
+
+    /// <summary>
+    /// Focuses on the story <paramref name="node"/> belongs to (anthology only). The editor moves into the
+    /// story when the open file is outside it.
+    /// </summary>
+    public void FocusStory(ChapterViewModel node)
+    {
+        if (!Profile.SupportsStoryFocus)
+            return;
+        var story = StoryStructure.AnthologyStoryOf(_nodes, node);
+        if (story == null)
+            return;
+
+        _focusedStoryUuid = story.Uuid;
+        FocusedStory = story;
+        UpdateVisibility();
+
+        if (SelectedNode == null || !IsInFocus(SelectedNode))
+        {
+            var first = story.Node.Kind == NodeKind.Chapter
+                ? story
+                : StoryStructure.StoryScenes(_nodes, story).FirstOrDefault();
+            if (first != null)
+                SelectedNode = first;
+        }
+    }
+
+    public void ShowWholeCollection()
+    {
+        if (_focusedStoryUuid == null && FocusedStory == null)
+            return;
+        _focusedStoryUuid = null;
+        FocusedStory = null;
+        UpdateVisibility();
+    }
+
+    /// <summary>True when <paramref name="node"/> is part of the focused story, or nothing is focused.</summary>
+    public bool IsInFocus(ChapterViewModel node) =>
+        FocusedStory == null || ReferenceEquals(StoryStructure.AnthologyStoryOf(_nodes, node), FocusedStory);
+
+    /// <summary>Re-finds the focused story after the node list was rebuilt; drops the focus when it is gone.</summary>
+    private void ResolveFocus()
+    {
+        if (_focusedStoryUuid == null)
+        {
+            if (FocusedStory != null)
+                FocusedStory = null;
+            return;
+        }
+        var story = Profile.SupportsStoryFocus
+            ? _nodes.FirstOrDefault(n => n.Uuid == _focusedStoryUuid && !n.Node.IsExcluded)
+            : null;
+        if (story == null)
+            _focusedStoryUuid = null;
+        if (!ReferenceEquals(story, FocusedStory))
+            FocusedStory = story;
+    }
+
+    /// <summary>The project's word for a book file in messages: chapter, scene, story.</summary>
+    private string UnitWord => Profile.UnitNoun.ToLowerInvariant();
+
+    /// <summary>The project's word for a divider in messages: part, section, story with scenes.</summary>
+    private string PartWord => Profile.PartNoun.ToLowerInvariant();
+
+    private static string Capital(string word) =>
+        word.Length == 0 ? word : char.ToUpperInvariant(word[0]) + word[1..];
+
+    /// <summary>
+    /// What <paramref name="node"/> is called in this project: a chapter or part in a novel, a scene or
+    /// section in a short story, a story or one of its scenes in an anthology.
+    /// </summary>
+    public string NounFor(ChapterViewModel node)
+    {
+        var insidePart = false;
+        foreach (var n in _nodes)
+        {
+            if (ReferenceEquals(n, node))
+                break;
+            if (n.Node.Kind == NodeKind.Part)
+                insidePart = true;
+        }
+        return Profile.NounFor(node.Node.Kind, insidePart);
+    }
     /// <summary>Profile of the open workspace's project kind (Novel when none is open).</summary>
+    private string _collectionTitle = "";
+    /// <summary>The open collection's (or book's, or story's) title; empty when it has none.</summary>
+    public string CollectionTitle
+    {
+        get => _collectionTitle;
+        set
+        {
+            this.RaiseAndSetIfChanged(ref _collectionTitle, value ?? "");
+            this.RaisePropertyChanged(nameof(CollectionDisplayName));
+        }
+    }
+
+    /// <summary>The title when there is one, otherwise the project's noun (Book, Story, Collection).</summary>
+    public string CollectionDisplayName =>
+        string.IsNullOrWhiteSpace(CollectionTitle) ? Profile.CollectionNoun : CollectionTitle;
+
     public ProjectProfile Profile
     {
         get => _profile;
-        private set => this.RaiseAndSetIfChanged(ref _profile, value);
+        private set
+        {
+            this.RaiseAndSetIfChanged(ref _profile, value);
+            this.RaisePropertyChanged(nameof(CollectionDisplayName));
+            _editor.Profile = value;
+            if (!value.SupportsStoryFocus && _focusedStoryUuid != null)
+            {
+                _focusedStoryUuid = null;
+                FocusedStory = null;
+                UpdateVisibility();
+            }
+        }
     }
 
     private bool _hasWorkspace;
@@ -302,8 +445,10 @@ public class WorkspaceViewModel : ViewModelBase
         ProjectInitializer? projectInitializer = null,
         IProjectInitPrompt? initPrompt = null,
         INotesService? notesService = null,
-        IBeatBoardService? beatBoards = null)
+        IBeatBoardService? beatBoards = null,
+        CollectionService? collections = null)
     {
+        _collections = collections ?? new CollectionService(new MetadataStore());
         _manuscriptService = manuscriptService;
         _structureService = structureService;
         _filePicker = filePicker;
@@ -337,6 +482,9 @@ public class WorkspaceViewModel : ViewModelBase
         OpenWorkspaceCommand = ReactiveCommand.CreateFromTask(OpenWorkspaceAsync);
         CloseWorkspaceCommand = ReactiveCommand.CreateFromTask(CloseWorkspaceAsync, this.WhenAnyValue(x => x.HasWorkspace));
         SelectBookCommand = ReactiveCommand.CreateFromTask(SelectBookAsync);
+        FocusStoryCommand = ReactiveCommand.Create<ChapterViewModel>(FocusStory);
+        ShowWholeCollectionCommand = ReactiveCommand.Create(ShowWholeCollection,
+            this.WhenAnyValue(x => x.IsStoryFocused));
 
         CreateChapterCommand = ReactiveCommand.CreateFromTask<CreateChapterRequest>(CreateChapterAsync,
             this.WhenAnyValue(x => x.HasWorkspace));
@@ -653,7 +801,7 @@ public class WorkspaceViewModel : ViewModelBase
     /// </summary>
     private async Task<Result<Unit>> ReloadWorkspaceAsync(string workspaceRoot, string bookTxtPath, bool reselectBook = true)
     {
-        var result = await _manuscriptService.LoadWorkspaceAsync(workspaceRoot);
+        var result = await LoadManuscriptAsync(workspaceRoot);
         if (!result.IsSuccess)
         {
             _notificationService.ShowError($"Failed to reload workspace: {result.Error}");
@@ -685,7 +833,7 @@ public class WorkspaceViewModel : ViewModelBase
         ErrorMessage = null;
         try
         {
-            var result = await _manuscriptService.LoadWorkspaceAsync(path);
+            var result = await LoadManuscriptAsync(path);
             if (!result.IsSuccess)
             {
                 ErrorMessage = result.Error;
@@ -739,11 +887,36 @@ public class WorkspaceViewModel : ViewModelBase
     /// Loads project.json for <paramref name="workspaceRoot"/> into <see cref="Profile"/>.
     /// Missing settings service or file → Novel; unreadable file → Novel plus an info notice.
     /// </summary>
+    /// <summary>Loads the project kind, then the open collection's title.</summary>
     private async Task LoadProfileAsync(string workspaceRoot)
+    {
+        await LoadProjectKindAsync(workspaceRoot);
+        CollectionTitle = await _collections.GetActiveTitleAsync(workspaceRoot) ?? "";
+    }
+
+    /// <summary>
+    /// Finishes a collection switch that was interrupted (so Book.txt is the open collection's list), then
+    /// reads Book.txt.
+    /// </summary>
+    private async Task<Result<ManuscriptModel>> LoadManuscriptAsync(string folder)
+    {
+        try
+        {
+            await _collections.RecoverAsync(folder);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            _notificationService.ShowError($"An interrupted collection switch couldn't be finished: {ex.Message}");
+        }
+        return await _manuscriptService.LoadWorkspaceAsync(folder);
+    }
+
+    private async Task LoadProjectKindAsync(string workspaceRoot)
     {
         if (_projectSettings == null)
         {
             Profile = ProjectProfile.Novel;
+        CollectionTitle = "";
             return;
         }
 
@@ -756,6 +929,7 @@ public class WorkspaceViewModel : ViewModelBase
 
         _notificationService.ShowInfo($"Couldn't read project settings ({result.Error}). Opening as a novel.");
         Profile = ProjectProfile.Novel;
+        CollectionTitle = "";
     }
 
     /// <summary>
@@ -811,6 +985,7 @@ public class WorkspaceViewModel : ViewModelBase
         HasWorkspace = false;
         WorkspaceName = null;
         Profile = ProjectProfile.Novel;
+        CollectionTitle = "";
         this.RaisePropertyChanged(nameof(WorkspaceRoot));
         this.RaisePropertyChanged(nameof(BookTxtPath));
         _workspaceChanged.OnNext(Unit.Default);
@@ -834,7 +1009,7 @@ public class WorkspaceViewModel : ViewModelBase
         IsLoading = true;
         try
         {
-            var result = await _manuscriptService.LoadWorkspaceAsync(lastPath);
+            var result = await LoadManuscriptAsync(lastPath);
             if (!result.IsSuccess) return;
 
             await LoadProfileAsync(result.Value!.WorkspaceRoot);
@@ -1387,10 +1562,20 @@ public class WorkspaceViewModel : ViewModelBase
 
     private void UpdateVisibility()
     {
+        ResolveFocus();
+        var focus = FocusedStory;
+
         bool partExpanded = true;
+        ChapterViewModel? currentPart = null;
         _visibleNodes.Clear();
         foreach (var vm in _nodes)
         {
+            if (vm.Node.Kind == NodeKind.Part)
+                currentPart = vm;
+            // While focused on one anthology story, only its own entries are listed.
+            if (focus != null && !ReferenceEquals(vm.Node.Kind == NodeKind.Part ? vm : currentPart ?? vm, focus))
+                continue;
+
             if (vm.Node.Kind == NodeKind.Part)
             {
                 partExpanded = vm.IsExpanded;
@@ -1523,7 +1708,7 @@ public class WorkspaceViewModel : ViewModelBase
     private async Task CreateChapterAsync(CreateChapterRequest request)
     {
         await ExecuteStructuralOperationAsync(
-            "Create chapter",
+            $"Create {UnitWord}",
             request.ChapterPath,
             () => _structureService.CreateNewChapterAsync(BookTxtPath, request.ChapterPath, request.Content, request.Index))
             .ConfigureAwait(false);
@@ -1532,7 +1717,7 @@ public class WorkspaceViewModel : ViewModelBase
     private async Task CreatePartAsync(CreatePartRequest request)
     {
         await ExecuteStructuralOperationAsync(
-            "Create part",
+            $"Create {PartWord}",
             request.PartPath,
             () => _structureService.CreateNewPartAsync(BookTxtPath, request.PartPath, request.Title, request.Index))
             .ConfigureAwait(false);
@@ -1585,7 +1770,7 @@ public class WorkspaceViewModel : ViewModelBase
         var result = await _structureService.ExcludeEntryAsync(_model.BookTxtPath, chapterPath).ConfigureAwait(false);
         if (!result.IsSuccess)
         {
-            _notificationService.ShowError($"Failed to remove chapter: {result.Error}");
+            _notificationService.ShowError($"Failed to remove {UnitWord}: {result.Error}");
             return;
         }
         await ReloadWorkspaceAsync(_model.WorkspaceRoot, _model.BookTxtPath, reselectBook: false).ConfigureAwait(false);
@@ -1594,7 +1779,7 @@ public class WorkspaceViewModel : ViewModelBase
     private async Task RemoveMissingEntryAsync(string chapterPath)
     {
         await ExecuteStructuralOperationAsync(
-            "Remove chapter",
+            $"Remove {UnitWord}",
             chapterPath,
             () => _structureService.RemoveEntryAsync(BookTxtPath, chapterPath)).ConfigureAwait(false);
     }
@@ -1608,7 +1793,7 @@ public class WorkspaceViewModel : ViewModelBase
         }
 
         await ExecuteRenameOperationAsync(
-            "Rename chapter",
+            $"Rename {UnitWord}",
             request.ExistingPath,
             replacementPath!,
             () => _structureService.RenameEntryAsync(BookTxtPath, request.ExistingPath, replacementPath!))
@@ -1624,7 +1809,7 @@ public class WorkspaceViewModel : ViewModelBase
         }
 
         await ExecuteRenameOperationAsync(
-            "Rename part",
+            $"Rename {PartWord}",
             request.ExistingPath,
             replacementPath!,
             () => _structureService.RenameEntryAsync(BookTxtPath, request.ExistingPath, replacementPath!))
@@ -1639,12 +1824,12 @@ public class WorkspaceViewModel : ViewModelBase
         replacementPath = null;
         error = null;
 
-        if (!TryResolveRenameSource("Rename chapter", request.ExistingPath, NodeKind.Chapter, out var node, out error))
+        if (!TryResolveRenameSource($"Rename {UnitWord}", request.ExistingPath, NodeKind.Chapter, out var node, out error))
             return false;
 
-        if (!TryBuildSafePathSegment(request.NewTitle, "chapter title", out var segment, out error))
+        if (!TryBuildSafePathSegment(request.NewTitle, $"{UnitWord} title", out var segment, out error))
         {
-            error = $"Rename chapter for '{request.ExistingPath}' in '{BookTxtPath}': {error}";
+            error = $"Rename {UnitWord} for '{request.ExistingPath}' in '{BookTxtPath}': {error}";
             return false;
         }
 
@@ -1666,19 +1851,19 @@ public class WorkspaceViewModel : ViewModelBase
         replacementPath = null;
         error = null;
 
-        if (!TryResolveRenameSource("Rename part", request.ExistingPath, NodeKind.Part, out var node, out error))
+        if (!TryResolveRenameSource($"Rename {PartWord}", request.ExistingPath, NodeKind.Part, out var node, out error))
             return false;
 
-        if (!TryBuildSafePathSegment(request.NewTitle, "part title", out var segment, out error))
+        if (!TryBuildSafePathSegment(request.NewTitle, $"{PartWord} title", out var segment, out error))
         {
-            error = $"Rename part for '{request.ExistingPath}' in '{BookTxtPath}': {error}";
+            error = $"Rename {PartWord} for '{request.ExistingPath}' in '{BookTxtPath}': {error}";
             return false;
         }
 
         var fileName = Path.GetFileName(node!.RelativePath);
         if (string.IsNullOrWhiteSpace(fileName))
         {
-            error = $"Rename part for '{request.ExistingPath}' in '{BookTxtPath}': Part path has no file name.";
+            error = $"Rename {PartWord} for '{request.ExistingPath}' in '{BookTxtPath}': {Capital(PartWord)} path has no file name.";
             return false;
         }
 
@@ -1688,7 +1873,7 @@ public class WorkspaceViewModel : ViewModelBase
         var parent = Path.GetDirectoryName(node.RelativePath.Replace('/', Path.DirectorySeparatorChar))?.Replace('\\', '/');
         if (string.IsNullOrWhiteSpace(parent))
         {
-            error = $"Rename part for '{request.ExistingPath}' in '{BookTxtPath}': Part entries must be inside a folder.";
+            error = $"Rename {PartWord} for '{request.ExistingPath}' in '{BookTxtPath}': {Capital(PartWord)} entries must be inside a folder.";
             return false;
         }
 
@@ -1808,13 +1993,13 @@ public class WorkspaceViewModel : ViewModelBase
 
         if (!_nodesByPath.TryGetValue(chapterPath, out var chapter))
         {
-            error = $"Include file for '{chapterPath}' in '{BookTxtPath}': chapter was not found in the sidebar.";
+            error = $"Include file for '{chapterPath}' in '{BookTxtPath}': {UnitWord} was not found in the sidebar.";
             return false;
         }
 
         if (chapter.Node.Kind != NodeKind.Chapter)
         {
-            error = $"Include file for '{chapterPath}' in '{BookTxtPath}': only chapters can be included.";
+            error = $"Include file for '{chapterPath}' in '{BookTxtPath}': only {Profile.UnitPlural.ToLowerInvariant()} can be included.";
             return false;
         }
 
@@ -1826,7 +2011,7 @@ public class WorkspaceViewModel : ViewModelBase
 
         if (!chapter.Node.IsExcluded)
         {
-            error = $"Include file for '{chapterPath}' in '{BookTxtPath}': chapter is already included.";
+            error = $"Include file for '{chapterPath}' in '{BookTxtPath}': {UnitWord} is already included.";
             return false;
         }
 
@@ -1929,7 +2114,7 @@ public class WorkspaceViewModel : ViewModelBase
         {
             if (target.Node.Kind != NodeKind.Part)
             {
-                error = $"Part '{source.Node.RelativePath}' can only be dropped on another Part divider, not chapter '{target.Node.RelativePath}'.";
+                error = $"{Capital(PartWord)} '{source.Node.RelativePath}' can only be dropped on another {Capital(PartWord)} divider, not {UnitWord} '{target.Node.RelativePath}'.";
                 return false;
             }
 
@@ -1938,7 +2123,7 @@ public class WorkspaceViewModel : ViewModelBase
                 var nextPartIndex = FindNextPartIndex(activeNodes, targetIndex + 1);
                 if (nextPartIndex < 0)
                 {
-                    error = $"Part '{source.Node.RelativePath}' cannot be dropped after last Part '{target.Node.RelativePath}' because Book.txt part block moves require a following Part target.";
+                    error = $"{Capital(PartWord)} '{source.Node.RelativePath}' cannot be dropped after last {Capital(PartWord)} '{target.Node.RelativePath}' because Book.txt part block moves require a following {Capital(PartWord)} target.";
                     return false;
                 }
 
@@ -1954,7 +2139,7 @@ public class WorkspaceViewModel : ViewModelBase
 
         if (target.Node.Kind != NodeKind.Chapter)
         {
-            error = $"Chapter '{source.Node.RelativePath}' can only be dropped on another chapter in the same Part section, not Part '{target.Node.RelativePath}'.";
+            error = $"{Capital(UnitWord)} '{source.Node.RelativePath}' can only be dropped on another {UnitWord} in the same {Capital(PartWord)} section, not {Capital(PartWord)} '{target.Node.RelativePath}'.";
             return false;
         }
 
@@ -1962,7 +2147,7 @@ public class WorkspaceViewModel : ViewModelBase
         var targetPart = FindContainingPartPath(activeNodes, targetIndex);
         if (!string.Equals(sourcePart, targetPart, StringComparison.OrdinalIgnoreCase))
         {
-            error = $"Chapter '{source.Node.RelativePath}' cannot be moved across Part sections from '{DisplayPartSection(sourcePart)}' to '{DisplayPartSection(targetPart)}'. Move chapters between Parts from the corkboard.";
+            error = $"{Capital(UnitWord)} '{source.Node.RelativePath}' cannot be moved across {Capital(PartWord)} sections from '{DisplayPartSection(sourcePart)}' to '{DisplayPartSection(targetPart)}'. Move {Profile.UnitPlural.ToLowerInvariant()} between {Capital(PartWord)}s {(Profile.Kind == ProjectKind.Novel ? "from the corkboard" : "in Plan mode")}.";
             return false;
         }
 

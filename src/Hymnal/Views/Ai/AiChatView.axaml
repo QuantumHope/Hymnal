@@ -4,7 +4,7 @@
              xmlns:models="using:Hymnal.Core.Models.Ai"
              x:Class="Hymnal.Views.Ai.AiChatView"
              x:DataType="vm:AiChatViewModel"
-             Background="{DynamicResource SurfaceElevatedBrush}">
+             Background="{DynamicResource Cora.Surface.Panel}">
 
     <Panel>
 
@@ -15,7 +15,7 @@
                     Spacing="8"
                     Margin="16">
             <TextBlock Text="Configure an AI provider in Settings to use AI features."
-                       Foreground="{DynamicResource OnSurfaceMutedBrush}"
+                       Foreground="{DynamicResource Cora.Text.Disabled}"
                        TextWrapping="Wrap"
                        TextAlignment="Center"
                        FontSize="12" />
@@ -28,7 +28,7 @@
                     Spacing="8"
                     Margin="16">
             <TextBlock Text="Open a workspace to use AI features."
-                       Foreground="{DynamicResource OnSurfaceMutedBrush}"
+                       Foreground="{DynamicResource Cora.Text.Disabled}"
                        TextWrapping="Wrap"
                        TextAlignment="Center"
                        FontSize="12" />
@@ -46,36 +46,36 @@
                           ItemsSource="{Binding AvailableRoles}"
                           SelectedItem="{Binding SelectedRole}"
                           FontSize="11"
-                          Foreground="{DynamicResource OnSurfaceDimBrush}"
-                          Background="{DynamicResource SurfaceOverlayBrush}"
+                          Foreground="{DynamicResource Cora.Text.Secondary}"
+                          Background="{DynamicResource Cora.Surface.Elevated}"
                           BorderThickness="0"
                           Padding="6,2" />
                 <StackPanel Grid.Column="2"
                             Orientation="Horizontal"
                             Spacing="2">
-                    <Button Content="CH"
+                    <Button Content="{Binding Profile.AiScopeUnitLabel}"
                             FontSize="10"
                             Padding="4,1"
                             Command="{Binding SetScopeCommand}"
                             CommandParameter="{x:Static models:ConversationScope.Chapter}"
-                            Background="{DynamicResource SurfaceOverlayBrush}"
-                            Foreground="{DynamicResource OnSurfaceDimBrush}"
+                            Background="{DynamicResource Cora.Surface.Elevated}"
+                            Foreground="{DynamicResource Cora.Text.Secondary}"
                             BorderThickness="0" />
-                    <Button Content="PART"
+                    <Button Content="{Binding Profile.AiScopePartLabel}"
                             FontSize="10"
                             Padding="4,1"
                             Command="{Binding SetScopeCommand}"
                             CommandParameter="{x:Static models:ConversationScope.Part}"
-                            Background="{DynamicResource SurfaceOverlayBrush}"
-                            Foreground="{DynamicResource OnSurfaceDimBrush}"
+                            Background="{DynamicResource Cora.Surface.Elevated}"
+                            Foreground="{DynamicResource Cora.Text.Secondary}"
                             BorderThickness="0" />
-                    <Button Content="BOOK"
+                    <Button Content="{Binding Profile.AiScopeAllLabel}"
                             FontSize="10"
                             Padding="4,1"
                             Command="{Binding SetScopeCommand}"
                             CommandParameter="{x:Static models:ConversationScope.Book}"
-                            Background="{DynamicResource SurfaceOverlayBrush}"
-                            Foreground="{DynamicResource OnSurfaceDimBrush}"
+                            Background="{DynamicResource Cora.Surface.Elevated}"
+                            Foreground="{DynamicResource Cora.Text.Secondary}"
                             BorderThickness="0" />
                 </StackPanel>
             </Grid>
@@ -83,7 +83,7 @@
             <!-- Separator -->
             <Border Grid.Row="1"
                     Height="1"
-                    Background="{DynamicResource BorderSubtleBrush}"
+                    Background="{DynamicResource Cora.Border.Subtle}"
                     Margin="0" />
 
             <!-- Message area -->
@@ -94,8 +94,8 @@
 
                     <!-- Empty state -->
                     <TextBlock IsVisible="{Binding Messages.Count, Converter={x:Static ObjectConverters.IsNull}}"
-                               Text="Start a conversation. Your message is sent with the current chapter as context."
-                               Foreground="{DynamicResource OnSurfaceMutedBrush}"
+                               Text="{Binding EmptyStateText}"
+                               Foreground="{DynamicResource Cora.Text.Disabled}"
                                TextWrapping="Wrap"
                                TextAlignment="Center"
                                FontSize="11"
@@ -111,10 +111,10 @@
                                             Padding="8,3"
                                             CornerRadius="4"
                                             HorizontalAlignment="Center"
-                                            Background="{DynamicResource SurfaceOverlayBrush}">
+                                            Background="{DynamicResource Cora.Surface.Elevated}">
                                         <TextBlock Text="{Binding Content}"
                                                    FontSize="10"
-                                                   Foreground="{DynamicResource OnSurfaceMutedBrush}" />
+                                                   Foreground="{DynamicResource Cora.Text.Disabled}" />
                                     </Border>
 
                                     <!-- User bubble -->
@@ -123,11 +123,11 @@
                                             Padding="10,7"
                                             CornerRadius="8"
                                             HorizontalAlignment="Right"
-                                            Background="{DynamicResource SurfaceHighBrush}">
+                                            Background="{DynamicResource Cora.Wash.Selected}">
                                         <TextBlock Text="{Binding Content}"
                                                    TextWrapping="Wrap"
                                                    FontSize="12"
-                                                   Foreground="{DynamicResource OnSurfaceBrush}" />
+                                                   Foreground="{DynamicResource Cora.Text}" />
                                     </Border>
 
                                     <!-- Assistant bubble -->
@@ -135,11 +135,11 @@
                                             Margin="0,2,32,2"
                                             Padding="10,7"
                                             CornerRadius="8"
-                                            Background="{DynamicResource SurfaceOverlayBrush}">
+                                            Background="{DynamicResource Cora.Surface.Elevated}">
                                         <TextBlock Text="{Binding Content}"
                                                    TextWrapping="Wrap"
                                                    FontSize="12"
-                                                   Foreground="{DynamicResource OnSurfaceBrush}" />
+                                                   Foreground="{DynamicResource Cora.Text}" />
                                     </Border>
                                 </Panel>
                             </DataTemplate>
@@ -158,7 +158,7 @@
                 <TextBlock Grid.Row="0"
                            Text="{Binding ErrorMessage}"
                            IsVisible="{Binding ErrorMessage, Converter={x:Static ObjectConverters.IsNotNull}}"
-                           Foreground="{DynamicResource ErrorBrush}"
+                           Foreground="{DynamicResource Cora.Accent.Error}"
                            FontSize="11"
                            TextWrapping="Wrap"
                            Margin="0,0,0,4" />
@@ -173,14 +173,14 @@
                              TextWrapping="Wrap"
                              MaxHeight="100"
                              FontSize="12"
-                             FontFamily="{DynamicResource InterFont}"
-                             Background="{DynamicResource SurfaceBaseBrush}"
-                             Foreground="{DynamicResource OnSurfaceBrush}"
+                             FontFamily="{DynamicResource Cora.Font.Persona}"
+                             Background="{DynamicResource Cora.Surface.Void}"
+                             Foreground="{DynamicResource Cora.Text}"
                              BorderThickness="1"
-                             BorderBrush="{DynamicResource BorderDefaultBrush}"
+                             BorderBrush="{DynamicResource Cora.Border.Input}"
                              CornerRadius="6"
                              Padding="8,6"
-                             CaretBrush="{DynamicResource SynthwavePurpleBrush}"
+                             CaretBrush="{DynamicResource Cora.Accent.Store}"
                              Name="ComposerBox" />
                     <StackPanel Grid.Column="1"
                                 Orientation="Horizontal"
@@ -192,15 +192,15 @@
                                 IsVisible="{Binding IsStreaming}"
                                 Padding="8,5"
                                 FontSize="11"
-                                Background="{DynamicResource ErrorBrush}"
-                                Foreground="White"
+                                Background="{DynamicResource Cora.Accent.Error}"
+                                Foreground="{DynamicResource Cora.IconInk}"
                                 CornerRadius="5" />
                         <Button Content="Send ↵"
                                 Command="{Binding SendCommand}"
                                 Padding="8,5"
                                 FontSize="11"
-                                Background="{DynamicResource SynthwavePurpleBrush}"
-                                Foreground="White"
+                                Background="{DynamicResource Cora.Accent.Store}"
+                                Foreground="{DynamicResource Cora.IconInk}"
                                 CornerRadius="5" />
                     </StackPanel>
                 </Grid>

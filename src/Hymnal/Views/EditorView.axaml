@@ -1,4 +1,5 @@
 <UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:controls="using:Hymnal.Views.Controls"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:vm="using:Hymnal.ViewModels"
              xmlns:avedit="using:AvaloniaEdit"
@@ -19,7 +20,7 @@
     <UserControl.Styles>
         <Style Selector="ToggleButton.view-mode">
             <Setter Property="Background" Value="Transparent" />
-            <Setter Property="Foreground" Value="{DynamicResource OnSurfaceDimBrush}" />
+            <Setter Property="Foreground" Value="{DynamicResource Cora.Text.Secondary}" />
             <Setter Property="BorderThickness" Value="0" />
             <Setter Property="CornerRadius" Value="4" />
             <Setter Property="Padding" Value="10,3" />
@@ -29,12 +30,12 @@
             <Setter Property="LetterSpacing" Value="0.8" />
         </Style>
         <Style Selector="ToggleButton.view-mode:pointerover /template/ ContentPresenter#PART_ContentPresenter">
-            <Setter Property="Background" Value="{DynamicResource SurfaceHighBrush}" />
-            <Setter Property="Foreground" Value="{DynamicResource OnSurfaceBrush}" />
+            <Setter Property="Background" Value="{DynamicResource Cora.Wash.Hover}" />
+            <Setter Property="Foreground" Value="{DynamicResource Cora.Text}" />
         </Style>
         <Style Selector="ToggleButton.view-mode:checked /template/ ContentPresenter#PART_ContentPresenter">
-            <Setter Property="Background" Value="#2D1B5E" />
-            <Setter Property="Foreground" Value="#E9D5FF" />
+            <Setter Property="Background" Value="{DynamicResource Cora.Wash.Selected}" />
+            <Setter Property="Foreground" Value="{DynamicResource Cora.Text}" />
         </Style>
         <Style Selector="ToggleButton.view-mode Path.view-icon">
             <Setter Property="Width" Value="14" />
@@ -47,10 +48,10 @@
             <Setter Property="Stroke" Value="{Binding $parent[ToggleButton].Foreground}" />
         </Style>
         <Style Selector="ToggleButton.view-mode:checked Path.view-icon">
-            <Setter Property="Stroke" Value="#E9D5FF" />
+            <Setter Property="Stroke" Value="{DynamicResource Cora.Text}" />
         </Style>
         <Style Selector="ToggleButton.view-mode:pointerover Path.view-icon">
-            <Setter Property="Stroke" Value="{DynamicResource OnSurfaceBrush}" />
+            <Setter Property="Stroke" Value="{DynamicResource Cora.Text}" />
         </Style>
         <Style Selector="ToggleButton.view-mode TextBlock.view-label">
             <Setter Property="VerticalAlignment" Value="Center" />
@@ -62,6 +63,10 @@
         <Style Selector="Border.compact ToggleButton.view-mode">
             <Setter Property="Padding" Value="7,4" />
         </Style>
+        <!-- The chapter bar's phase dates (EditorChapterBar) make way for the status and Complete button. -->
+        <Style Selector="Border.compact StackPanel.phase-dates">
+            <Setter Property="IsVisible" Value="False" />
+        </Style>
     </UserControl.Styles>
 
     <Grid RowDefinitions="Auto,Auto,Auto,*">
@@ -69,13 +74,13 @@
         <!-- Conflict strip: visible when an external file change conflicts with dirty buffer -->
         <Border Grid.Row="0"
                 IsVisible="{Binding HasConflict}"
-                Background="{DynamicResource SurfaceHighBrush}"
-                BorderBrush="{DynamicResource BorderDefaultBrush}"
+                Background="{DynamicResource Cora.Wash.Selected}"
+                BorderBrush="{DynamicResource Cora.Border.Input}"
                 BorderThickness="0,0,0,1"
                 Padding="8,6">
             <StackPanel Orientation="Horizontal" Spacing="12">
                 <TextBlock Text="{Binding ConflictMessage}"
-                           Foreground="{DynamicResource OnSurfaceBrush}"
+                           Foreground="{DynamicResource Cora.Text}"
                            VerticalAlignment="Center"
                            TextWrapping="Wrap"
                            MaxWidth="600" />
@@ -93,20 +98,20 @@
         <!-- Book.txt warning banner -->
         <Border Grid.Row="1"
                 IsVisible="{Binding ShowBookTxtWarning}"
-                Background="#1A9D4EDD"
-                BorderBrush="{DynamicResource SynthwavePurpleBrush}"
+                Background="{DynamicResource Cora.Wash.Store}"
+                BorderBrush="{DynamicResource Cora.Accent.Store}"
                 BorderThickness="0,0,0,1"
                 Padding="12,7">
             <StackPanel Orientation="Horizontal" Spacing="10">
                 <Path Data="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
-                      Stroke="{DynamicResource SynthwavePurpleBrush}"
+                      Stroke="{DynamicResource Cora.Accent.Store}"
                       StrokeThickness="1.5"
                       StrokeLineCap="Round"
                       Width="18" Height="18"
                       Stretch="Uniform"
                       VerticalAlignment="Center" />
-                <TextBlock Text="Editing Book.txt — this file defines the chapter list. Save (Ctrl+S) to refresh the sidebar."
-                           Foreground="{DynamicResource OnSurfaceDimBrush}"
+                <TextBlock Text="Editing Book.txt — this file sets what the sidebar lists, in order. Save (Ctrl+S) to refresh the sidebar."
+                           Foreground="{DynamicResource Cora.Text.Secondary}"
                            FontSize="12"
                            VerticalAlignment="Center" />
             </StackPanel>
@@ -117,8 +122,8 @@
         <Border x:Name="PART_HeaderRow"
                 Grid.Row="2"
                 Height="36"
-                Background="{DynamicResource SurfaceElevatedBrush}"
-                BorderBrush="{DynamicResource BorderSubtleBrush}"
+                Background="{DynamicResource Cora.Surface.Panel}"
+                BorderBrush="{DynamicResource Cora.Border.Subtle}"
                 BorderThickness="0,0,0,1"
                 Padding="0,0,8,0">
             <Grid ColumnDefinitions="*,Auto,Auto">
@@ -132,7 +137,7 @@
                         Width="1"
                         Height="18"
                         Margin="10,0"
-                        Background="{DynamicResource BorderDefaultBrush}" />
+                        Background="{DynamicResource Cora.Border.Subtle}" />
 
                 <StackPanel x:Name="PART_ViewModeSwitch"
                             Grid.Column="2"
@@ -164,7 +169,7 @@
                     </ToggleButton>
                     <ToggleButton x:Name="PART_PreviewModeButton"
                                   Classes="view-mode"
-                                  ToolTip.Tip="Preview: the chapter as Leanpub sets it (F6 cycles modes)"
+                                  ToolTip.Tip="Preview: as Leanpub sets it (F6 cycles modes)"
                                   Command="{Binding SetViewModeCommand}"
                                   CommandParameter="{x:Static vm:EditorViewMode.Preview}"
                                   IsChecked="{Binding ViewMode, Mode=OneWay, Converter={x:Static conv:ShellModeEqualsConverter.Instance}, ConverterParameter=Preview}">
@@ -182,12 +187,12 @@
             <avedit:TextEditor x:Name="PART_Editor"
                                Grid.Column="0"
                                IsVisible="{Binding ShowSourcePane}"
-                               FontFamily="{DynamicResource EditorFont}"
+                               FontFamily="{DynamicResource Cora.Font.Machine}"
                                FontSize="14"
                                WordWrap="True"
                                ShowLineNumbers="False"
                                Background="Transparent"
-                               Foreground="{DynamicResource OnSurfaceBrush}"
+                               Foreground="{DynamicResource Cora.Text}"
                                HorizontalScrollBarVisibility="Disabled"
                                VerticalScrollBarVisibility="Auto"
                                Padding="16,12" />
@@ -197,7 +202,7 @@
                           Width="4"
                           IsVisible="{Binding IsSplitView}"
                           ResizeDirection="Columns"
-                          Background="{DynamicResource BorderSubtleBrush}" />
+                          Background="{DynamicResource Cora.Border.Subtle}" />
 
             <editor:MarkuaPreviewView x:Name="PART_Preview"
                                       Grid.Column="2"
@@ -206,42 +211,65 @@
                                       BaseDirectory="{Binding PreviewBaseDirectory}" />
           </Grid>
 
+            <!-- Focus mode's quiet status line: the word count, and how to leave. -->
+            <TextBlock x:Name="PART_FocusStatus"
+                       IsVisible="False"
+                       HorizontalAlignment="Center"
+                       VerticalAlignment="Bottom"
+                       Margin="0,0,0,14"
+                       FontSize="11"
+                       Opacity="0.7"
+                       IsHitTestVisible="False"
+                       Foreground="{DynamicResource Cora.Text.Disabled}"
+                       Text="{Binding LiveWordCount, StringFormat='{}{0:N0} words  ·  Esc or F11 to leave focus'}" />
+
             <Border IsVisible="{Binding ShowWorkspacePrompt}"
-                    Background="{DynamicResource SurfaceBaseBrush}">
+                    Background="{DynamicResource Cora.Surface.Void}">
                 <StackPanel HorizontalAlignment="Center"
                             VerticalAlignment="Center"
                             Spacing="8"
                             MaxWidth="420">
-                    <TextBlock Text="Open a workspace"
-                               FontSize="18"
-                               FontWeight="SemiBold"
-                               Foreground="{DynamicResource OnSurfaceBrush}" />
-                    <TextBlock Text="Use File > Open Workspace or the sidebar button to load a manuscript."
+                    <controls:ThemeEmblem Kind="{DynamicResource Hymnal.Emblem}" Width="132" Height="132"
+                                          HorizontalAlignment="Center" Margin="0,0,0,8" />
+                    <TextBlock Classes="heading"
+                               Text="Open a workspace"
+                               HorizontalAlignment="Center"
+                               FontSize="22"
+                               FontWeight="SemiBold" />
+                    <TextBlock Text="Use File > Open Workspace or the sidebar button to open a project."
                                TextWrapping="Wrap"
                                TextAlignment="Center"
-                               Foreground="{DynamicResource OnSurfaceDimBrush}" />
+                               Foreground="{DynamicResource Cora.Text.Secondary}" />
                 </StackPanel>
             </Border>
 
             <Border IsVisible="{Binding ShowNoChapterPrompt}"
-                    Background="{DynamicResource SurfaceBaseBrush}">
+                    Background="{DynamicResource Cora.Surface.Void}">
                 <StackPanel HorizontalAlignment="Center"
                             VerticalAlignment="Center"
                             Spacing="8"
                             MaxWidth="420">
-                    <TextBlock Text="No chapter open"
-                               FontSize="18"
-                               FontWeight="SemiBold"
-                               Foreground="{DynamicResource OnSurfaceBrush}" />
-                    <TextBlock Text="Select a chapter in the sidebar to load its Markua content here."
+                    <!-- The theme's emblem (Synthwave's sun, Mordor's Eye, CORA's face); nothing for other themes -->
+                    <Panel HorizontalAlignment="Center" Margin="0,0,0,8">
+                        <controls:ThemeEmblem Kind="{DynamicResource Hymnal.Emblem}" Width="132" Height="132" />
+                        <controls:PuritySeal HorizontalAlignment="Right" VerticalAlignment="Top" Margin="0,-4,-48,0"
+                                             Tilt="9" SealSize="30" StripLength="46"
+                                             Text="Rite of Composition|The page awaits" />
+                    </Panel>
+                    <TextBlock Classes="heading"
+                               Text="{Binding Profile.NothingOpenTitle}"
+                               HorizontalAlignment="Center"
+                               FontSize="22"
+                               FontWeight="SemiBold" />
+                    <TextBlock Text="{Binding Profile.NothingOpenHint}"
                                TextWrapping="Wrap"
                                TextAlignment="Center"
-                               Foreground="{DynamicResource OnSurfaceDimBrush}" />
+                               Foreground="{DynamicResource Cora.Text.Secondary}" />
                 </StackPanel>
             </Border>
 
             <Border IsVisible="{Binding ShowNoResearchDocPrompt}"
-                    Background="{DynamicResource SurfaceBaseBrush}">
+                    Background="{DynamicResource Cora.Surface.Void}">
                 <StackPanel HorizontalAlignment="Center"
                             VerticalAlignment="Center"
                             Spacing="8"
@@ -249,34 +277,34 @@
                     <TextBlock Text="No research doc open"
                                FontSize="18"
                                FontWeight="SemiBold"
-                               Foreground="{DynamicResource OnSurfaceBrush}" />
+                               Foreground="{DynamicResource Cora.Text}" />
                     <TextBlock Text="Select a file in the DOCS sidebar, or create or import one to begin."
                                TextWrapping="Wrap"
                                TextAlignment="Center"
-                               Foreground="{DynamicResource OnSurfaceDimBrush}" />
+                               Foreground="{DynamicResource Cora.Text.Secondary}" />
                 </StackPanel>
             </Border>
 
             <Border IsVisible="{Binding ShowMissingChapterPrompt}"
-                    Background="{DynamicResource SurfaceBaseBrush}">
+                    Background="{DynamicResource Cora.Surface.Void}">
                 <StackPanel HorizontalAlignment="Center"
                             VerticalAlignment="Center"
                             Spacing="12"
                             MaxWidth="460">
                     <Path Data="M12 2L2 20h20L12 2zm0 5.5L18.25 18H5.75L12 7.5zm-1 4.5h2v4h-2zm0 5.2h2v2h-2z"
-                          Fill="{DynamicResource OrangeBrush}"
+                          Fill="{DynamicResource Cora.Accent.Unknown}"
                           Width="40" Height="40"
                           Stretch="Uniform"
                           HorizontalAlignment="Center" />
-                    <TextBlock Text="Chapter not found on disk"
+                    <TextBlock Text="File not found on disk"
                                FontSize="18"
                                FontWeight="SemiBold"
                                HorizontalAlignment="Center"
-                               Foreground="{DynamicResource OnSurfaceBrush}" />
+                               Foreground="{DynamicResource Cora.Text}" />
                     <TextBlock Text="{Binding MissingChapterMessage}"
                                TextWrapping="Wrap"
                                TextAlignment="Center"
-                               Foreground="{DynamicResource OnSurfaceDimBrush}" />
+                               Foreground="{DynamicResource Cora.Text.Secondary}" />
                 </StackPanel>
             </Border>
         </Grid>

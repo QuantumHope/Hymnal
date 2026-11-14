@@ -748,14 +748,29 @@ public sealed class CorkboardViewModelTests
 
         AddWorkspaceNode(context, CreateChapter(context, "part-one/chapter-two.md", "Chapter Two"));
 
+        // The rebuild runs off this thread and may still be writing Items when we look, so read it with a retry
+        // (an enumeration that catches it mid-rebuild throws) until the rebuilt card is there.
+        ChapterCardItemViewModel? second = null;
         Assert.True(
             SpinWait.SpinUntil(
-                () => board.Items.Any(item => item.RelativePath == "part-one/chapter-two.md"),
+                () =>
+                {
+                    try
+                    {
+                        if (!board.Items.Any(item => item.RelativePath == "part-one/chapter-two.md"))
+                            return false;
+                        part = Assert.IsType<PartDividerItemViewModel>(board.Items[0]);
+                        second = GetChapterCard(board, "part-one/chapter-two.md");
+                        return true;
+                    }
+                    catch (InvalidOperationException)
+                    {
+                        return false;
+                    }
+                },
                 TimeSpan.FromSeconds(2)),
             "Corkboard items did not rebuild after workspace node collection change.");
-
-        part = Assert.IsType<PartDividerItemViewModel>(board.Items[0]);
-        var second = GetChapterCard(board, "part-one/chapter-two.md");
+        Assert.NotNull(second);
 
         Assert.False(part.IsExpanded);
         Assert.False(second.IsVisibleOnBoard);

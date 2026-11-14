@@ -11,54 +11,54 @@
                        Text="Updates"
                        FontSize="18"
                        FontWeight="SemiBold"
-                       Foreground="{DynamicResource OnSurfaceBrush}" />
+                       Foreground="{DynamicResource Cora.Text}" />
             <TextBlock x:Name="PART_CurrentVersion"
                        Grid.Column="1"
                        Text="{Binding CurrentVersion, StringFormat='Version {0}'}"
                        VerticalAlignment="Center"
                        FontSize="12"
-                       Foreground="{DynamicResource OnSurfaceDimBrush}" />
+                       Foreground="{DynamicResource Cora.Text.Secondary}" />
         </Grid>
         <TextBlock Text="New versions of Hymnal are released on GitHub. Installing one saves your work, replaces Hymnal's files where it is installed and reopens it."
                    FontSize="12"
                    TextWrapping="Wrap"
-                   Foreground="{DynamicResource OnSurfaceMutedBrush}" />
+                   Foreground="{DynamicResource Cora.Text.Secondary}" />
 
         <Border Padding="16,14"
                 CornerRadius="8"
-                Background="{DynamicResource SurfaceElevatedBrush}"
+                Background="{DynamicResource Cora.Surface.Panel}"
                 BorderThickness="1"
-                BorderBrush="{DynamicResource BorderDefaultBrush}">
+                BorderBrush="{DynamicResource Cora.Border.Input}">
             <StackPanel Spacing="10">
                 <Grid ColumnDefinitions="Auto,*">
                     <Ellipse Width="8" Height="8" Margin="0,5,0,0" VerticalAlignment="Top"
-                             Fill="{DynamicResource PinkBrush}"
+                             Fill="{DynamicResource Cora.Accent.Store}"
                              IsVisible="{Binding HasUpdate}" />
                     <Ellipse Width="8" Height="8" Margin="0,5,0,0" VerticalAlignment="Top"
-                             Fill="{DynamicResource SuccessBrush}"
+                             Fill="{DynamicResource Cora.Accent.Success}"
                              IsVisible="{Binding !HasUpdate}" />
                     <StackPanel Grid.Column="1" Margin="10,0,0,0" Spacing="4">
                         <TextBlock x:Name="PART_StatusText"
                                    Text="{Binding StatusText}"
                                    FontSize="13"
                                    TextWrapping="Wrap"
-                                   Foreground="{DynamicResource OnSurfaceBrush}" />
+                                   Foreground="{DynamicResource Cora.Text}" />
                         <TextBlock Text="{Binding NotUpdatableReason}"
                                    IsVisible="{Binding HasNotUpdatableReason}"
                                    FontSize="12"
                                    TextWrapping="Wrap"
-                                   Foreground="{DynamicResource OnSurfaceDimBrush}" />
+                                   Foreground="{DynamicResource Cora.Text.Secondary}" />
                         <TextBlock Text="{Binding Error}"
                                    IsVisible="{Binding HasError}"
                                    FontSize="12"
                                    TextWrapping="Wrap"
-                                   Foreground="{DynamicResource ErrorBrush}" />
+                                   Foreground="{DynamicResource Cora.Accent.Error}" />
                     </StackPanel>
                 </Grid>
                 <CheckBox Content="Check for updates when Hymnal starts and every few hours"
                           IsChecked="{Binding AutoCheck}"
                           IsEnabled="{Binding CanUpdate}"
-                          Foreground="{DynamicResource OnSurfaceBrush}" />
+                          Foreground="{DynamicResource Cora.Text}" />
                 <StackPanel Orientation="Horizontal" Spacing="8">
                     <Button Content="Check now"
                             Command="{Binding CheckCommand}"
@@ -77,26 +77,26 @@
                             Padding="12,6"
                             FontSize="12"
                             CornerRadius="5"
-                            Background="{DynamicResource SynthwavePurpleBrush}"
-                            Foreground="White" />
+                            Background="{DynamicResource Cora.Accent.Store}"
+                            Foreground="{DynamicResource Cora.IconInk}" />
                 </StackPanel>
 
                 <!-- GitHub access: Hymnal's releases are public, so this is only for a private fork or a rate limit. -->
-                <Border Height="1" Background="{DynamicResource BorderSubtleBrush}" />
+                <Border Height="1" Background="{DynamicResource Cora.Border.Subtle}" />
                 <StackPanel Spacing="6">
                     <TextBlock Text="GitHub access"
                                FontSize="12"
                                FontWeight="SemiBold"
-                               Foreground="{DynamicResource OnSurfaceDimBrush}" />
-                    <TextBlock Text="Hymnal's releases are public, so no token is needed. A saved token stays on this machine (~/.hymnal/github-token)."
+                               Foreground="{DynamicResource Cora.Text.Secondary}" />
+                    <TextBlock Text="Hymnal's releases are public, so no token is needed. A token saved here is kept in Hymnal's credential store, never in a plain file."
                                FontSize="12"
                                TextWrapping="Wrap"
-                               Foreground="{DynamicResource OnSurfaceMutedBrush}" />
+                               Foreground="{DynamicResource Cora.Text.Secondary}" />
                     <TextBlock x:Name="PART_AccessText"
                                Text="{Binding AccessText}"
                                FontSize="12"
                                TextWrapping="Wrap"
-                               Foreground="{DynamicResource OnSurfaceDimBrush}" />
+                               Foreground="{DynamicResource Cora.Text.Secondary}" />
                     <StackPanel Orientation="Horizontal" Spacing="8">
                         <TextBox x:Name="PART_TokenInput"
                                  Text="{Binding TokenInput}"

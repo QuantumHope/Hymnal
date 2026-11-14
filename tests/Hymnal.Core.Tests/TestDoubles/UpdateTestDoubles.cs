@@ -15,6 +15,8 @@ internal sealed class FakeUpdateService : IUpdateService
     public bool AsksForPassword { get; set; }
     public string ReleasesUrl => "https://github.com/QuantumHope/Hymnal/releases";
     public string AccessSource { get; set; } = "none";
+    public bool HasSavedToken { get; set; }
+    public Task RefreshAccessAsync() => Task.CompletedTask;
 
     /// <summary>What <see cref="CheckAsync"/> returns; null means up to date.</summary>
     public UpdateOffer? Offer { get; set; }

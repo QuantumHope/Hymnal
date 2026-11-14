@@ -79,7 +79,7 @@ public sealed class ProjectProfile
                 "COLLECTION STATS", "BY STORY", "STORY STATS", "BY SCENE",
                 showsBookStats: true, allowsPartTargets: true,
                 ShortFormStatuses, ShortFormPhases, ChapterStatus.Planned, ShortFormPresets)
-            : new(kind, "Scene", "Part", "Story", "Story Info",
+            : new(kind, "Scene", "Section", "Story", "Story Info",
                 "", "", "", "",
                 showsBookStats: false, allowsPartTargets: false,
                 ShortFormStatuses, ShortFormPhases, ChapterStatus.Planned, ShortFormPresets);
@@ -105,6 +105,129 @@ public sealed class ProjectProfile
     public string UnitNoun { get; }
     public string PartNoun { get; }
     public string CollectionNoun { get; }
+
+    /// <summary>
+    /// What a <see cref="PartNoun"/> holds: chapters in a novel's part, scenes in a story. Plan mode uses it
+    /// for counts and "add" actions inside a Part.
+    /// </summary>
+    public string SubunitNoun => Kind == ProjectKind.Novel ? "Chapter" : "Scene";
+    // ── Wording ───────────────────────────────────────────────────────────────
+    // Every user-facing noun for the book's structure comes from here, so a short story or anthology
+    // never speaks of chapters, parts or books.
+
+    /// <summary>Plural of <see cref="UnitNoun"/>: Chapters, Scenes, Stories.</summary>
+    public string UnitPlural => Kind switch
+    {
+        ProjectKind.Story => "Scenes",
+        ProjectKind.Anthology => "Stories",
+        _ => "Chapters"
+    };
+
+    /// <summary>Plural of <see cref="SubunitNoun"/>: Chapters, Scenes.</summary>
+    public string SubunitPlural => Kind == ProjectKind.Novel ? "Chapters" : "Scenes";
+
+    /// <summary>
+    /// What one Book.txt entry is called. A Part divider is a <see cref="PartNoun"/> in a novel or short story
+    /// and a story in an anthology; a file inside a Part is a <see cref="SubunitNoun"/>; any other file is a
+    /// <see cref="UnitNoun"/>.
+    /// </summary>
+    public string NounFor(NodeKind kind, bool insidePart) => kind switch
+    {
+        NodeKind.Part => Kind == ProjectKind.Anthology ? "Story" : PartNoun,
+        _ when insidePart => SubunitNoun,
+        _ => UnitNoun
+    };
+
+    /// <summary>
+    /// True when the author can focus on one story: an anthology narrows the sidebar, Plan and Schedule to it.
+    /// </summary>
+    public bool SupportsStoryFocus => Kind == ProjectKind.Anthology;
+
+    /// <summary>
+    /// True when a story can be exported as a Standard Manuscript Format .docx for submission to a market
+    /// (short fiction: Short Story and Anthology projects).
+    /// </summary>
+    public bool SupportsSubmissionExport => Kind != ProjectKind.Novel;
+
+    /// <summary>True when one workspace can hold several collections over one folder of stories.</summary>
+    public bool SupportsMultipleCollections => Kind == ProjectKind.Anthology;
+
+    /// <summary>The sidebar list of the book's contents: CHAPTERS, SCENES, STORIES.</summary>
+    public string ContentsTitle => UnitPlural.ToUpperInvariant();
+
+    /// <summary>Tooltip of the sidebar's + button.</summary>
+    public string AddContentsTip => Kind switch
+    {
+        ProjectKind.Story => "Add a scene or section",
+        ProjectKind.Anthology => "Add a story",
+        _ => "Add chapter or part"
+    };
+
+    /// <summary>The editor's empty state title when nothing is open.</summary>
+    public string NothingOpenTitle => Kind switch
+    {
+        ProjectKind.Story => "No scene open",
+        ProjectKind.Anthology => "No story open",
+        _ => "No chapter open"
+    };
+
+    /// <summary>The editor's empty state hint when nothing is open.</summary>
+    public string NothingOpenHint => Kind switch
+    {
+        ProjectKind.Story => "Select a scene in the sidebar to write it here.",
+        ProjectKind.Anthology => "Select a story or one of its scenes in the sidebar to write it here.",
+        _ => "Select a chapter in the sidebar to load its Markua content here."
+    };
+
+    /// <summary>A side panel's empty state, e.g. "Open a scene to start taking notes."</summary>
+    public string OpenSomethingTo(string purpose) => Kind switch
+    {
+        ProjectKind.Story => $"Open a scene to {purpose}.",
+        ProjectKind.Anthology => $"Open a story or scene to {purpose}.",
+        _ => $"Open a chapter to {purpose}."
+    };
+
+    /// <summary>Sidebar/Plan menu: put an excluded file back, e.g. "Include in story".</summary>
+    public string IncludeInCollectionLabel => $"Include in {CollectionNoun.ToLowerInvariant()}";
+
+    /// <summary>Sidebar menu: leave a file out of the book without deleting it.</summary>
+    public string ExcludeFromCollectionLabel => $"Exclude from {CollectionNoun.ToLowerInvariant()}";
+
+    /// <summary>AI chat scope buttons: the open file, its Part, the whole book.</summary>
+    public string AiScopeUnitLabel => Kind == ProjectKind.Novel ? "CH" : "SCENE";
+    public string AiScopePartLabel => Kind switch
+    {
+        ProjectKind.Story => "SECTION",
+        ProjectKind.Anthology => "STORY",
+        _ => "PART"
+    };
+    public string AiScopeAllLabel => Kind switch
+    {
+        ProjectKind.Story => "STORY",
+        ProjectKind.Anthology => "ALL",
+        _ => "BOOK"
+    };
+
+    /// <summary>The Schedule's first column and its whole-book rollup row.</summary>
+    public string ScheduleItemHeader => Kind switch
+    {
+        ProjectKind.Story => "SCENE",
+        ProjectKind.Anthology => "STORY",
+        _ => "CHAPTER"
+    };
+    public string ScheduleRollupLabel => CollectionNoun.ToUpperInvariant();
+
+    /// <summary>A new file's suggested name: new-chapter.md, new-scene.md, new-story.md.</summary>
+    public string NewFileStem => $"new-{UnitNoun.ToLowerInvariant()}";
+
+    /// <summary>A new divider's suggested path.</summary>
+    public string NewPartPath => Kind switch
+    {
+        ProjectKind.Story => "section-two/section.md",
+        ProjectKind.Anthology => "new-story/story.md",
+        _ => "part-two/part.md"
+    };
+
     public string InfoPanelTitle { get; }
     public string BookStatsTitle { get; }
     public string BookStatsBarLabel { get; }

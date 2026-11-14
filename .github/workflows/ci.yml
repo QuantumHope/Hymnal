@@ -8,6 +8,12 @@ on:
   pull_request:
   workflow_dispatch:
 
+# A pull request's newer push cancels its older run. Every other run (each push to main and its release, a manual
+# run) gets a group of its own, so a queued main push is never dropped and every passing main build is released.
+concurrency:
+  group: ci-${{ github.event_name == 'pull_request' && github.ref || github.run_id }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
 jobs:
   build:
     name: Build and test

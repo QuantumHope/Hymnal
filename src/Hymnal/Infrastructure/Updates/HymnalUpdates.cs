@@ -1,5 +1,6 @@
 using System;
 using System.IO;
+using Hymnal.Core.Interfaces;
 using MattEland.HopeLab.Common;
 using MattEland.HopeLab.Updates;
 using MattEland.HopeLab.Updates.ReactiveUI;
@@ -8,7 +9,7 @@ namespace Hymnal.Infrastructure.Updates;
 
 /// <summary>
 /// Hymnal's side of the shared release updates (MattEland.HopeLab.Updates): where its releases come from, where it
-/// keeps update downloads and a GitHub token, and the wording of the update banner and Settings → Updates. The same
+/// keeps update downloads and a saved GitHub token, and the wording of the update banner and Settings → Updates. The same
 /// values are in <c>hopelab-app.json</c>, which the release workflow and the installers read.
 /// </summary>
 public static class HymnalUpdates
@@ -20,8 +21,8 @@ public static class HymnalUpdates
     public const string Executable = "Hymnal";
 
     /// <summary>
-    /// The per-user folder for update downloads (<c>updates/</c>) and a saved GitHub token (<c>github-token</c>), under
-    /// the home folder. Hymnal's settings stay in the OS app-data folder (<c>AppSettingsStore</c>); the installers need a
+    /// The per-user folder for update downloads (<c>updates/</c>), under the home folder. (A saved GitHub token goes in
+    /// Hymnal's credential store instead.) Hymnal's settings stay in the OS app-data folder (<c>AppSettingsStore</c>); the installers need a
     /// folder relative to home, so updates get their own.
     /// </summary>
     public const string DataFolderName = ".hymnal";
@@ -37,16 +38,21 @@ public static class HymnalUpdates
     public static string DefaultDataDirectory(string? home = null) =>
         Path.Combine(home ?? Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), DataFolderName);
 
-    public static AppUpdateOptions CreateOptions(string? dataDirectory = null) =>
+    /// <param name="credentials">
+    /// Hymnal's secret storage. A GitHub token saved in Settings → Updates is kept there (<see cref="CredentialTokenStore"/>),
+    /// never in the shared library's plain <c>github-token</c> file.
+    /// </param>
+    public static AppUpdateOptions CreateOptions(ICredentialStore credentials, string? dataDirectory = null) =>
         new(AppName, Repository, dataDirectory ?? DefaultDataDirectory(), Executable)
         {
             WindowsSetupAppId = WindowsSetupAppId,
             TokenVariable = TokenVariable,
+            TokenStore = new CredentialTokenStore(credentials),
         };
 
     /// <summary>The real update service: checks GitHub and installs over the running copy's own folder.</summary>
-    public static IUpdateService CreateService(AppUpdateOptions? options = null) =>
-        new AppUpdateService(new AppUpdater(options ?? CreateOptions(), SystemClock.Instance));
+    public static IUpdateService CreateService(ICredentialStore credentials) =>
+        new AppUpdateService(new AppUpdater(CreateOptions(credentials), SystemClock.Instance));
 
     /// <param name="hasUnsavedChanges">True while restarting would need to save first (the editor is dirty).</param>
     public static UpdatesViewModel CreateViewModel(IUpdateService? service, IUpdateHost host, Func<bool> hasUnsavedChanges) =>

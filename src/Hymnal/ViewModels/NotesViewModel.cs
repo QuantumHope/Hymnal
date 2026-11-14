@@ -80,6 +80,9 @@ public class NotesViewModel : ViewModelBase, IDisposable
     /// <summary>Text typed but not yet saved (null when nothing is pending); taken by whichever save runs first.</summary>
     private string? _pendingText;
 
+    /// <summary>True while typed notes are waiting on the debounce (or a failed save) to be written.</summary>
+    public bool HasPendingChanges => Volatile.Read(ref _pendingText) is not null;
+
     /// <summary>One notes save at a time, so a flush waits for one already writing.</summary>
     private readonly SemaphoreSlim _saveGate = new(1, 1);
 
@@ -102,6 +105,10 @@ public class NotesViewModel : ViewModelBase, IDisposable
 
     public ReactiveCommand<Unit, Unit> ToggleCommand { get; }
 
+    private readonly ObservableAsPropertyHelper<string> _emptyStateText;
+    /// <summary>What the panel says when nothing is open, in the project's words.</summary>
+    public string EmptyStateText => _emptyStateText.Value;
+
     // ── Constructor ───────────────────────────────────────────────────────────
 
     public NotesViewModel(
@@ -113,6 +120,11 @@ public class NotesViewModel : ViewModelBase, IDisposable
         _workspaceViewModel = workspaceViewModel;
         _notificationService = notificationService;
         _settingsStore = settingsStore;
+
+        _emptyStateText = workspaceViewModel.WhenAnyValue(x => x.Profile)
+            .Select(p => p.OpenSomethingTo("start taking notes"))
+            .ToProperty(this, x => x.EmptyStateText);
+        Disposables.Add(_emptyStateText);
 
         try
         {

@@ -1,0 +1,179 @@
+<!-- Imported from OneRing f378709 (src/OneRing.Desktop/Themes/Synthwave.Dark.axaml) by tools/OneRingThemeImport. Re-run it rather than editing this file. -->
+<!--
+  "Synthwave", after Hymnal (src/Hymnal/Themes/SynthwaveTheme.axaml and the gradients in its MainWindow): violet
+  night, a magenta horizon glowing at the foot of the window, and a purple-pink-cyan neon band along the status bar.
+  Same keys as Cora.Dark.axaml. Accents keep their operation meanings (§17.1), recoloured from Hymnal's set:
+  Store = neon violet, Create = sun yellow, Merge = magenta, Retrieve = cyan, Success = mint, Error = red,
+  Unknown = orange. The sun, the neon band and the glows are switched on by Synthwave.Controls.axaml.
+-->
+<ResourceDictionary xmlns="https://github.com/avaloniaui"
+                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+
+  <!-- Surfaces: Hymnal's base, elevated and overlay -->
+  <Color x:Key="Cora.Surface.Void.Color">#0C0A20</Color>
+  <Color x:Key="Cora.Surface.Panel.Color">#130F22</Color>
+  <Color x:Key="Cora.Surface.Elevated.Color">#1E1636</Color>
+  <Color x:Key="Cora.Surface.Header.Color">#160833</Color>
+  <Color x:Key="Cora.Surface.HeaderEnd.Color">#1B0838</Color>
+  <Color x:Key="Cora.Surface.Sidebar.Color">#0B0820</Color>
+  <Color x:Key="Cora.Surface.Live.Color">#22D3A0</Color>
+
+  <!-- Text -->
+  <Color x:Key="Cora.Text.Color">#EDE8F5</Color>
+  <Color x:Key="Cora.Text.Secondary.Color">#A497C2</Color>
+  <Color x:Key="Cora.Text.Machine.Color">#9A8EBA</Color>
+  <Color x:Key="Cora.Text.Disabled.Color">#574E70</Color>
+  <Color x:Key="Cora.IconInk.Color">#0C0A20</Color>
+
+  <!-- Borders -->
+  <Color x:Key="Cora.Border.Header.Color">#809D4EDD</Color>
+  <Color x:Key="Cora.Border.Subtle.Color">#2D2540</Color>
+  <Color x:Key="Cora.Border.Input.Color">#4A3F75</Color>
+  <Color x:Key="Cora.Border.Focus.Color">#B469F0</Color>
+
+  <!-- Accents -->
+  <Color x:Key="Cora.Accent.Store.Color">#B469F0</Color>
+  <Color x:Key="Cora.Accent.Create.Color">#F5C842</Color>
+  <Color x:Key="Cora.Accent.Merge.Color">#F0389E</Color>
+  <Color x:Key="Cora.Accent.Retrieve.Color">#38BDF8</Color>
+  <Color x:Key="Cora.Accent.Success.Color">#22D3A0</Color>
+  <Color x:Key="Cora.Accent.Error.Color">#FF5A5C</Color>
+  <Color x:Key="Cora.Accent.Unknown.Color">#FF8A4C</Color>
+
+  <!-- Ornament colours (used only by Synthwave.Controls.axaml) -->
+  <Color x:Key="Synthwave.Purple.Color">#9D4EDD</Color>
+  <Color x:Key="Synthwave.Pink.Color">#E91E8C</Color>
+  <Color x:Key="Synthwave.Cyan.Color">#38BDF8</Color>
+  <Color x:Key="Synthwave.Yellow.Color">#F5C842</Color>
+
+  <SolidColorBrush x:Key="Cora.Surface.Void" Color="{StaticResource Cora.Surface.Void.Color}" />
+  <SolidColorBrush x:Key="Cora.Surface.Panel" Color="{StaticResource Cora.Surface.Panel.Color}" />
+  <SolidColorBrush x:Key="Cora.Surface.Elevated" Color="{StaticResource Cora.Surface.Elevated.Color}" />
+  <SolidColorBrush x:Key="Cora.Surface.Header" Color="{StaticResource Cora.Surface.Header.Color}" />
+  <SolidColorBrush x:Key="Cora.Surface.Sidebar" Color="{StaticResource Cora.Surface.Sidebar.Color}" />
+  <SolidColorBrush x:Key="Cora.Surface.Live" Color="{StaticResource Cora.Surface.Live.Color}" />
+  <!-- Hymnal's night sky, with its horizon glow folded into the last stops -->
+  <LinearGradientBrush x:Key="Cora.Surface.Window" StartPoint="0%,0%" EndPoint="0%,100%">
+    <GradientStop Offset="0" Color="#0B0820" />
+    <GradientStop Offset="0.55" Color="#0F082A" />
+    <GradientStop Offset="0.82" Color="#170834" />
+    <GradientStop Offset="1" Color="#2E0A44" />
+  </LinearGradientBrush>
+  <SolidColorBrush x:Key="Cora.Scrim" Color="#CC0C0A20" />
+  <SolidColorBrush x:Key="Cora.Terminal.Background" Color="{StaticResource Cora.Surface.Void.Color}" />
+  <SolidColorBrush x:Key="Cora.Terminal.Text" Color="{StaticResource Cora.Text.Color}" />
+  <SolidColorBrush x:Key="Cora.Surface" Color="{StaticResource Cora.Surface.Panel.Color}" />
+  <SolidColorBrush x:Key="Cora.Text" Color="{StaticResource Cora.Text.Color}" />
+  <SolidColorBrush x:Key="Cora.Text.Secondary" Color="{StaticResource Cora.Text.Secondary.Color}" />
+  <SolidColorBrush x:Key="Cora.Text.Machine" Color="{StaticResource Cora.Text.Machine.Color}" />
+  <SolidColorBrush x:Key="Cora.Text.Disabled" Color="{StaticResource Cora.Text.Disabled.Color}" />
+  <SolidColorBrush x:Key="Cora.IconInk" Color="{StaticResource Cora.IconInk.Color}" />
+  <SolidColorBrush x:Key="Cora.Border.Header" Color="{StaticResource Cora.Border.Header.Color}" />
+  <SolidColorBrush x:Key="Cora.Border.Subtle" Color="{StaticResource Cora.Border.Subtle.Color}" />
+  <SolidColorBrush x:Key="Cora.Border.Input" Color="{StaticResource Cora.Border.Input.Color}" />
+  <SolidColorBrush x:Key="Cora.Border.Focus" Color="{StaticResource Cora.Border.Focus.Color}" />
+  <SolidColorBrush x:Key="Cora.Accent.Store" Color="{StaticResource Cora.Accent.Store.Color}" />
+  <SolidColorBrush x:Key="Cora.Accent.Create" Color="{StaticResource Cora.Accent.Create.Color}" />
+  <SolidColorBrush x:Key="Cora.Accent.Merge" Color="{StaticResource Cora.Accent.Merge.Color}" />
+  <SolidColorBrush x:Key="Cora.Accent.Retrieve" Color="{StaticResource Cora.Accent.Retrieve.Color}" />
+  <SolidColorBrush x:Key="Cora.Accent.Success" Color="{StaticResource Cora.Accent.Success.Color}" />
+  <SolidColorBrush x:Key="Cora.Accent.Error" Color="{StaticResource Cora.Accent.Error.Color}" />
+  <SolidColorBrush x:Key="Cora.Accent.Unknown" Color="{StaticResource Cora.Accent.Unknown.Color}" />
+
+  <SolidColorBrush x:Key="Synthwave.Purple" Color="{StaticResource Synthwave.Purple.Color}" />
+  <SolidColorBrush x:Key="Synthwave.Pink" Color="{StaticResource Synthwave.Pink.Color}" />
+  <SolidColorBrush x:Key="Synthwave.Cyan" Color="{StaticResource Synthwave.Cyan.Color}" />
+  <SolidColorBrush x:Key="Synthwave.Yellow" Color="{StaticResource Synthwave.Yellow.Color}" />
+  <!-- Hymnal's neon band: purple, magenta, cyan -->
+  <LinearGradientBrush x:Key="Synthwave.Neon" StartPoint="0%,0%" EndPoint="100%,0%">
+    <GradientStop Offset="0" Color="#9D4EDD" />
+    <GradientStop Offset="0.5" Color="#E91E8C" />
+    <GradientStop Offset="1" Color="#38BDF8" />
+  </LinearGradientBrush>
+  <!-- The setting sun: yellow at the top, through magenta, to violet at the horizon -->
+  <LinearGradientBrush x:Key="Synthwave.Sun" StartPoint="0%,0%" EndPoint="0%,100%">
+    <GradientStop Offset="0" Color="#FFE066" />
+    <GradientStop Offset="0.5" Color="#FF4FA3" />
+    <GradientStop Offset="1" Color="#9D4EDD" />
+  </LinearGradientBrush>
+  <LinearGradientBrush x:Key="Synthwave.PrimaryButton" StartPoint="0%,0%" EndPoint="100%,0%">
+    <GradientStop Offset="0" Color="#9D4EDD" />
+    <GradientStop Offset="1" Color="#E91E8C" />
+  </LinearGradientBrush>
+  <LinearGradientBrush x:Key="Synthwave.PrimaryButtonHot" StartPoint="0%,0%" EndPoint="100%,0%">
+    <GradientStop Offset="0" Color="#B469F0" />
+    <GradientStop Offset="1" Color="#FF3FA0" />
+  </LinearGradientBrush>
+
+  <!-- Tinted washes -->
+  <SolidColorBrush x:Key="Cora.Wash.Store" Color="#29B469F0" />
+  <SolidColorBrush x:Key="Cora.Wash.Error" Color="#33FF5A5C" />
+  <SolidColorBrush x:Key="Cora.Wash.Merge" Color="#29F0389E" />
+  <SolidColorBrush x:Key="Cora.Wash.Warning" Color="#33FF8A4C" />
+  <SolidColorBrush x:Key="Cora.Wash.Hover" Color="#14B469F0" />
+  <LinearGradientBrush x:Key="Cora.Wash.Selected" StartPoint="0%,0%" EndPoint="100%,0%">
+    <GradientStop Offset="0" Color="#409D4EDD" />
+    <GradientStop Offset="1" Color="#10E91E8C" />
+  </LinearGradientBrush>
+
+  <!-- Status bar and rail -->
+  <LinearGradientBrush x:Key="Cora.Gradient.Header" StartPoint="0%,0%" EndPoint="100%,0%">
+    <GradientStop Offset="0" Color="#1B0838" />
+    <GradientStop Offset="0.5" Color="#0C0A20" />
+    <GradientStop Offset="1" Color="#0B1630" />
+  </LinearGradientBrush>
+  <LinearGradientBrush x:Key="Cora.Gradient.Sidebar" StartPoint="0%,0%" EndPoint="0%,100%">
+    <GradientStop Offset="0" Color="#130F22" />
+    <GradientStop Offset="0.7" Color="#0F0A26" />
+    <GradientStop Offset="1" Color="#1E0A3A" />
+  </LinearGradientBrush>
+
+  <!-- Typography: Hymnal's faces, bundled (OFL) -->
+  <FontFamily x:Key="Cora.Font.Machine">avares://Hymnal/Assets/Fonts#JetBrains Mono, Cascadia Mono, Consolas, monospace</FontFamily>
+  <FontFamily x:Key="Cora.Font.Persona">avares://Hymnal/Assets/Fonts#Inter, Segoe UI, DejaVu Sans, sans-serif</FontFamily>
+  <FontFamily x:Key="Cora.Font.Heading">avares://Hymnal/Assets/Fonts#Inter, Segoe UI, DejaVu Sans, sans-serif</FontFamily>
+  <FontFamily x:Key="Cora.Font.Caps">avares://Hymnal/Assets/Fonts#JetBrains Mono, Cascadia Mono, Consolas, monospace</FontFamily>
+  <FontFamily x:Key="Cora.Font.Display">avares://Hymnal/Assets/Fonts#Inter, Segoe UI, DejaVu Sans, sans-serif</FontFamily>
+  <x:Double x:Key="Cora.Type.Display">28</x:Double>
+  <x:Double x:Key="Cora.Type.Heading">20</x:Double>
+  <x:Double x:Key="Cora.Type.Subheading">16</x:Double>
+  <x:Double x:Key="Cora.Type.Body">14</x:Double>
+  <x:Double x:Key="Cora.Type.Label">12</x:Double>
+  <x:Double x:Key="Cora.Type.Micro">11</x:Double>
+  <x:Double x:Key="Cora.Type.Machine">12</x:Double>
+
+  <x:Double x:Key="Cora.Space.Xs">4</x:Double>
+  <x:Double x:Key="Cora.Space.Sm">8</x:Double>
+  <x:Double x:Key="Cora.Space.Md">16</x:Double>
+  <x:Double x:Key="Cora.Space.Lg">24</x:Double>
+  <x:Double x:Key="Cora.Space.Xl">32</x:Double>
+  <CornerRadius x:Key="Cora.Radius">4</CornerRadius>
+  <CornerRadius x:Key="Cora.Radius.Pill">10</CornerRadius>
+
+
+  <!-- The primary button under the pointer: a step lighter (dark themes) or darker (light) than Store -->
+  <SolidColorBrush x:Key="Cora.Accent.Store.Hot" Color="#C88BF5" />
+
+  <!-- The status-bar motto and signature chrome are CORA's; this theme draws its own -->
+  <x:String x:Key="Theme.Text.Motto">&#160;</x:String>
+  <x:String x:Key="Theme.Chrome">none</x:String>
+
+  <!-- Fluent palette -->
+  <Color x:Key="Fluent.Accent">#B469F0</Color>
+  <Color x:Key="Fluent.Region">#0C0A20</Color>
+  <Color x:Key="Fluent.BaseHigh">#EDE8F5</Color>
+  <Color x:Key="Fluent.ChromeMedium">#1E1636</Color>
+  <Color x:Key="Fluent.ChromeMediumLow">#130F22</Color>
+  <Color x:Key="Fluent.ChromeLow">#160833</Color>
+  <Color x:Key="Fluent.ErrorText">#FF5A5C</Color>
+
+  <!-- Chart series: the validated dark steps. Neon would read as accents (operations), so it stays out of charts. -->
+  <SolidColorBrush x:Key="Cora.Viz.Series1" Color="#3987E5" />
+  <SolidColorBrush x:Key="Cora.Viz.Series2" Color="#D95926" />
+  <SolidColorBrush x:Key="Cora.Viz.Series3" Color="#199E70" />
+  <SolidColorBrush x:Key="Cora.Viz.Series4" Color="#C98500" />
+  <SolidColorBrush x:Key="Cora.Viz.Series5" Color="#D55181" />
+  <SolidColorBrush x:Key="Cora.Viz.Series6" Color="#008300" />
+  <SolidColorBrush x:Key="Cora.Viz.Series7" Color="#9085E9" />
+  <SolidColorBrush x:Key="Cora.Viz.Other" Color="#6E6C80" />
+</ResourceDictionary>

@@ -1,0 +1,32 @@
+<!--
+  Scriptorium of the Eye's decoration in Hymnal (after OneRing's Mordor.Controls.axaml): gold-leaf rules above and
+  below the page, the wax purity seals shown, labels in Cinzel and headings in blackletter (the theme's faces), and a
+  gold motto in the status strip. Loaded after App.axaml's base styles while this theme is applied.
+-->
+<Styles xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:controls="using:Hymnal.Views.Controls">
+
+  <Style Selector="Border.band">
+    <Setter Property="Height" Value="2" />
+    <Setter Property="Background" Value="{DynamicResource Mordor.GoldLeaf}" />
+  </Style>
+
+  <Style Selector="controls|PuritySeal">
+    <Setter Property="IsVisible" Value="True" />
+    <Setter Property="Wax" Value="{DynamicResource Mordor.Wax}" />
+    <Setter Property="WaxDeep" Value="{DynamicResource Mordor.WaxDeep}" />
+    <Setter Property="Parchment" Value="{DynamicResource Mordor.Parchment}" />
+    <Setter Property="Ink" Value="{DynamicResource Mordor.Ink}" />
+    <Setter Property="ScriptFont" Value="{DynamicResource Cora.Font.Persona}" />
+  </Style>
+
+  <Style Selector="TextBlock.motto">
+    <Setter Property="Text" Value="&#x2726; SCRIPTORIUM OF THE EYE &#x2726;" />
+    <Setter Property="Foreground" Value="{DynamicResource Mordor.Gold}" />
+  </Style>
+
+  <Style Selector="TextBlock.heading">
+    <Setter Property="Foreground" Value="{DynamicResource Mordor.Gold}" />
+  </Style>
+</Styles>

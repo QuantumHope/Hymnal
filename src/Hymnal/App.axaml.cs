@@ -8,9 +8,11 @@ using Hymnal.Core.Infrastructure;
 using Hymnal.Core.Infrastructure.Ai;
 using Hymnal.Core.Interfaces;
 using Hymnal.Core.Services;
+using Hymnal.Core.Submission;
 using Hymnal.Core.Services.Ai;
 using Hymnal.Infrastructure;
 using Hymnal.Infrastructure.Updates;
+using Hymnal.Theming;
 using Hymnal.ViewModels;
 using Hymnal.ViewModels.Ai;
 using Hymnal.Views;
@@ -47,6 +49,9 @@ public partial class App : Application
 
         // S02 services
         services.AddSingleton<IAppSettingsStore, AppSettingsStore>();
+        // Themes: the picker in Settings swaps them at runtime; the choice is kept in the app settings
+        services.AddSingleton(sp => new ThemeManager(new ThemePreference(sp.GetRequiredService<IAppSettingsStore>())));
+        services.AddSingleton<IThemeService>(sp => sp.GetRequiredService<ThemeManager>());
         services.AddSingleton<ManuscriptService>();
 
         // Sound: preferences, the audio output (opened only while a sound is on) and the typewriter
@@ -148,6 +153,25 @@ public partial class App : Application
                     ? TopLevel.GetTopLevel(dl.MainWindow)
                     : null));
 
+        services.AddSingleton<ISaveFilePickerService>(sp => (FilePickerService)sp.GetRequiredService<IFilePickerService>());
+
+        services.AddSingleton<SubmissionExportService>();
+        services.AddSingleton<SubmissionExportViewModel>(sp =>
+            new SubmissionExportViewModel(
+                sp.GetRequiredService<WorkspaceViewModel>(),
+                sp.GetRequiredService<SubmissionExportService>(),
+                sp.GetRequiredService<IAppSettingsStore>(),
+                sp.GetRequiredService<ISaveFilePickerService>(),
+                sp.GetRequiredService<INotificationService>(),
+                async () =>
+                {
+                    var notes = await sp.GetRequiredService<NotesViewModel>().FlushAsync();
+                    var schedule = await sp.GetRequiredService<ChapterInfoViewModel>().FlushScheduleAsync();
+                    var writeBeats = await sp.GetRequiredService<WriteBeatsViewModel>().FlushAsync();
+                    return notes && schedule && writeBeats;
+                },
+                sp.GetRequiredService<EditorViewModel>()));
+
         services.AddSingleton<ProjectSettingsService>();
         services.AddSingleton<ProjectInitializer>();
         services.AddSingleton<IProjectInitPrompt>(sp =>
@@ -176,7 +200,8 @@ public partial class App : Application
                 sp.GetRequiredService<ProjectInitializer>(),
                 sp.GetRequiredService<IProjectInitPrompt>(),
                 sp.GetRequiredService<INotesService>(),
-                sp.GetRequiredService<IBeatBoardService>()));
+                sp.GetRequiredService<IBeatBoardService>(),
+                sp.GetRequiredService<CollectionService>()));
 
         services.AddSingleton<NotesViewModel>(sp =>
             new NotesViewModel(
@@ -247,13 +272,64 @@ public partial class App : Application
                 sp.GetRequiredService<WorkspaceViewModel>(),
                 sp.GetRequiredService<INotificationService>()));
 
+        services.AddSingleton<CollectionService>(sp => new CollectionService(sp.GetRequiredService<IMetadataStore>()));
+        services.AddSingleton<CollectionsViewModel>(sp =>
+            new CollectionsViewModel(
+                sp.GetRequiredService<WorkspaceViewModel>(),
+                sp.GetRequiredService<CollectionService>(),
+                sp.GetRequiredService<INotificationService>(),
+                async () =>
+                {
+                    var notes = await sp.GetRequiredService<NotesViewModel>().FlushAsync();
+                    var schedule = await sp.GetRequiredService<ChapterInfoViewModel>().FlushScheduleAsync();
+                    var beats = await sp.GetRequiredService<PlanHostViewModel>().FlushAsync();
+                    var writeBeats = await sp.GetRequiredService<WriteBeatsViewModel>().FlushAsync();
+                    return notes && schedule && beats && writeBeats;
+                },
+                sp.GetRequiredService<EditorViewModel>()));
+
+        // Write mode's Beats panel has its own board, so it never changes the one Plan shows.
+        services.AddSingleton<WriteBeatsViewModel>(sp =>
+            new WriteBeatsViewModel(
+                sp.GetRequiredService<WorkspaceViewModel>(),
+                new BeatBoardViewModel(
+                    sp.GetRequiredService<WorkspaceViewModel>(),
+                    sp.GetRequiredService<INotificationService>()),
+                sp.GetRequiredService<BeatBoardViewModel>(),
+                sp.GetRequiredService<IAppSettingsStore>(),
+                sp.GetRequiredService<INotificationService>()));
+
         services.AddSingleton<PlanHostViewModel>(sp =>
             new PlanHostViewModel(
                 sp.GetRequiredService<WorkspaceViewModel>(),
                 sp.GetRequiredService<CorkboardViewModel>(),
                 sp.GetRequiredService<BeatBoardViewModel>(),
                 sp.GetRequiredService<INotificationService>(),
-                sp.GetRequiredService<IBeatBoardService>()));
+                sp.GetRequiredService<IBeatBoardService>(),
+                sp.GetRequiredService<CollectionPlannerViewModel>()));
+
+        // An anthology's Plan mode: every collection side by side over a library of stories.
+        services.AddSingleton<CollectionPlanService>(sp =>
+            new CollectionPlanService(
+                sp.GetRequiredService<IMetadataStore>(),
+                sp.GetRequiredService<CollectionService>(),
+                sp.GetRequiredService<WordCountService>()));
+        services.AddSingleton<CollectionPlannerViewModel>(sp =>
+            new CollectionPlannerViewModel(
+                sp.GetRequiredService<WorkspaceViewModel>(),
+                sp.GetRequiredService<CollectionPlanService>(),
+                sp.GetRequiredService<ChapterRegistryService>(),
+                sp.GetRequiredService<INotificationService>(),
+                sp.GetRequiredService<CollectionsViewModel>(),
+                async () =>
+                {
+                    var notes = await sp.GetRequiredService<NotesViewModel>().FlushAsync();
+                    var schedule = await sp.GetRequiredService<ChapterInfoViewModel>().FlushScheduleAsync();
+                    var beats = await sp.GetRequiredService<PlanHostViewModel>().FlushAsync();
+                    var writeBeats = await sp.GetRequiredService<WriteBeatsViewModel>().FlushAsync();
+                    return notes && schedule && beats && writeBeats;
+                },
+                sp.GetRequiredService<EditorViewModel>()));
 
         // M006 — AI chat ViewModels (must be registered after Editor/Workspace VMs)
         services.AddSingleton<ConversationListViewModel>(sp =>
@@ -275,7 +351,7 @@ public partial class App : Application
                 sp.GetRequiredService<ConversationListViewModel>()));
 
         // Releases and in-app updates (hopelab-app.json; the shared MattEland.HopeLab.Updates libraries).
-        services.AddSingleton<IUpdateService>(_ => HymnalUpdates.CreateService());
+        services.AddSingleton<IUpdateService>(sp => HymnalUpdates.CreateService(sp.GetRequiredService<ICredentialStore>()));
         services.AddSingleton<UpdatesViewModel>(sp => HymnalUpdates.CreateViewModel(
             sp.GetRequiredService<IUpdateService>(),
             new HymnalUpdateHost(
@@ -299,10 +375,12 @@ public partial class App : Application
                 {
                     var notes = await sp.GetRequiredService<NotesViewModel>().FlushAsync();
                     var schedule = await sp.GetRequiredService<ChapterInfoViewModel>().FlushScheduleAsync();
-                    return notes && schedule;
+                    var writeBeats = await sp.GetRequiredService<WriteBeatsViewModel>().FlushAsync();
+                    return notes && schedule && writeBeats;
                 },
                 sp.GetRequiredService<SoundPreferences>(),
                 sp.GetRequiredService<TypingSoundPlayer>(),
+                sp.GetRequiredService<IThemeService>(),
                 sp.GetRequiredService<UpdatesViewModel>()));
 
         services.AddTransient<MainWindowViewModel>(sp =>
@@ -324,6 +402,9 @@ public partial class App : Application
                 sp.GetRequiredService<IdeasViewModel>(),
                 sp.GetRequiredService<PlanHostViewModel>(),
                 sp.GetRequiredService<SoundPreferences>(),
+                sp.GetRequiredService<WriteBeatsViewModel>(),
+                sp.GetRequiredService<CollectionsViewModel>(),
+                sp.GetRequiredService<SubmissionExportViewModel>(),
                 sp.GetRequiredService<UpdatesViewModel>()));
 
         _serviceProvider = services.BuildServiceProvider();
@@ -335,6 +416,8 @@ public partial class App : Application
         if (ApplicationLifetime is IClassicDesktopStyleApplicationLifetime desktop)
         {
             desktop.Exit += (_, _) => DisposeServices();
+            // The saved theme, before the first window draws
+            Services.GetRequiredService<ThemeManager>().ApplySaved();
             var vm = Services.GetRequiredService<MainWindowViewModel>();
             var window = new MainWindow { DataContext = vm };
             desktop.MainWindow = window;
@@ -359,7 +442,8 @@ public partial class App : Application
             services.GetRequiredService<IUpdateService>(),
             () => vm.SaveAllBeforeRestartAsync(RestartSaveTimeout),
             () => desktop.TryShutdown(),
-            services.GetRequiredService<INotificationService>());
+            services.GetRequiredService<INotificationService>(),
+            vm.CancelRestart);
         updates.RestartRequested += async (_, executable) => await restart.RestartAsync(executable);
 
         void StartChecks(object? sender, EventArgs e)

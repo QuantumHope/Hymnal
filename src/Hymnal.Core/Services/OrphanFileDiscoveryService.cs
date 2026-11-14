@@ -33,6 +33,13 @@ public sealed class OrphanFileDiscoveryService : IOrphanFileDiscoveryService
             if (IsUnderExcludedDirectory(manuscriptRootFull, absolutePath))
                 continue;
 
+            // Hymnal's own folders at the top: other collections' lists, and the copy published for LeanPub.
+            var topLevel = Path.GetRelativePath(manuscriptRootFull, absolutePath)
+                .Split(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar)[0];
+            if (string.Equals(topLevel, CollectionService.CollectionsFolder, StringComparison.OrdinalIgnoreCase)
+                || CollectionService.IsPublishedCopy(manuscriptRootFull, topLevel))
+                continue;
+
             var relativePath = Path.GetRelativePath(manuscriptRootFull, absolutePath)
                 .Replace('\\', '/');
 

@@ -1,0 +1,164 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:Hymnal.ViewModels"
+             xmlns:controls="using:Hymnal.Views.Controls"
+             xmlns:models="using:Hymnal.Core.Models"
+             x:Class="Hymnal.Views.CollectionBar"
+             x:DataType="vm:MainWindowViewModel">
+
+    <UserControl.Styles>
+        <Style Selector="Button.collection-pill">
+            <Setter Property="Padding" Value="10,2" />
+            <Setter Property="MinHeight" Value="0" />
+            <Setter Property="FontSize" Value="12" />
+            <Setter Property="CornerRadius" Value="11" />
+            <Setter Property="Cursor" Value="Hand" />
+            <Setter Property="Background" Value="Transparent" />
+            <Setter Property="BorderThickness" Value="1" />
+            <Setter Property="BorderBrush" Value="{DynamicResource Cora.Border.Subtle}" />
+            <Setter Property="Foreground" Value="{DynamicResource Cora.Text.Secondary}" />
+        </Style>
+        <Style Selector="Button.collection-pill:pointerover /template/ ContentPresenter#PART_ContentPresenter">
+            <Setter Property="Background" Value="{DynamicResource Cora.Wash.Hover}" />
+            <Setter Property="Foreground" Value="{DynamicResource Cora.Text}" />
+        </Style>
+        <Style Selector="Button.collection-pill.active">
+            <Setter Property="Cursor" Value="Arrow" />
+            <Setter Property="FontWeight" Value="SemiBold" />
+            <Setter Property="Background" Value="{DynamicResource Cora.Wash.Selected}" />
+            <Setter Property="BorderBrush" Value="{DynamicResource Cora.Accent.Merge}" />
+            <Setter Property="Foreground" Value="{DynamicResource Cora.Text}" />
+        </Style>
+    </UserControl.Styles>
+
+    <!-- Plan and Manage: which collection (book, story) is open, its size and progress, the story in focus, and
+         the collection menu (the same menu as Write's ⋯ button). -->
+    <Border Height="40"
+            Padding="12,0"
+            Background="{DynamicResource Cora.Surface.Panel}"
+            BorderBrush="{DynamicResource Cora.Border.Subtle}"
+            BorderThickness="0,0,0,1">
+        <Grid ColumnDefinitions="Auto,Auto,*,Auto">
+
+            <!-- The collection: click for the collection menu -->
+            <Button x:Name="CollectionTitleButton"
+                    Grid.Column="0"
+                    Classes="collection-title"
+                    Background="Transparent"
+                    BorderThickness="0"
+                    Padding="6,4"
+                    CornerRadius="4"
+                    Cursor="Hand"
+                    VerticalAlignment="Center"
+                    ToolTip.Tip="Collection menu: name, switch, publish"
+                    Click="CollectionTitleButton_Click">
+                <StackPanel Orientation="Horizontal" Spacing="8">
+                    <Path Data="M4 19.5A2.5 2.5 0 016.5 17H20M4 19.5A2.5 2.5 0 006.5 22H20V2H6.5A2.5 2.5 0 004 4.5v15z"
+                          Stroke="{DynamicResource Cora.Accent.Merge}"
+                          StrokeThickness="1.5"
+                          StrokeLineCap="Round"
+                          StrokeJoin="Round"
+                          Width="15" Height="15"
+                          Stretch="Uniform"
+                          VerticalAlignment="Center" />
+                    <!-- The noun labels a named collection; an unnamed one already shows the noun as its title. -->
+                    <TextBlock Text="{Binding WorkspaceViewModel.Profile.CollectionNoun}"
+                               IsVisible="{Binding WorkspaceViewModel.CollectionTitle, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"
+                               FontSize="11"
+                               VerticalAlignment="Center"
+                               Foreground="{DynamicResource Cora.Text.Secondary}" />
+                    <TextBlock Text="{Binding WorkspaceViewModel.CollectionDisplayName}"
+                               FontSize="14"
+                               FontWeight="Bold"
+                               MaxWidth="420"
+                               TextTrimming="CharacterEllipsis"
+                               VerticalAlignment="Center"
+                               Foreground="{DynamicResource Cora.Accent.Merge}" />
+                    <Path Data="M6 9l6 6 6-6"
+                          Stroke="{DynamicResource Cora.Text.Secondary}"
+                          StrokeThickness="1.6"
+                          StrokeLineCap="Round"
+                          StrokeJoin="Round"
+                          Width="10" Height="10"
+                          Stretch="Uniform"
+                          VerticalAlignment="Center" />
+                </StackPanel>
+            </Button>
+
+            <!-- Anthology story focus: the story in focus and the way back to the whole collection -->
+            <StackPanel Grid.Column="1"
+                        Orientation="Horizontal"
+                        Spacing="6"
+                        Margin="4,0,0,0"
+                        VerticalAlignment="Center"
+                        IsVisible="{Binding WorkspaceViewModel.IsStoryFocused}">
+                <TextBlock Text="›"
+                           VerticalAlignment="Center"
+                           Foreground="{DynamicResource Cora.Text.Disabled}" />
+                <Border Background="{DynamicResource Cora.Wash.Selected}"
+                        BorderBrush="{DynamicResource Cora.Accent.Store}"
+                        BorderThickness="1"
+                        CornerRadius="10"
+                        Padding="8,2">
+                    <TextBlock Text="{Binding WorkspaceViewModel.FocusedStoryTitle}"
+                               FontSize="12"
+                               FontWeight="SemiBold"
+                               MaxWidth="280"
+                               TextTrimming="CharacterEllipsis"
+                               Foreground="{DynamicResource Cora.Text}" />
+                </Border>
+                <Button Content="Show all"
+                        FontSize="11"
+                        Padding="6,2"
+                        Background="Transparent"
+                        BorderThickness="0"
+                        Cursor="Hand"
+                        Foreground="{DynamicResource Cora.Accent.Store}"
+                        ToolTip.Tip="Show every story in the collection"
+                        Command="{Binding WorkspaceViewModel.ShowWholeCollectionCommand}" />
+            </StackPanel>
+
+            <!-- Several collections over one folder of stories: each one, the open one highlighted; click to open -->
+            <ScrollViewer Grid.Column="2"
+                          Margin="16,0,12,0"
+                          HorizontalScrollBarVisibility="Hidden"
+                          VerticalScrollBarVisibility="Disabled"
+                          VerticalAlignment="Center"
+                          IsVisible="{Binding CollectionsViewModel.HasSeveral, FallbackValue=False}">
+                <ItemsControl ItemsSource="{Binding CollectionsViewModel.Collections}">
+                    <ItemsControl.ItemsPanel>
+                        <ItemsPanelTemplate>
+                            <StackPanel Orientation="Horizontal" Spacing="6" />
+                        </ItemsPanelTemplate>
+                    </ItemsControl.ItemsPanel>
+                    <ItemsControl.ItemTemplate>
+                        <DataTemplate x:DataType="models:CollectionInfo">
+                            <Button Classes="collection-pill"
+                                    Classes.active="{Binding IsActive}"
+                                    Click="CollectionPill_Click"
+                                    ToolTip.Tip="{Binding EntryCount, StringFormat='{}{0} in its list'}">
+                                <TextBlock Text="{Binding Title}"
+                                           MaxWidth="200"
+                                           TextTrimming="CharacterEllipsis" />
+                            </Button>
+                        </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                </ItemsControl>
+            </ScrollViewer>
+
+            <!-- Size and progress, as the sidebar's root row shows them -->
+            <StackPanel Grid.Column="3"
+                        Orientation="Horizontal"
+                        Spacing="10"
+                        VerticalAlignment="Center">
+                <TextBlock Text="{Binding WorkspaceViewModel.TotalWordCountTooltip}"
+                           FontSize="12"
+                           VerticalAlignment="Center"
+                           Foreground="{DynamicResource Cora.Text.Secondary}" />
+                <controls:StatusPieChart Segments="{Binding WorkspaceViewModel.BookStatusSummary}"
+                                         Width="18" Height="18"
+                                         VerticalAlignment="Center" />
+            </StackPanel>
+        </Grid>
+    </Border>
+</UserControl>

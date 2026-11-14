@@ -18,15 +18,15 @@ public sealed class UpdateViewsSmokeTests
     public void MainWindow_and_Settings_host_the_update_views()
     {
         var main = File.ReadAllText(HymnalUpdatesTests.RepositoryFile("src/Hymnal/Views/MainWindow.axaml"));
-        Assert.Contains("<views:UpdateBannerView DockPanel.Dock=\"Top\"", main);
+        Assert.Contains("<views:UpdateBannerView DataContext=\"{Binding Updates}\"", main);
         Assert.Contains("DataContext=\"{Binding Updates}\"", main);
         Assert.Contains("Command=\"{Binding Updates.CheckCommand}\"", main);
         // The banner sits above the shell, below the accent stripe.
-        Assert.True(main.IndexOf("UpdateBannerView", StringComparison.Ordinal) > main.IndexOf("Synthwave accent stripe (Row 1", StringComparison.Ordinal));
+        Assert.True(main.IndexOf("UpdateBannerView", StringComparison.Ordinal) > main.IndexOf("Accent band (Row 1", StringComparison.Ordinal));
 
         var settings = File.ReadAllText(HymnalUpdatesTests.RepositoryFile("src/Hymnal/Views/SettingsView.axaml"));
         Assert.Contains("<views:UpdatesSettingsView DataContext=\"{Binding Updates}\"", settings);
-        Assert.Contains("Text=\"Updates\"", settings);
+        Assert.Contains("CommandParameter=\"{x:Static vm:SettingsSection.Updates}\"", settings);
     }
 
     [Fact]
