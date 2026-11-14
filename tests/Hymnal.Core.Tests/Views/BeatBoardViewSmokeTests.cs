@@ -44,7 +44,7 @@ public sealed class BeatBoardViewSmokeTests
                 var picker = view.FindControl<ScrollViewer>("TemplatePickerPanel")!;
                 var beats = view.FindControl<ListBox>("BeatList")!;
                 Assert.True(picker.IsVisible);
-                Assert.False(beats.IsVisible);
+                Assert.False(beats.IsEffectivelyVisible);
                 Assert.Same(context.Board.TemplateOptions, view.FindControl<ItemsControl>("TemplatePicker")!.ItemsSource);
                 Assert.Same(context.Board.Beats, beats.ItemsSource);
 
@@ -53,7 +53,7 @@ public sealed class BeatBoardViewSmokeTests
                 LayoutView(view);
 
                 Assert.False(picker.IsVisible);
-                Assert.True(beats.IsVisible);
+                Assert.True(beats.IsEffectivelyVisible);
                 Assert.Equal(5, beats.ItemCount);
                 Assert.False(view.FindControl<Border>("ReadOnlyBanner")!.IsVisible);
 
@@ -63,7 +63,7 @@ public sealed class BeatBoardViewSmokeTests
                 await Within(context.Board.ChooseTemplateCommand.Execute().ToTask());
                 LayoutView(view);
                 Assert.True(picker.IsVisible);
-                Assert.False(beats.IsVisible);
+                Assert.False(beats.IsEffectivelyVisible);
                 Assert.False(apply.IsVisible);
                 Assert.True(view.FindControl<Button>("BackToBeatsButton")!.IsVisible);
             });

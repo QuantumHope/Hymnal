@@ -40,6 +40,41 @@ public sealed class BeatCardViewModel : ViewModelBase, IDisposable
 
     public string Id { get; }
 
+    private int _number;
+    /// <summary>Its place on the board, from 1 (kept current by <see cref="BeatBoardViewModel"/>).</summary>
+    public int Number
+    {
+        get => _number;
+        set
+        {
+            if (_number == value)
+                return;
+            this.RaiseAndSetIfChanged(ref _number, value);
+            this.RaisePropertyChanged(nameof(Numeral));
+        }
+    }
+
+    /// <summary>The number as a Roman numeral, as a book numbers its chapters ("IV").</summary>
+    public string Numeral => ToRoman(Number);
+
+    internal static string ToRoman(int number)
+    {
+        if (number <= 0)
+            return "";
+        var sb = new System.Text.StringBuilder();
+        foreach (var (value, symbol) in new[]
+                 {
+                     (1000, "M"), (900, "CM"), (500, "D"), (400, "CD"), (100, "C"), (90, "XC"),
+                     (50, "L"), (40, "XL"), (10, "X"), (9, "IX"), (5, "V"), (4, "IV"), (1, "I"),
+                 })
+            while (number >= value)
+            {
+                sb.Append(symbol);
+                number -= value;
+            }
+        return sb.ToString();
+    }
+
     private string _title;
     public string Title
     {

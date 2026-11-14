@@ -11,7 +11,7 @@
     <UserControl.Styles>
         <Style Selector="ListBox#BeatList ListBoxItem">
             <Setter Property="Padding" Value="0" />
-            <Setter Property="Margin" Value="0,0,0,10" />
+            <Setter Property="Margin" Value="0,0,0,8" />
             <Setter Property="Background" Value="Transparent" />
         </Style>
         <Style Selector="ListBox#BeatList ListBoxItem:selected /template/ ContentPresenter#PART_ContentPresenter">
@@ -20,22 +20,106 @@
         <Style Selector="ListBox#BeatList ListBoxItem:pointerover /template/ ContentPresenter#PART_ContentPresenter">
             <Setter Property="Background" Value="Transparent" />
         </Style>
+
+        <!-- Contents cards: all one size, so the board reads as a table of contents -->
         <Style Selector="Border.beat-card">
             <Setter Property="Background" Value="{DynamicResource Cora.Surface.Panel}" />
             <Setter Property="BorderBrush" Value="{DynamicResource Cora.Border.Subtle}" />
             <Setter Property="BorderThickness" Value="1" />
-            <Setter Property="CornerRadius" Value="12" />
-            <Setter Property="Padding" Value="12,10" />
-            <Setter Property="MaxWidth" Value="760" />
-            <Setter Property="HorizontalAlignment" Value="Left" />
+            <Setter Property="CornerRadius" Value="4" />
+            <Setter Property="Padding" Value="4,8,10,8" />
+            <Setter Property="Height" Value="92" />
+            <Setter Property="HorizontalAlignment" Value="Stretch" />
+            <Setter Property="Cursor" Value="Hand" />
+        </Style>
+        <Style Selector="Border.beat-card:pointerover">
+            <Setter Property="BorderBrush" Value="{DynamicResource Cora.Border.Input}" />
         </Style>
         <Style Selector="ListBox#BeatList ListBoxItem:selected Border.beat-card">
             <Setter Property="BorderBrush" Value="{DynamicResource Cora.Accent.Store}" />
+            <Setter Property="Background" Value="{DynamicResource Cora.Wash.Selected}" />
         </Style>
         <Style Selector="Border.beat-card.drop-target">
             <Setter Property="BorderBrush" Value="{DynamicResource Cora.Accent.Store}" />
             <Setter Property="BorderThickness" Value="1,3,1,1" />
         </Style>
+        <Style Selector="TextBlock.beat-numeral">
+            <Setter Property="FontFamily" Value="{DynamicResource Cora.Font.Display}" />
+            <Setter Property="FontSize" Value="20" />
+            <Setter Property="HorizontalAlignment" Value="Center" />
+            <Setter Property="VerticalAlignment" Value="Center" />
+            <Setter Property="Foreground" Value="{DynamicResource Cora.Accent.Store}" />
+        </Style>
+        <Style Selector="TextBlock.beat-card-title">
+            <Setter Property="FontFamily" Value="{DynamicResource Cora.Font.Heading}" />
+            <Setter Property="FontSize" Value="14" />
+            <Setter Property="FontWeight" Value="SemiBold" />
+            <Setter Property="TextTrimming" Value="CharacterEllipsis" />
+            <Setter Property="Foreground" Value="{DynamicResource Cora.Text}" />
+        </Style>
+        <Style Selector="TextBlock.beat-card-note">
+            <Setter Property="FontFamily" Value="{DynamicResource Cora.Font.Persona}" />
+            <Setter Property="FontSize" Value="12" />
+            <Setter Property="MaxLines" Value="2" />
+            <Setter Property="TextWrapping" Value="Wrap" />
+            <Setter Property="TextTrimming" Value="CharacterEllipsis" />
+            <Setter Property="Foreground" Value="{DynamicResource Cora.Text.Secondary}" />
+        </Style>
+        <Style Selector="TextBlock.beat-card-scene">
+            <Setter Property="FontSize" Value="10" />
+            <Setter Property="TextTrimming" Value="CharacterEllipsis" />
+            <Setter Property="Foreground" Value="{DynamicResource Cora.Accent.Retrieve}" />
+        </Style>
+        <Style Selector="TextBlock.untitled">
+            <Setter Property="FontStyle" Value="Italic" />
+            <Setter Property="Foreground" Value="{DynamicResource Cora.Text.Disabled}" />
+        </Style>
+
+        <!-- The page: the open beat, set like a manuscript leaf -->
+        <Style Selector="Border.beat-page">
+            <Setter Property="Background" Value="{DynamicResource Cora.Surface.Panel}" />
+            <Setter Property="BorderBrush" Value="{DynamicResource Cora.Border.Subtle}" />
+            <Setter Property="BorderThickness" Value="1" />
+            <Setter Property="CornerRadius" Value="4" />
+            <Setter Property="Padding" Value="32,20,32,20" />
+            <Setter Property="BoxShadow" Value="0 10 30 0 #40000000" />
+        </Style>
+        <Style Selector="TextBlock.page-title">
+            <Setter Property="FontFamily" Value="{DynamicResource Cora.Font.Heading}" />
+            <Setter Property="FontSize" Value="26" />
+            <Setter Property="FontWeight" Value="SemiBold" />
+            <Setter Property="TextWrapping" Value="Wrap" />
+            <Setter Property="Cursor" Value="IBeam" />
+            <Setter Property="Foreground" Value="{DynamicResource Cora.Text}" />
+        </Style>
+        <Style Selector="TextBox.page-title-editor">
+            <Setter Property="FontFamily" Value="{DynamicResource Cora.Font.Heading}" />
+            <Setter Property="FontSize" Value="26" />
+            <Setter Property="FontWeight" Value="SemiBold" />
+            <Setter Property="Padding" Value="6,2" />
+        </Style>
+        <Style Selector="TextBlock.page-note">
+            <Setter Property="FontFamily" Value="{DynamicResource Cora.Font.Persona}" />
+            <Setter Property="FontSize" Value="16" />
+            <Setter Property="LineHeight" Value="26" />
+            <Setter Property="TextWrapping" Value="Wrap" />
+            <Setter Property="Foreground" Value="{DynamicResource Cora.Text}" />
+        </Style>
+        <Style Selector="TextBox.page-note-editor">
+            <Setter Property="FontFamily" Value="{DynamicResource Cora.Font.Persona}" />
+            <Setter Property="FontSize" Value="16" />
+            <Setter Property="Padding" Value="10,8" />
+        </Style>
+        <Style Selector="Button.page-turn">
+            <Setter Property="Padding" Value="10,3" />
+            <Setter Property="MinHeight" Value="0" />
+            <Setter Property="FontSize" Value="12" />
+            <Setter Property="Background" Value="Transparent" />
+            <Setter Property="BorderThickness" Value="0" />
+            <Setter Property="Cursor" Value="Hand" />
+            <Setter Property="Foreground" Value="{DynamicResource Cora.Accent.Store}" />
+        </Style>
+
         <Style Selector="Border.template-card">
             <Setter Property="Background" Value="{DynamicResource Cora.Surface.Panel}" />
             <Setter Property="BorderBrush" Value="{DynamicResource Cora.Border.Subtle}" />
@@ -104,7 +188,8 @@
                            Margin="12,0,0,0"
                            Text="{Binding BoardTitle}"
                            VerticalAlignment="Center"
-                           FontSize="14"
+                           FontFamily="{DynamicResource Cora.Font.Heading}"
+                           FontSize="15"
                            FontWeight="SemiBold"
                            Foreground="{DynamicResource Cora.Text}" />
                 <Button x:Name="ApplyTemplateButton"
@@ -123,15 +208,17 @@
                         Content="← Back to beats"
                         Command="{Binding CancelTemplateChoiceCommand}"
                         IsVisible="{Binding IsChoosingTemplate}" />
-                <Button DockPanel.Dock="Right"
+                <Button x:Name="AddBeatButton"
+                        DockPanel.Dock="Right"
                         Content="+ Add beat"
                         Padding="12,4"
                         Background="{DynamicResource Cora.Accent.Store}"
                         Foreground="{DynamicResource Cora.IconInk}"
                         BorderThickness="0"
-                        ToolTip.Tip="Add a beat after the selected one"
+                        ToolTip.Tip="Add a beat after the open one"
                         IsVisible="{Binding !IsChoosingTemplate}"
-                        Command="{Binding AddBeatCommand}" />
+                        Command="{Binding AddBeatCommand}"
+                        Click="AddBeatButton_Click" />
             </DockPanel>
         </Border>
 
@@ -154,6 +241,7 @@
             <StackPanel Spacing="16">
                 <StackPanel Spacing="4" IsVisible="{Binding !IsChoosingTemplate}">
                     <TextBlock Text="How will this story unfold?"
+                               FontFamily="{DynamicResource Cora.Font.Heading}"
                                FontSize="20"
                                FontWeight="SemiBold"
                                Foreground="{DynamicResource Cora.Text}" />
@@ -164,6 +252,7 @@
                 </StackPanel>
                 <StackPanel Spacing="4" IsVisible="{Binding IsChoosingTemplate}">
                     <TextBlock Text="Apply a template"
+                               FontFamily="{DynamicResource Cora.Font.Heading}"
                                FontSize="20"
                                FontWeight="SemiBold"
                                Foreground="{DynamicResource Cora.Text}" />
@@ -190,6 +279,7 @@
                                         <Grid ColumnDefinitions="*,Auto" ColumnSpacing="8">
                                             <TextBlock Grid.Column="0"
                                                        Text="{Binding Name}"
+                                                       FontFamily="{DynamicResource Cora.Font.Heading}"
                                                        FontSize="16"
                                                        FontWeight="SemiBold"
                                                        TextWrapping="Wrap"
@@ -276,84 +366,215 @@
             </StackPanel>
         </ScrollViewer>
 
-        <!-- Ordered beat cards -->
-        <ListBox x:Name="BeatList"
-                 Grid.Row="2"
-                 Padding="16"
-                 Background="Transparent"
-                 IsVisible="{Binding ShowsBeats}"
-                 ItemsSource="{Binding Beats}"
-                 SelectedItem="{Binding Selected, Mode=TwoWay}">
-            <ListBox.ItemTemplate>
-                <DataTemplate DataType="vm:BeatCardViewModel">
-                    <Border Classes="beat-card"
-                            Loaded="BeatCard_Loaded">
-                        <Grid ColumnDefinitions="Auto,*,Auto"
-                              ColumnSpacing="10">
-                            <TextBlock Grid.Column="0"
-                                       Classes="beat-drag-handle"
-                                       Text="⠿"
-                                       FontSize="16"
-                                       Cursor="SizeAll"
-                                       VerticalAlignment="Top"
-                                       Margin="0,4,0,0"
-                                       ToolTip.Tip="Drag to reorder"
-                                       Foreground="{DynamicResource Cora.Text.Disabled}" />
-                            <StackPanel Grid.Column="1" Spacing="6">
-                                <TextBox Text="{Binding Title, Mode=TwoWay}"
-                                         PlaceholderText="Beat title"
-                                         IsReadOnly="{Binding !DataContext.CanEdit, ElementName=Root}"
-                                         FontSize="14"
-                                         FontWeight="SemiBold" />
-                                <TextBox Text="{Binding Note, Mode=TwoWay}"
-                                         PlaceholderText="What happens in this beat?"
-                                         IsReadOnly="{Binding !DataContext.CanEdit, ElementName=Root}"
-                                         AcceptsReturn="True"
-                                         TextWrapping="Wrap"
-                                         MinHeight="48" />
-                                <StackPanel Orientation="Horizontal"
-                                            Spacing="8"
-                                            IsVisible="{Binding DataContext.ShowsSceneLinks, ElementName=Root}">
-                                    <TextBlock Classes="field-label"
-                                               Text="SCENE"
-                                               VerticalAlignment="Center" />
-                                    <ComboBox MinWidth="200"
-                                              IsEnabled="{Binding DataContext.CanEdit, ElementName=Root}"
-                                              PlaceholderText="Missing scene"
-                                              ItemsSource="{Binding SceneChoices}"
-                                              SelectedItem="{Binding SelectedScene, Mode=TwoWay}">
-                                        <ComboBox.ItemTemplate>
-                                            <DataTemplate DataType="vm:SceneOption">
-                                                <TextBlock Text="{Binding Title}" />
-                                            </DataTemplate>
-                                        </ComboBox.ItemTemplate>
-                                    </ComboBox>
-                                    <TextBlock VerticalAlignment="Center"
-                                               FontSize="11"
-                                               Foreground="{DynamicResource Cora.Text.Disabled}"
-                                               Text="{Binding SceneStatusLabel}" />
-                                    <TextBlock VerticalAlignment="Center"
-                                               FontSize="11"
-                                               Foreground="{DynamicResource Cora.Text.Disabled}"
-                                               Text="{Binding SceneWordCount, StringFormat='{}{0:N0} words'}" />
+        <!-- The board as a book: the contents (uniform beat cards) beside the open page -->
+        <Grid Grid.Row="2"
+              ColumnDefinitions="360,*"
+              IsVisible="{Binding ShowsBeats}">
+
+            <!-- CONTENTS: every beat, numbered as a book numbers its chapters -->
+            <DockPanel Grid.Column="0">
+                <TextBlock DockPanel.Dock="Top"
+                           Classes="caps field-label"
+                           Margin="20,14,16,6"
+                           Text="CONTENTS" />
+                <ListBox x:Name="BeatList"
+                         Padding="12,0,12,16"
+                         Background="Transparent"
+                         ItemsSource="{Binding Beats}"
+                         SelectedItem="{Binding Selected, Mode=TwoWay}">
+                    <ListBox.ItemTemplate>
+                        <DataTemplate DataType="vm:BeatCardViewModel">
+                            <Border Classes="beat-card"
+                                    Loaded="BeatCard_Loaded">
+                                <Grid ColumnDefinitions="56,*,Auto">
+                                    <!-- Its numeral, like a chapter number -->
+                                    <!-- Long numerals (VIII, XIII) shrink to fit rather than crowd the title -->
+                                    <Viewbox Grid.Column="0"
+                                             Margin="4,0,8,0"
+                                             StretchDirection="DownOnly"
+                                             VerticalAlignment="Center">
+                                        <TextBlock Classes="beat-numeral"
+                                                   Text="{Binding Numeral}" />
+                                    </Viewbox>
+                                    <StackPanel Grid.Column="1" Spacing="3" VerticalAlignment="Center">
+                                        <TextBlock Classes="beat-card-title"
+                                                   Text="{Binding Title}"
+                                                   IsVisible="{Binding Title, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
+                                        <TextBlock Classes="beat-card-title untitled"
+                                                   Text="Untitled beat"
+                                                   IsVisible="{Binding Title, Converter={x:Static StringConverters.IsNullOrEmpty}}" />
+                                        <TextBlock Classes="beat-card-note"
+                                                   Text="{Binding Note}" />
+                                        <TextBlock Classes="beat-card-scene"
+                                                   IsVisible="{Binding SceneTitle, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"
+                                                   Text="{Binding SceneTitle, StringFormat='§ {0}'}" />
+                                    </StackPanel>
+                                    <TextBlock Grid.Column="2"
+                                               Classes="beat-drag-handle"
+                                               Text="⠿"
+                                               FontSize="15"
+                                               Cursor="SizeAll"
+                                               VerticalAlignment="Center"
+                                               Margin="6,0,0,0"
+                                               ToolTip.Tip="Drag to reorder"
+                                               Foreground="{DynamicResource Cora.Text.Disabled}" />
+                                </Grid>
+                            </Border>
+                        </DataTemplate>
+                    </ListBox.ItemTemplate>
+                </ListBox>
+            </DockPanel>
+
+            <!-- THE PAGE: the open beat, read like a manuscript; click the title or the note to write -->
+            <Border Grid.Column="1" Padding="8,16,24,20">
+                <Panel>
+                    <TextBlock IsVisible="{Binding !HasSelection}"
+                               HorizontalAlignment="Center"
+                               VerticalAlignment="Center"
+                               FontFamily="{DynamicResource Cora.Font.Persona}"
+                               FontSize="15"
+                               FontStyle="Italic"
+                               Foreground="{DynamicResource Cora.Text.Disabled}"
+                               Text="Choose a beat to open its page." />
+
+                    <Border x:Name="BeatPage"
+                            Classes="beat-page"
+                            IsVisible="{Binding HasSelection}">
+                        <DockPanel DataContext="{Binding Selected}">
+                            <!-- Where this page sits, and the way to the next -->
+                            <Grid DockPanel.Dock="Top" ColumnDefinitions="*,Auto">
+                                <TextBlock Classes="caps field-label"
+                                           VerticalAlignment="Center"
+                                           Text="{Binding DataContext.SelectedPosition, ElementName=Root}" />
+                                <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="4">
+                                    <Button Classes="page-turn"
+                                            Content="‹ Previous"
+                                            ToolTip.Tip="The beat before this one"
+                                            Command="{Binding DataContext.SelectPreviousCommand, ElementName=Root}" />
+                                    <Button Classes="page-turn"
+                                            Content="Next ›"
+                                            ToolTip.Tip="The beat after this one"
+                                            Command="{Binding DataContext.SelectNextCommand, ElementName=Root}" />
                                 </StackPanel>
+                            </Grid>
+
+                            <!-- Footer: the scene it happens in, and deleting it -->
+                            <StackPanel DockPanel.Dock="Bottom" Spacing="6" Margin="0,14,0,0">
+                                <Grid ColumnDefinitions="*,Auto">
+                                    <StackPanel Orientation="Horizontal"
+                                                Spacing="8"
+                                                IsVisible="{Binding DataContext.ShowsSceneLinks, ElementName=Root}">
+                                        <TextBlock Classes="field-label"
+                                                   Text="SCENE"
+                                                   VerticalAlignment="Center" />
+                                        <ComboBox MinWidth="200"
+                                                  IsEnabled="{Binding DataContext.CanEdit, ElementName=Root}"
+                                                  PlaceholderText="Missing scene"
+                                                  ItemsSource="{Binding SceneChoices}"
+                                                  SelectedItem="{Binding SelectedScene, Mode=TwoWay}">
+                                            <ComboBox.ItemTemplate>
+                                                <DataTemplate DataType="vm:SceneOption">
+                                                    <TextBlock Text="{Binding Title}" />
+                                                </DataTemplate>
+                                            </ComboBox.ItemTemplate>
+                                        </ComboBox>
+                                        <TextBlock VerticalAlignment="Center"
+                                                   FontSize="11"
+                                                   Foreground="{DynamicResource Cora.Text.Disabled}"
+                                                   Text="{Binding SceneStatusLabel}" />
+                                        <TextBlock VerticalAlignment="Center"
+                                                   FontSize="11"
+                                                   Foreground="{DynamicResource Cora.Text.Disabled}"
+                                                   Text="{Binding SceneWordCount, StringFormat='{}{0:N0} words'}" />
+                                    </StackPanel>
+                                    <Button Grid.Column="1"
+                                            Classes="beat-action"
+                                            Content="Delete beat"
+                                            ToolTip.Tip="Delete this beat (asks first)"
+                                            IsVisible="{Binding DataContext.CanEdit, ElementName=Root}"
+                                            Command="{Binding DataContext.DeleteBeatCommand, ElementName=Root}"
+                                            CommandParameter="{Binding}" />
+                                </Grid>
                                 <TextBlock IsVisible="{Binding IsSceneMissing}"
                                            FontSize="11"
                                            TextWrapping="Wrap"
                                            Foreground="{DynamicResource Cora.Accent.Unknown}"
                                            Text="{Binding SceneTitle, StringFormat='Linked scene {0} is no longer in the story. Choose None to unlink it.'}" />
                             </StackPanel>
-                            <Button Grid.Column="2"
-                                    Classes="beat-action"
-                                    VerticalAlignment="Top"
-                                    Content="Delete"
-                                    ToolTip.Tip="Delete this beat (asks first)"
-                                    Command="{Binding DataContext.DeleteBeatCommand, ElementName=Root}"
-                                    CommandParameter="{Binding}" />
-                        </Grid>
+
+                            <ScrollViewer HorizontalScrollBarVisibility="Disabled" Margin="0,10,0,0">
+                                <StackPanel Spacing="10" MaxWidth="720" HorizontalAlignment="Left">
+                                    <!-- Title: read, or click to write -->
+                                    <Panel>
+                                        <TextBlock x:Name="TitleDisplay"
+                                                   Classes="page-title"
+                                                   Text="{Binding Title}"
+                                                   Background="Transparent"
+                                                   MinHeight="34"
+                                                   ToolTip.Tip="Click to edit the title"
+                                                   Tapped="TitleDisplay_Tapped" />
+                                        <TextBlock Classes="page-title untitled"
+                                                   Text="Untitled beat"
+                                                   IsVisible="{Binding Title, Converter={x:Static StringConverters.IsNullOrEmpty}}"
+                                                   IsHitTestVisible="False" />
+                                        <TextBox x:Name="TitleEditor"
+                                                 Classes="page-title-editor"
+                                                 IsVisible="False"
+                                                 PlaceholderText="Beat title"
+                                                 Text="{Binding Title, Mode=TwoWay}"
+                                                 KeyDown="TitleEditor_KeyDown"
+                                                 LostFocus="Editor_LostFocus" />
+                                    </Panel>
+
+                                    <!-- A printer's ornament between the title and the text -->
+                                    <Grid ColumnDefinitions="*,Auto,*" Margin="0,2,0,4">
+                                        <Border Grid.Column="0" Height="1" VerticalAlignment="Center" Background="{DynamicResource Cora.Border.Subtle}" />
+                                        <TextBlock Grid.Column="1"
+                                                   Text="❦"
+                                                   Margin="12,0"
+                                                   FontSize="16"
+                                                   Foreground="{DynamicResource Cora.Accent.Store}" />
+                                        <Border Grid.Column="2" Height="1" VerticalAlignment="Center" Background="{DynamicResource Cora.Border.Subtle}" />
+                                    </Grid>
+
+                                    <!-- The note: read, or click to write on a full page -->
+                                    <Panel>
+                                        <Border x:Name="NoteDisplay"
+                                                Background="Transparent"
+                                                Cursor="IBeam"
+                                                MinHeight="160"
+                                                ToolTip.Tip="Click to write"
+                                                Tapped="NoteDisplay_Tapped">
+                                            <Panel>
+                                                <TextBlock Classes="page-note"
+                                                           Text="{Binding Note}" />
+                                                <TextBlock Classes="page-note untitled"
+                                                           IsVisible="{Binding Note, Converter={x:Static StringConverters.IsNullOrEmpty}}"
+                                                           Text="What happens in this beat? Click to write." />
+                                            </Panel>
+                                        </Border>
+                                        <TextBox x:Name="NoteEditor"
+                                                 Classes="page-note-editor"
+                                                 IsVisible="False"
+                                                 AcceptsReturn="True"
+                                                 TextWrapping="Wrap"
+                                                 MinHeight="320"
+                                                 PlaceholderText="What happens in this beat?"
+                                                 Text="{Binding Note, Mode=TwoWay}"
+                                                 KeyDown="NoteEditor_KeyDown"
+                                                 LostFocus="Editor_LostFocus" />
+                                    </Panel>
+                                    <TextBlock x:Name="EditHint"
+                                               IsVisible="False"
+                                               FontSize="11"
+                                               Foreground="{DynamicResource Cora.Text.Disabled}"
+                                               Text="Click away to keep it · Esc to undo" />
+                                </StackPanel>
+                            </ScrollViewer>
+                        </DockPanel>
                     </Border>
-                </DataTemplate>
-            </ListBox.ItemTemplate>
-        </ListBox>
+                </Panel>
+            </Border>
+        </Grid>
     </Grid>
 </UserControl>

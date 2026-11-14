@@ -148,4 +148,117 @@ public partial class BeatBoardView : UserControl
         _dragPressArgs = null;
         _dragStarted = false;
     }
+
+    // ── The page: read by default, click a field to write it ─────────────────
+    // The title and the note show as text; a click swaps that one field for its editor (bound two-way, so the
+    // board saves as usual). Clicking away or Enter (title) keeps the edit, Esc puts the text back as it was.
+
+    private TextBox? _editing;
+    private Control? _editingDisplay;
+    private string _editingOriginal = "";
+
+    private void TitleDisplay_Tapped(object? sender, TappedEventArgs e) => BeginEdit(TitleEditor, TitleDisplay);
+
+    private void NoteDisplay_Tapped(object? sender, TappedEventArgs e) => BeginEdit(NoteEditor, NoteDisplay);
+
+    private void BeginEdit(TextBox editor, Control display, bool selectAll = false)
+    {
+        if (DataContext is not BeatBoardViewModel { CanEdit: true })
+            return;
+        EndEdit();
+        _editing = editor;
+        _editingDisplay = display;
+        _editingOriginal = editor.Text ?? "";
+        display.IsVisible = false;
+        editor.IsVisible = true;
+        EditHint.IsVisible = true;
+        Avalonia.Threading.Dispatcher.UIThread.Post(() =>
+        {
+            editor.Focus();
+            if (selectAll)
+                editor.SelectAll();
+            else
+                editor.CaretIndex = editor.Text?.Length ?? 0;
+        });
+    }
+
+    private void EndEdit(bool revert = false)
+    {
+        if (_editing is not { } editor)
+            return;
+        _editing = null;
+        if (revert)
+            editor.Text = _editingOriginal;
+        editor.IsVisible = false;
+        if (_editingDisplay != null)
+            _editingDisplay.IsVisible = true;
+        _editingDisplay = null;
+        EditHint.IsVisible = false;
+    }
+
+    private void TitleEditor_KeyDown(object? sender, KeyEventArgs e)
+    {
+        if (e.Key == Key.Enter)
+        {
+            e.Handled = true;
+            EndEdit();
+        }
+        else if (e.Key == Key.Escape)
+        {
+            e.Handled = true;
+            EndEdit(revert: true);
+        }
+    }
+
+    private void NoteEditor_KeyDown(object? sender, KeyEventArgs e)
+    {
+        if (e.Key == Key.Escape)
+        {
+            e.Handled = true;
+            EndEdit(revert: true);
+        }
+        else if (e.Key == Key.Enter && e.KeyModifiers.HasFlag(KeyModifiers.Control))
+        {
+            e.Handled = true;
+            EndEdit();
+        }
+    }
+
+    private void Editor_LostFocus(object? sender, FocusChangedEventArgs e)
+    {
+        if (ReferenceEquals(sender, _editing))
+            EndEdit();
+    }
+
+    /// <summary>A new beat opens on the page with its title selected, ready to type over.</summary>
+    private void AddBeatButton_Click(object? sender, RoutedEventArgs e) =>
+        Avalonia.Threading.Dispatcher.UIThread.Post(
+            () => BeginEdit(TitleEditor, TitleDisplay, selectAll: true),
+            Avalonia.Threading.DispatcherPriority.Background);
+
+    protected override void OnDataContextChanged(EventArgs e)
+    {
+        base.OnDataContextChanged(e);
+        _pageSubscription?.Dispose();
+        if (DataContext is not BeatBoardViewModel vm)
+            return;
+
+        // Turning to another page ends any edit; a board with beats always has a page open (also after another
+        // story's board loads in its place).
+        void OpenFirstPage()
+        {
+            if (vm.ShowsBeats && vm.Selected == null && vm.Beats.Count > 0)
+                vm.Selected = vm.Beats[0];
+        }
+        System.Collections.Specialized.NotifyCollectionChangedEventHandler onBeats = (_, _) =>
+            Avalonia.Threading.Dispatcher.UIThread.Post(OpenFirstPage);
+        ((System.Collections.Specialized.INotifyCollectionChanged)vm.Beats).CollectionChanged += onBeats;
+        _pageSubscription = new System.Reactive.Disposables.CompositeDisposable(
+            ReactiveUI.WhenAnyMixin.WhenAnyValue(vm, x => x.Selected).Subscribe(_ => EndEdit()),
+            ReactiveUI.WhenAnyMixin.WhenAnyValue(vm, x => x.ShowsBeats).Subscribe(_ => OpenFirstPage()),
+            System.Reactive.Disposables.Disposable.Create(() =>
+                ((System.Collections.Specialized.INotifyCollectionChanged)vm.Beats).CollectionChanged -= onBeats));
+    }
+
+    private IDisposable? _pageSubscription;
 }

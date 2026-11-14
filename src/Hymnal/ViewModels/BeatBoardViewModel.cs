@@ -78,6 +78,20 @@ public sealed class BeatBoardViewModel : ViewModelBase, IDisposable
         _notifications = notifications;
         Beats = new ReadOnlyObservableCollection<BeatCardViewModel>(_beats);
 
+        // Every beat knows its place, for the board's numerals and the page's "Beat III of VIII".
+        Disposables.Add(CollectionChanges(_beats).Subscribe(_ =>
+        {
+            for (var i = 0; i < _beats.Count; i++)
+                _beats[i].Number = i + 1;
+            this.RaisePropertyChanged(nameof(SelectedPosition));
+        }));
+
+        SelectPreviousCommand = ReactiveCommand.Create(() => Step(-1),
+            this.WhenAnyValue(x => x.Selected).Select(s => s != null && s.Number > 1));
+        SelectNextCommand = ReactiveCommand.Create(() => Step(1),
+            Observable.CombineLatest(this.WhenAnyValue(x => x.Selected), CollectionChanges(_beats).StartWith(Unit.Default),
+                (s, _) => s != null && s.Number < _beats.Count));
+
         _isEmpty = CollectionChanges(_beats)
             .Select(_ => _beats.Count == 0)
             .StartWith(true)
@@ -208,10 +222,36 @@ public sealed class BeatBoardViewModel : ViewModelBase, IDisposable
     public bool ShowsSceneLinks => _showsSceneLinks.Value;
 
     private BeatCardViewModel? _selected;
+    /// <summary>The beat open on the page beside the board.</summary>
     public BeatCardViewModel? Selected
     {
         get => _selected;
-        set => this.RaiseAndSetIfChanged(ref _selected, value);
+        set
+        {
+            this.RaiseAndSetIfChanged(ref _selected, value);
+            this.RaisePropertyChanged(nameof(SelectedPosition));
+            this.RaisePropertyChanged(nameof(HasSelection));
+        }
+    }
+
+    public bool HasSelection => Selected != null;
+
+    /// <summary>"BEAT III OF VIII": where the open page sits in the story.</summary>
+    public string SelectedPosition => Selected == null
+        ? ""
+        : $"BEAT {Selected.Numeral} OF {BeatCardViewModel.ToRoman(_beats.Count)}";
+
+    /// <summary>Turn the page back / forward to the previous or next beat.</summary>
+    public ReactiveCommand<Unit, Unit> SelectPreviousCommand { get; }
+    public ReactiveCommand<Unit, Unit> SelectNextCommand { get; }
+
+    private void Step(int by)
+    {
+        if (Selected == null)
+            return;
+        var index = _beats.IndexOf(Selected) + by;
+        if (index >= 0 && index < _beats.Count)
+            Selected = _beats[index];
     }
 
     public IReadOnlyList<BeatTemplate> Templates => BeatTemplateLoader.All;
