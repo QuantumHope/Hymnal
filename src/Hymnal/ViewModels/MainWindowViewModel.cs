@@ -41,6 +41,12 @@ public class MainWindowViewModel : ViewModelBase
     /// <summary>Plan mode for story and anthology projects (beat boards); null when the app runs without it.</summary>
     public PlanHostViewModel? PlanHostViewModel { get; }
 
+    /// <summary>App-wide sound preferences (View → Sound); null when the host has no sound.</summary>
+    public Hymnal.Audio.SoundPreferences? SoundPreferences { get; }
+
+    /// <summary>View → Sound: turns all of Hymnal's sound on or off.</summary>
+    public ReactiveCommand<Unit, Unit> ToggleSoundCommand { get; }
+
     // ── Settings overlay ──────────────────────────────────────────────────────
 
     private bool _isSettingsOpen;
@@ -278,7 +284,8 @@ public class MainWindowViewModel : ViewModelBase
         AiChatViewModel aiChatViewModel,
         Func<SettingsViewModel> settingsVmFactory,
         IdeasViewModel? ideasViewModel = null,
-        PlanHostViewModel? planHostViewModel = null)
+        PlanHostViewModel? planHostViewModel = null,
+        Hymnal.Audio.SoundPreferences? soundPreferences = null)
     {
         _settingsStore = settingsStore;
         _workspaceVm = workspaceViewModel;
@@ -299,6 +306,8 @@ public class MainWindowViewModel : ViewModelBase
         AiChatViewModel = aiChatViewModel;
         IdeasViewModel = ideasViewModel;
         PlanHostViewModel = planHostViewModel;
+        SoundPreferences = soundPreferences;
+        ToggleSoundCommand = ReactiveCommand.Create(() => soundPreferences?.ToggleSound());
         _settingsVmFactory = settingsVmFactory;
 
         CorkboardViewModel.SetViewActive(false);

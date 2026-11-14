@@ -10,7 +10,9 @@ using AvaloniaEdit.Document;
 using AvaloniaEdit.Highlighting;
 using AvaloniaEdit.Highlighting.Xshd;
 using AvaloniaEdit.Rendering;
+using Hymnal.Audio;
 using Hymnal.Infrastructure;
+using Hymnal.Views.Editor;
 using Hymnal.ViewModels;
 using Microsoft.Extensions.DependencyInjection;
 using ReactiveUI;
@@ -33,6 +35,8 @@ public partial class EditorView : UserControl
     private bool _highlightingLoaded;
     private MarkuaColorizingTransformer? _markuaColorizer;
     private ValidationMargin? _validationMargin;
+    private TypingSoundHook? _typingSoundHook;
+    private bool _isAttached;
 
     public static readonly StyledProperty<bool> HasWorkspaceProperty =
         AvaloniaProperty.Register<EditorView, bool>(nameof(HasWorkspace));
@@ -41,6 +45,19 @@ public partial class EditorView : UserControl
     {
         get => GetValue(HasWorkspaceProperty);
         set => SetValue(HasWorkspaceProperty, value);
+    }
+
+    /// <summary>
+    /// Typing and deleting in this editor plays the typewriter sounds (when the user has them turned on).
+    /// Set on the Write surface only; Research and other editors stay quiet.
+    /// </summary>
+    public static readonly StyledProperty<bool> PlaysTypingSoundsProperty =
+        AvaloniaProperty.Register<EditorView, bool>(nameof(PlaysTypingSounds));
+
+    public bool PlaysTypingSounds
+    {
+        get => GetValue(PlaysTypingSoundsProperty);
+        set => SetValue(PlaysTypingSoundsProperty, value);
     }
 
     /// <summary>
@@ -88,6 +105,9 @@ public partial class EditorView : UserControl
 
         if (change.Property == HasWorkspaceProperty && DataContext is EditorViewModel vm)
             vm.HasWorkspace = change.GetNewValue<bool>();
+
+        if (change.Property == PlaysTypingSoundsProperty && _isAttached)
+            UpdateTypingSoundHook();
 
         if (change.Property == HeaderContentProperty)
         {
@@ -142,6 +162,15 @@ public partial class EditorView : UserControl
             PART_Editor.TextArea.TextView.ScrollOffsetChanged -= OnEditorScrolled;
         }));
 
+        _isAttached = true;
+        UpdateTypingSoundHook();
+        _viewDisposables.Add(Disposable.Create(() =>
+        {
+            _isAttached = false;
+            _typingSoundHook?.Dispose();
+            _typingSoundHook = null;
+        }));
+
         // VM → Editor: initial sync + react to DataContext changes.
         SubscribeToVmText();
         DataContextChanged += OnDataContextChanged;
@@ -169,6 +198,22 @@ public partial class EditorView : UserControl
         }
 
         _viewDisposables.Dispose();
+    }
+
+    // ── Typing sounds ────────────────────────────────────────────────────────
+
+    /// <summary>Hooks the editor up to the app's typing sounds while <see cref="PlaysTypingSounds"/> is set.</summary>
+    private void UpdateTypingSoundHook()
+    {
+        var player = PlaysTypingSounds ? App.Services?.GetService<TypingSoundPlayer>() : null;
+        if (player == null)
+        {
+            _typingSoundHook?.Dispose();
+            _typingSoundHook = null;
+            return;
+        }
+
+        _typingSoundHook ??= new TypingSoundHook(PART_Editor, player.Play);
     }
 
     // ── VM → Editor ──────────────────────────────────────────────────────────

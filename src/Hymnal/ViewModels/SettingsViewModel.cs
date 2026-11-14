@@ -6,6 +6,7 @@ using System.Collections.Specialized;
 using System.Reactive;
 using System.Reactive.Linq;
 using System.Threading.Tasks;
+using Hymnal.Audio;
 using Hymnal.Core.Common;
 using Hymnal.Core.Interfaces;
 using Hymnal.Core.Models;
@@ -61,6 +62,12 @@ public class SettingsViewModel : ViewModelBase
 
     /// <summary>Why "Keep everything in the story file" can't be turned on.</summary>
     public const string StorageOptionUnavailable = "Available when Book.txt lists exactly one story file.";
+
+    /// <summary>The Sound section; null when the host has no sound (the section is hidden).</summary>
+    public SoundSettingsViewModel? Sound { get; }
+
+    /// <summary>True when the Sound section applies.</summary>
+    public bool HasSound => Sound is not null;
 
     public ObservableCollection<ProviderProfileViewModel> Profiles { get; } = new();
 
@@ -131,7 +138,9 @@ public class SettingsViewModel : ViewModelBase
         IBeatBoardService? beatBoards = null,
         BeatBoardViewModel? beatBoard = null,
         StorageMigrator? storageMigrator = null,
-        Func<Task<bool>>? flushStoryEdits = null)
+        Func<Task<bool>>? flushStoryEdits = null,
+        SoundPreferences? sound = null,
+        TypingSoundPlayer? typingSounds = null)
     {
         _profileService = profileService;
         _credentials = credentials;
@@ -143,6 +152,11 @@ public class SettingsViewModel : ViewModelBase
         _beatBoard = beatBoard;
         _storageMigrator = storageMigrator;
         _flushStoryEdits = flushStoryEdits;
+        if (sound is not null)
+        {
+            Sound = new SoundSettingsViewModel(sound, typingSounds);
+            Disposables.Add(Sound);
+        }
 
         AddProfileCommand = ReactiveCommand.CreateFromTask(AddProfileAsync);
         Disposables.Add(AddProfileCommand.ThrownExceptions

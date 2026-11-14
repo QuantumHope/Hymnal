@@ -2,6 +2,8 @@ using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Controls.ApplicationLifetimes;
 using Avalonia.Markup.Xaml;
+using Hymnal.Audio;
+using Hymnal.Core.Audio;
 using Hymnal.Core.Infrastructure;
 using Hymnal.Core.Infrastructure.Ai;
 using Hymnal.Core.Interfaces;
@@ -41,6 +43,15 @@ public partial class App : Application
         // S02 services
         services.AddSingleton<IAppSettingsStore, AppSettingsStore>();
         services.AddSingleton<ManuscriptService>();
+
+        // Sound: preferences, the audio output (opened only while a sound is on) and the typewriter
+        services.AddSingleton<SoundSettingsService>();
+        services.AddSingleton<SoundPreferences>();
+        services.AddSingleton<IAudioEngine, OpenAlAudioEngine>();
+        services.AddSingleton<TypingSoundPlayer>(sp => new TypingSoundPlayer(
+            sp.GetRequiredService<IAudioEngine>(),
+            sp.GetRequiredService<SoundPreferences>(),
+            ThemeSoundSchemes.SynthwaveThemeId));
 
         // S03 services
         services.AddSingleton<IProcessRunner, GitProcessRunner>();
@@ -274,7 +285,9 @@ public partial class App : Application
                     var notes = await sp.GetRequiredService<NotesViewModel>().FlushAsync();
                     var schedule = await sp.GetRequiredService<ChapterInfoViewModel>().FlushScheduleAsync();
                     return notes && schedule;
-                }));
+                },
+                sp.GetRequiredService<SoundPreferences>(),
+                sp.GetRequiredService<TypingSoundPlayer>()));
 
         services.AddTransient<MainWindowViewModel>(sp =>
             new MainWindowViewModel(
@@ -293,10 +306,14 @@ public partial class App : Application
                 sp.GetRequiredService<AiChatViewModel>(),
                 () => sp.GetRequiredService<SettingsViewModel>(),
                 sp.GetRequiredService<IdeasViewModel>(),
-                sp.GetRequiredService<PlanHostViewModel>()));
+                sp.GetRequiredService<PlanHostViewModel>(),
+                sp.GetRequiredService<SoundPreferences>()));
 
         _serviceProvider = services.BuildServiceProvider();
         Services = _serviceProvider;
+
+        // Start the typewriter now, so sounds turned on last session are ready by the first keystroke.
+        Services.GetRequiredService<TypingSoundPlayer>();
 
         if (ApplicationLifetime is IClassicDesktopStyleApplicationLifetime desktop)
         {

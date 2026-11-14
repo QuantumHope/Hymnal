@@ -153,6 +153,13 @@
                                       InputGesture="F6" />
                         </MenuItem>
                         <Separator />
+                        <MenuItem x:Name="PART_SoundMenuItem"
+                                  Header="S_ound"
+                                  ToggleType="CheckBox"
+                                  Command="{Binding ToggleSoundCommand}"
+                                  IsChecked="{Binding SoundPreferences.SoundEnabled, Mode=OneWay}"
+                                  IsVisible="{Binding SoundPreferences, Converter={x:Static ObjectConverters.IsNotNull}}"
+                                  Foreground="{DynamicResource OnSurfaceBrush}" />
                         <MenuItem Header="_Reset Write Layout"
                                   Command="{Binding ResetWriteLayoutCommand}" />
                     </MenuItem>
@@ -477,6 +484,7 @@
                 <!-- The chapter status bar shares the editor's header row with the Write / Split / Preview switch. -->
                 <views:EditorView Grid.Column="2"
                                   DataContext="{Binding EditorViewModel}"
+                                  PlaysTypingSounds="True"
                                   Background="Transparent">
                     <views:EditorView.HeaderContent>
                         <views:EditorChapterBar

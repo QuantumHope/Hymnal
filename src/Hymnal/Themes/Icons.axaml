@@ -23,4 +23,12 @@
     <!-- Eye: see the page as the reader will (deliberately unlike the two-column Split icon) -->
     <StreamGeometry x:Key="Icon.ViewPreview">M2,12 C4.5,7 8,5 12,5 C16,5 19.5,7 22,12 C19.5,17 16,19 12,19 C8,19 4.5,17 2,12 Z M12,9 A3,3 0 1 0 12,15 A3,3 0 1 0 12,9 Z</StreamGeometry>
 
+    <!-- Sound (same 24x24 stroked outline style). -->
+
+    <!-- Triangle: play a preview -->
+    <StreamGeometry x:Key="Icon.Play">M7,4 L19,12 L7,20 Z</StreamGeometry>
+
+    <!-- Speaker with sound waves -->
+    <StreamGeometry x:Key="Icon.Sound">M4,9 L8,9 L13,5 L13,19 L8,15 L4,15 Z M16.5,8.5 A5,5 0 0 1 16.5,15.5 M19.5,5.5 A9,9 0 0 1 19.5,18.5</StreamGeometry>
+
 </ResourceDictionary>
