@@ -33,6 +33,11 @@ public sealed class SubmissionExportService
                 var text = await File.ReadAllTextAsync(path).ConfigureAwait(false);
                 scenes.Add(MarkuaParser.Parse(StoryFileFormat.Split(text).Prose));
             }
+            catch (Exception ex) when (ex is FileNotFoundException or DirectoryNotFoundException)
+            {
+                return Result<SubmissionDraft>.Fail(
+                    $"'{relative}' is missing, so the story can't be exported whole. Restore the file, or take it out of Book.txt.");
+            }
             catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
             {
                 return Result<SubmissionDraft>.Fail($"'{relative}' couldn't be read: {ex.Message}");

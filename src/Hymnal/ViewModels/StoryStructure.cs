@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using Hymnal.Core.Models;
@@ -29,16 +30,31 @@ public static class StoryStructure
     public static IEnumerable<ChapterViewModel> IncludedChapters(IEnumerable<ChapterViewModel> nodes) =>
         nodes.Where(n => n.Node.Kind == NodeKind.Chapter && !n.Node.IsExcluded && !n.Node.IsMissing);
 
-    /// <summary>The scene files of an anthology story: itself, or the chapter files inside its Part.</summary>
-    public static IReadOnlyList<ChapterViewModel> StoryScenes(IReadOnlyList<ChapterViewModel> nodes, ChapterViewModel story)
+    /// <summary>
+    /// Chapter files the story is made of, as Book.txt lists them (not excluded), including any missing from disk:
+    /// what a manuscript needs, so an export can report a missing file rather than leave it out.
+    /// </summary>
+    public static IEnumerable<ChapterViewModel> ListedChapters(IEnumerable<ChapterViewModel> nodes) =>
+        nodes.Where(n => n.Node.Kind == NodeKind.Chapter && !n.Node.IsExcluded);
+
+    /// <summary>The scene files of an anthology story: itself, or the chapter files inside its Part (present ones only).</summary>
+    public static IReadOnlyList<ChapterViewModel> StoryScenes(IReadOnlyList<ChapterViewModel> nodes, ChapterViewModel story) =>
+        StoryFiles(nodes, story, IncludedChapters);
+
+    /// <summary>Every scene file of an anthology story Book.txt lists, missing ones included (see <see cref="ListedChapters"/>).</summary>
+    public static IReadOnlyList<ChapterViewModel> ListedStoryScenes(IReadOnlyList<ChapterViewModel> nodes, ChapterViewModel story) =>
+        StoryFiles(nodes, story, ListedChapters);
+
+    private static IReadOnlyList<ChapterViewModel> StoryFiles(IReadOnlyList<ChapterViewModel> nodes, ChapterViewModel story,
+        Func<IEnumerable<ChapterViewModel>, IEnumerable<ChapterViewModel>> keep)
     {
         if (story.Node.Kind == NodeKind.Chapter)
-            return IncludedChapters([story]).ToList();
+            return keep([story]).ToList();
 
         var partIndex = IndexOf(nodes, story);
         return partIndex < 0
             ? []
-            : IncludedChapters(nodes.Skip(partIndex + 1).TakeWhile(n => n.Node.Kind != NodeKind.Part)).ToList();
+            : keep(nodes.Skip(partIndex + 1).TakeWhile(n => n.Node.Kind != NodeKind.Part)).ToList();
     }
 
     /// <summary>

@@ -166,6 +166,44 @@ public sealed class SubmissionExportViewModelTests
         finally { DeleteFolder(root); }
     }
 
+    [Fact]
+    public async Task A_missing_scene_stops_the_export_and_names_the_file()
+    {
+        var root = CreateWorkspace(StoryJson, ("one.md", "# Story\n\nFirst.\n"));
+        // Book.txt lists a second scene that isn't on disk.
+        File.WriteAllText(Path.Combine(root, "Book.txt"), "one.md\ntwo.md\n");
+        try
+        {
+            await Ui(root, 2, async context =>
+            {
+                var export = Create(context, new FakeSavePicker());
+
+                Assert.False(await Within(export.PrepareAsync()));
+                Assert.Contains(context.Errors, m => m.Contains("two.md") && m.Contains("missing"));
+            });
+        }
+        finally { DeleteFolder(root); }
+    }
+
+    [Fact]
+    public async Task Anthology_story_with_a_missing_scene_is_not_exported_short()
+    {
+        var root = CreateAnthology();
+        File.WriteAllText(Path.Combine(root, "Book.txt"),
+            $"{Lighthouse}\n{LongPart}\n{LongSceneA}\nlong-story/gone.md\n{LongSceneB}\n");
+        try
+        {
+            await Ui(root, 5, async context =>
+            {
+                var export = Create(context, new FakeSavePicker());
+
+                Assert.False(await Within(export.PrepareAsync(context.Node(LongSceneA))));
+                Assert.Contains(context.Errors, m => m.Contains("long-story/gone.md"));
+            });
+        }
+        finally { DeleteFolder(root); }
+    }
+
     private static string CreateAnthology() =>
         CreateWorkspace(AnthologyJson,
             (Lighthouse, "# Lighthouse\n\nThe lamp turns.\n"),

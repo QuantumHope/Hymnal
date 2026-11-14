@@ -248,11 +248,14 @@ public sealed class SubmissionExportViewModel : ViewModelBase
     private (string Title, IReadOnlyList<string> Paths)? ResolveStory(ChapterViewModel? from)
     {
         var nodes = _workspace.Nodes.ToList();
+        // A manuscript is every scene Book.txt lists, missing files included, so a missing one fails the export
+        // with its name rather than quietly leaving the story incomplete.
         if (_workspace.Profile.Kind == ProjectKind.Story)
         {
             var whole = StoryStructure.ShortStory(nodes);
             var title = !string.IsNullOrWhiteSpace(_workspace.CollectionTitle) ? _workspace.CollectionTitle : whole.Title;
-            return whole.Scenes.Count == 0 ? null : (title, whole.Scope);
+            var files = StoryStructure.ListedChapters(nodes).Select(n => n.Node.RelativePath).ToList();
+            return files.Count == 0 ? null : (title, files);
         }
 
         var anchor = from ?? _workspace.FocusedStory ?? _workspace.SelectedNode;
@@ -261,7 +264,7 @@ public sealed class SubmissionExportViewModel : ViewModelBase
         var story = StoryStructure.AnthologyStoryOf(nodes, anchor);
         if (story == null)
             return null;
-        var paths = StoryStructure.StoryScenes(nodes, story).Select(s => s.Node.RelativePath).ToList();
+        var paths = StoryStructure.ListedStoryScenes(nodes, story).Select(s => s.Node.RelativePath).ToList();
         return paths.Count == 0 ? null : (story.Node.Title, paths);
     }
 
