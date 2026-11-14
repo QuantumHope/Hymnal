@@ -106,11 +106,31 @@ public sealed class CollectionsViewModel : ViewModelBase
     }
 
     /// <summary>
+    /// The title an unnamed open collection is given when another is opened (its list needs a folder of its own):
+    /// the workspace folder's name, else the project's noun. It can be renamed at any time.
+    /// </summary>
+    public string DefaultTitleForOpen =>
+        !string.IsNullOrWhiteSpace(_workspace.WorkspaceName) ? _workspace.WorkspaceName! : _workspace.Profile.CollectionNoun;
+
+    /// <summary>Creates a collection called <paramref name="title"/> and opens it; returns its slug, or null on failure.</summary>
+    public async Task<string?> CreateAndOpenAsync(string title)
+    {
+        var slug = await CreateAsync(title);
+        if (slug == null)
+            return null;
+        return await OpenAsync(slug) ? slug : null;
+    }
+
+    /// <summary>
     /// Opens collection <paramref name="slug"/>: pending notes, schedule and beat edits are saved first, then
-    /// the lists are swapped and the workspace reloaded on the new one.
+    /// the lists are swapped and the workspace reloaded on the new one. An unnamed open collection is named
+    /// <see cref="DefaultTitleForOpen"/> first, without asking, so its list is kept.
     /// </summary>
     public async Task<bool> OpenAsync(string slug)
     {
+        if (!IsOpenCollectionNamed && !await RenameOpenAsync(DefaultTitleForOpen))
+            return false;
+
         if (_flushEdits != null && !await _flushEdits())
         {
             _notifications.ShowError("Some edits couldn't be saved, so the collection was not switched.");

@@ -59,4 +59,32 @@ public sealed class CollectionsViewModelTests
         }
         finally { DeleteFolder(root); }
     }
+
+    [Fact]
+    public async Task New_collection_opens_at_once_and_an_unnamed_open_one_keeps_its_list_under_the_folder_name()
+    {
+        var root = CreateWorkspace(AnthologyJson, ("lighthouse.md", "# Lighthouse\n\nThe lamp turns.\n"));
+        try
+        {
+            await Ui(root, 1, async context =>
+            {
+                var workspace = context.Workspace;
+                var collections = new CollectionsViewModel(workspace, new CollectionService(new MetadataStore()),
+                    context.Notifications);
+                Assert.False(collections.IsOpenCollectionNamed);
+                var folderName = collections.DefaultTitleForOpen;
+                Assert.Equal(Path.GetFileName(root.TrimEnd(Path.DirectorySeparatorChar)), folderName);
+
+                Assert.NotNull(await Within(collections.CreateAndOpenAsync("Harbour Tales")));
+                await PumpUntilAsync(() => workspace.CollectionTitle == "Harbour Tales");
+
+                // The collection that was open kept its list, under the folder's name.
+                await Within(collections.RefreshAsync());
+                var kept = collections.Collections.Single(c => !c.IsActive);
+                Assert.Equal(folderName, kept.Title);
+                Assert.Equal(1, kept.EntryCount);
+            });
+        }
+        finally { DeleteFolder(root); }
+    }
 }

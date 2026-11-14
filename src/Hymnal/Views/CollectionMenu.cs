@@ -101,25 +101,18 @@ public static class CollectionMenu
         return title != null && await collections.RenameOpenAsync(title);
     }
 
-    private static async Task OpenCollectionAsync(Window owner, CollectionsViewModel collections,
-        WorkspaceViewModel workspace, string slug)
-    {
-        // The open list needs a folder of its own before another collection takes its place.
-        if (!collections.IsOpenCollectionNamed
-            && !await NameOpenCollectionAsync(owner, collections, workspace,
-                "Name this collection first, so its list of stories is kept when you open another."))
-            return;
-        await collections.OpenAsync(slug);
-    }
+    // An unnamed open collection is named after the workspace when another opens (CollectionsViewModel.OpenAsync),
+    // so neither opening nor creating asks for a second name.
+    private static Task OpenCollectionAsync(Window owner, CollectionsViewModel collections,
+        WorkspaceViewModel workspace, string slug) =>
+        collections.OpenAsync(slug);
 
     private static async Task NewCollectionAsync(Window owner, CollectionsViewModel collections,
         WorkspaceViewModel workspace)
     {
         var title = await FileNameDialog.ShowAsync(owner, "New collection",
-            "Its title. It starts empty: add stories from the shared folder once it is open.", "");
-        if (title == null || await collections.CreateAsync(title) is not { } slug)
-            return;
-        if (await ConfirmDialog.ShowAsync(owner, "New collection", $"Open “{title}” now?", "Open"))
-            await OpenCollectionAsync(owner, collections, workspace, slug);
+            "Its title. It opens straight away, empty: add stories in Plan, or from the ⋯ menu.", "");
+        if (title != null)
+            await collections.CreateAndOpenAsync(title);
     }
 }
