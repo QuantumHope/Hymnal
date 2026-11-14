@@ -6,6 +6,7 @@ on:
       - main
       - 'milestone/*'
   pull_request:
+  workflow_dispatch:
 
 jobs:
   build:
@@ -47,3 +48,16 @@ jobs:
           dotnet test tests/Hymnal.Core.Tests/ --configuration Release --no-build --no-restore
           --filter "FullyQualifiedName!~GanttView_RowMoveShortcutHelper"
           --blame-hang-timeout 90s
+
+  # Every push to main that passes is released as v<major>.<minor>.<commits on main> (major.minor from
+  # Directory.Build.props): self-contained win-x64 and linux-x64 builds, a zip, a tar.gz, a per-user setup.exe,
+  # a .deb, latest.json and the install scripts, all described by hopelab-app.json. A manual run builds the
+  # packages as workflow artifacts without publishing a release.
+  release:
+    needs: build
+    if: (github.event_name == 'push' && github.ref == 'refs/heads/main') || github.event_name == 'workflow_dispatch'
+    uses: QuantumHope/MattEland.HopeLab.Shared/.github/workflows/app-release.yml@main
+    with:
+      publish: ${{ github.event_name == 'push' }}
+    permissions:
+      contents: write

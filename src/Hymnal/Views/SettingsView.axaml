@@ -3,6 +3,7 @@
              xmlns:vm="using:Hymnal.ViewModels"
              xmlns:aivm="using:Hymnal.ViewModels.Ai"
              xmlns:conv="using:Hymnal.Views.Converters"
+             xmlns:views="using:Hymnal.Views"
              x:Class="Hymnal.Views.SettingsView"
              x:DataType="vm:SettingsViewModel"
              Background="{DynamicResource SurfaceBaseBrush}">
@@ -41,6 +42,12 @@
                            Padding="8,6" />
                 <TextBlock Text="Sound"
                            IsVisible="{Binding HasSound}"
+                           FontSize="12"
+                           FontWeight="SemiBold"
+                           Foreground="{DynamicResource SynthwavePurpleBrush}"
+                           Padding="8,6" />
+                <TextBlock Text="Updates"
+                           IsVisible="{Binding HasUpdates}"
                            FontSize="12"
                            FontWeight="SemiBold"
                            Foreground="{DynamicResource SynthwavePurpleBrush}"
@@ -224,6 +231,10 @@
                                TextWrapping="Wrap"
                                Foreground="{DynamicResource OnSurfaceMutedBrush}" />
                 </StackPanel>
+
+                <!-- Updates section -->
+                <views:UpdatesSettingsView DataContext="{Binding Updates}"
+                                           IsVisible="{Binding IsAvailable, FallbackValue=False}" />
 
                 <!-- Section header -->
                 <Grid ColumnDefinitions="*,Auto">

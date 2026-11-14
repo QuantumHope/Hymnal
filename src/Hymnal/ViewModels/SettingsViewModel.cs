@@ -14,6 +14,7 @@ using Hymnal.Core.Models.Ai;
 using Hymnal.Core.Services;
 using Hymnal.Core.Services.Ai;
 using Hymnal.ViewModels.Ai;
+using MattEland.HopeLab.Updates.ReactiveUI;
 using ReactiveUI;
 using Unit = System.Reactive.Unit;
 
@@ -68,6 +69,12 @@ public class SettingsViewModel : ViewModelBase
 
     /// <summary>True when the Sound section applies.</summary>
     public bool HasSound => Sound is not null;
+
+    /// <summary>The Updates section (the app-wide update view model); null when the host has no updates.</summary>
+    public UpdatesViewModel? Updates { get; }
+
+    /// <summary>True when the Updates section applies.</summary>
+    public bool HasUpdates => Updates?.IsAvailable == true;
 
     public ObservableCollection<ProviderProfileViewModel> Profiles { get; } = new();
 
@@ -140,7 +147,8 @@ public class SettingsViewModel : ViewModelBase
         StorageMigrator? storageMigrator = null,
         Func<Task<bool>>? flushStoryEdits = null,
         SoundPreferences? sound = null,
-        TypingSoundPlayer? typingSounds = null)
+        TypingSoundPlayer? typingSounds = null,
+        UpdatesViewModel? updates = null)
     {
         _profileService = profileService;
         _credentials = credentials;
@@ -152,6 +160,7 @@ public class SettingsViewModel : ViewModelBase
         _beatBoard = beatBoard;
         _storageMigrator = storageMigrator;
         _flushStoryEdits = flushStoryEdits;
+        Updates = updates; // app-wide and long-lived: not disposed with Settings
         if (sound is not null)
         {
             Sound = new SoundSettingsViewModel(sound, typingSounds);

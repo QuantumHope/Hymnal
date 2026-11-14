@@ -9,6 +9,32 @@ Hymnal is a desktop editor for Book.txt-driven manuscripts. It is built with Ava
 - App type: cross-platform desktop UI
 - License: add your OSS license file if not already present
 
+## Install
+
+Every change merged to `main` is released on [GitHub](https://github.com/QuantumHope/Hymnal/releases/latest). From the latest release, download one of:
+
+- **Windows:** `Hymnal-<version>-win-x64-setup.exe`, a per-user setup (no admin rights). It installs to `%LOCALAPPDATA%\Programs\Hymnal` with a Start menu entry, and appears in Apps & features.
+- **Debian, Ubuntu, Pop!_OS:** `hymnal_<version>_amd64.deb` (`sudo apt install ./hymnal_<version>_amd64.deb`). It installs to `/opt/hymnal` with an app-menu entry.
+- The `win-x64` zip or `linux-x64` tar.gz, to unpack anywhere.
+
+Or install with one command (no admin rights; running it again updates in place, and `-Uninstall` / `--uninstall` removes Hymnal and keeps your settings):
+
+```powershell
+# Windows: %LOCALAPPDATA%\Programs\Hymnal and a Start menu entry
+& ([scriptblock]::Create((irm https://raw.githubusercontent.com/QuantumHope/MattEland.HopeLab.Shared/main/installers/install.ps1))) -Repo QuantumHope/Hymnal
+```
+
+```bash
+# Linux: ~/.local/share/hymnal/app and an app-menu entry
+curl -fsSL https://raw.githubusercontent.com/QuantumHope/MattEland.HopeLab.Shared/main/installers/install.sh | bash -s -- --repo QuantumHope/Hymnal
+```
+
+### Updating
+
+An installed Hymnal checks GitHub a little after it starts and every few hours (turn this off in **Settings → Updates**). When a new version is out, a banner at the top of the window offers to install it: Hymnal saves your work, replaces its files where it is installed, and reopens. **Help → Check for Updates** and **Settings → Updates** check on demand. A `.deb` install is updated with `apt-get`, so you're asked for your password. A copy built from source doesn't update itself.
+
+Update downloads go in `~/.hymnal/updates`. Hymnal's releases are public, so no GitHub token is needed; for a private fork, set `HYMNAL_GITHUB_TOKEN` or save a token in Settings → Updates (kept in `~/.hymnal/github-token`).
+
 ## What Hymnal Does
 
 - Opens a manuscript workspace by selecting a folder.
@@ -105,14 +131,11 @@ The repository is split into UI, core domain/services, and tests:
 From repository root:
 
 ```bash
-dotnet build src/Hymnal/Hymnal.csproj
-dotnet test Hymnal.sln
+dotnet build Hymnal.slnx
+dotnet test Hymnal.slnx --filter "FullyQualifiedName!~GanttView_RowMoveShortcutHelper" --blame-hang-timeout 90s
 ```
 
-Latest verified test result in this repository context:
-
-- 31 tests passed
-- 0 failed
+The filter skips a test that always hangs (see AGENTS.md).
 
 ## Run The App
 
@@ -129,11 +152,11 @@ dotnet run --project src/Hymnal/Hymnal.csproj
 - Per-chapter notes are stored in each workspace at:
 	- .hymnal-data/notes/
 - Notes file names are derived from chapter relative paths with path separators replaced by underscores.
+- Update downloads and an optional GitHub token are kept in `~/.hymnal/`.
 
 ## Limitations And Known Gaps
 
 - Credential store is currently an in-memory stub.
-- No packaged release installer documented yet.
 - Workspace reload prompt on Book.txt change is informational only at this stage.
 
 ## Documentation

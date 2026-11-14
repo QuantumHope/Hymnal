@@ -164,6 +164,10 @@
                                   Command="{Binding ResetWriteLayoutCommand}" />
                     </MenuItem>
                     <MenuItem Header="_Help" Foreground="{DynamicResource OnSurfaceBrush}">
+                        <MenuItem Header="Check for _Updates"
+                                  Command="{Binding Updates.CheckCommand}"
+                                  IsVisible="{Binding Updates, Converter={x:Static ObjectConverters.IsNotNull}}" />
+                        <Separator IsVisible="{Binding Updates, Converter={x:Static ObjectConverters.IsNotNull}}" />
                         <MenuItem Header="_About Hymnal"
                                   Command="{Binding ShowAboutCommand}"
                                   InputGesture="F1" />
@@ -296,441 +300,447 @@
             </Border.Background>
         </Border>
 
-        <!-- Main shell (Row 2) -->
-        <Panel Grid.Row="2">
+        <!-- Main shell (Row 2): the update banner above the shell -->
+        <DockPanel Grid.Row="2">
+            <views:UpdateBannerView DockPanel.Dock="Top"
+                                    DataContext="{Binding Updates}"
+                                    IsVisible="{Binding ShowBanner, FallbackValue=False}" />
 
-            <!-- Synthwave gradient background (full main area) -->
-            <Border>
-                <Border.Background>
-                    <LinearGradientBrush StartPoint="0%,0%" EndPoint="0%,100%">
-                        <GradientStop Color="#0B0820" Offset="0" />
-                        <GradientStop Color="#0F082A" Offset="0.55" />
-                        <GradientStop Color="#160833" Offset="0.82" />
-                        <GradientStop Color="#1B0838" Offset="1" />
-                    </LinearGradientBrush>
-                </Border.Background>
-            </Border>
+            <Panel>
 
-            <!-- Faint synthwave horizon glow at bottom -->
-            <Border VerticalAlignment="Bottom" Height="220" Opacity="0.45">
-                <Border.Background>
-                    <LinearGradientBrush StartPoint="0%,100%" EndPoint="0%,0%">
-                        <GradientStop Color="#60E91E8C" Offset="0" />
-                        <GradientStop Color="#289D4EDD" Offset="0.38" />
-                        <GradientStop Color="#0038BDF8" Offset="0.7" />
-                        <GradientStop Color="#00000000" Offset="1" />
-                    </LinearGradientBrush>
-                </Border.Background>
-            </Border>
-
-            <!-- Layout: [left pane] [editor] [splitter] [right pane] — Write mode only -->
-            <Grid x:Name="ShellGrid"
-                  ColumnDefinitions="220,4,*,4,280"
-                  IsVisible="{Binding IsEditorVisible}">
-
-                <!-- ── LEFT PANE ─────────────────────────────────────────────── -->
-                <Border Grid.Column="0"
-                        Background="{DynamicResource SurfaceElevatedBrush}"
-                        BorderBrush="{DynamicResource BorderSubtleBrush}"
-                        BorderThickness="0,0,1,0"
-                        MinWidth="48">
-                    <Panel>
-
-                        <!-- COLLAPSED: 48px icon rail — visible when neither content area is open -->
-                        <StackPanel Width="48"
-                                    IsVisible="{Binding !IsAnyLeftPaneOpen}"
-                                    Margin="0,8,0,0">
-                            <Button Classes="nav-icon"
-                                    Command="{Binding WorkspaceViewModel.ToggleChaptersPaneCommand}"
-                                    ToolTip.Tip="Chapters (Ctrl+B)">
-                                <Path Data="M3 12h18M3 6h18M3 18h18"
-                                      Stroke="{DynamicResource OnSurfaceDimBrush}"
-                                      StrokeThickness="1.5"
-                                      StrokeLineCap="Round"
-                                      Width="18" Height="18"
-                                      Stretch="Uniform" />
-                            </Button>
-                            <Button Classes="nav-icon"
-                                    Command="{Binding SupplementalDocsViewModel.ToggleCommand}"
-                                    ToolTip.Tip="Supplemental docs">
-                                <Path Data="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8zM14 2v6h6M16 13H8M16 17H8M10 9H8"
-                                      Stroke="{DynamicResource OnSurfaceDimBrush}"
-                                      StrokeThickness="1.5"
-                                      StrokeLineCap="Round"
-                                      Width="18" Height="18"
-                                      Stretch="Uniform" />
-                            </Button>
-                        </StackPanel>
-
-                        <!-- EXPANDED: Outlook-style explorer bar.
-                             Both section headers are ALWAYS visible when the pane is expanded.
-                             Each section's content area collapses independently.
-                             When both content areas are collapsed, IsAnyLeftPaneOpen → false
-                             and the icon rail above takes over.
-
-                             Outer rows: Chapters section | splitter | Docs section
-                             Each section is a nested grid: header (48px) + content (* or 0)
-                        -->
-                        <Grid IsVisible="{Binding IsAnyLeftPaneOpen}"
-                              RowDefinitions="*,Auto,*"
-                              x:Name="LeftPaneGrid">
-
-                            <!-- Chapters section -->
-                            <Grid Grid.Row="0"
-                                  x:Name="LeftChaptersSectionGrid"
-                                  RowDefinitions="48,*">
-                                <Border Grid.Row="0"
-                                        BorderBrush="{DynamicResource BorderSubtleBrush}"
-                                        BorderThickness="0,0,0,1">
-                                    <Grid ColumnDefinitions="48,*,Auto">
-                                        <Button Grid.Column="0"
-                                                Classes="nav-icon"
-                                                Command="{Binding WorkspaceViewModel.ToggleChaptersPaneCommand}"
-                                                ToolTip.Tip="Chapters (Ctrl+B)">
-                                            <Path Data="M3 12h18M3 6h18M3 18h18"
-                                                  Stroke="{DynamicResource SynthwavePurpleBrush}"
-                                                  StrokeThickness="1.5"
-                                                  StrokeLineCap="Round"
-                                                  Width="18" Height="18"
-                                                  Stretch="Uniform" />
-                                        </Button>
-                                        <TextBlock Grid.Column="1"
-                                                   Text="CHAPTERS"
-                                                   VerticalAlignment="Center"
-                                                   Margin="4,0,0,0"
-                                                   FontSize="10"
-                                                   FontWeight="SemiBold"
-                                                   LetterSpacing="1.5"
-                                                   Foreground="{DynamicResource OnSurfaceDimBrush}" />
-                                        <Button Grid.Column="2"
-                                                x:Name="AddChapterButton"
-                                                Content="+"
-                                                Margin="0,0,8,0"
-                                                Padding="8,2"
-                                                MinWidth="28"
-                                                MinHeight="24"
-                                                FontSize="14"
-                                                FontWeight="Bold"
-                                                VerticalAlignment="Center"
-                                                Background="Transparent"
-                                                BorderBrush="{DynamicResource BorderSubtleBrush}"
-                                                BorderThickness="1"
-                                                CornerRadius="4"
-                                                Foreground="{DynamicResource SynthwavePurpleBrush}"
-                                                ToolTip.Tip="Add chapter or part"
-                                                Click="AddChapterButton_Click" />
-                                    </Grid>
-                                </Border>
-
-                                <views:SidebarView Grid.Row="1"
-                                                   x:Name="ChaptersViewContent"
-                                                   DataContext="{Binding WorkspaceViewModel}"
-                                                   IsVisible="{Binding IsChaptersPaneVisible}" />
-                            </Grid>
-
-                            <GridSplitter Grid.Row="1"
-                                          Height="4"
-                                          ResizeDirection="Rows"
-                                          IsVisible="{Binding IsBothLeftPanesOpen}"
-                                          Background="{DynamicResource BorderSubtleBrush}" />
-
-                            <!-- Docs section -->
-                            <Grid Grid.Row="2"
-                                  x:Name="LeftDocsSectionGrid"
-                                  RowDefinitions="48,*">
-                                <Border Grid.Row="0"
-                                        BorderBrush="{DynamicResource BorderSubtleBrush}"
-                                        BorderThickness="0,1,0,1">
-                                    <Grid ColumnDefinitions="48,*">
-                                        <Button Grid.Column="0"
-                                                Classes="nav-icon"
-                                                Command="{Binding SupplementalDocsViewModel.ToggleCommand}"
-                                                ToolTip.Tip="Supplemental docs">
-                                            <Path Data="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8zM14 2v6h6M16 13H8M16 17H8M10 9H8"
-                                                  Stroke="{DynamicResource SynthwavePurpleBrush}"
-                                                  StrokeThickness="1.5"
-                                                  StrokeLineCap="Round"
-                                                  Width="18" Height="18"
-                                                  Stretch="Uniform" />
-                                        </Button>
-                                        <TextBlock Grid.Column="1"
-                                                   Text="DOCS"
-                                                   VerticalAlignment="Center"
-                                                   Margin="4,0,0,0"
-                                                   FontSize="10"
-                                                   FontWeight="SemiBold"
-                                                   LetterSpacing="1.5"
-                                                   Foreground="{DynamicResource OnSurfaceDimBrush}" />
-                                    </Grid>
-                                </Border>
-
-                                <views:SupplementalDocsView Grid.Row="1"
-                                                             x:Name="SupplementalDocsViewContent"
-                                                             DataContext="{Binding SupplementalDocsViewModel}"
-                                                             IsVisible="{Binding IsVisible}" />
-                            </Grid>
-                        </Grid>
-
-                    </Panel>
+                <!-- Synthwave gradient background (full main area) -->
+                <Border>
+                    <Border.Background>
+                        <LinearGradientBrush StartPoint="0%,0%" EndPoint="0%,100%">
+                            <GradientStop Color="#0B0820" Offset="0" />
+                            <GradientStop Color="#0F082A" Offset="0.55" />
+                            <GradientStop Color="#160833" Offset="0.82" />
+                            <GradientStop Color="#1B0838" Offset="1" />
+                        </LinearGradientBrush>
+                    </Border.Background>
                 </Border>
 
-                <!-- ── SPLITTER BETWEEN LEFT PANE AND EDITOR ─────────────── -->
-                <GridSplitter Grid.Column="1"
-                              Width="4"
-                              ResizeDirection="Columns"
-                              Background="{DynamicResource BorderSubtleBrush}" />
-
-                <!-- ── EDITOR ─────────────────────────────────────── -->
-                <!-- The chapter status bar shares the editor's header row with the Write / Split / Preview switch. -->
-                <views:EditorView Grid.Column="2"
-                                  DataContext="{Binding EditorViewModel}"
-                                  PlaysTypingSounds="True"
-                                  Background="Transparent">
-                    <views:EditorView.HeaderContent>
-                        <views:EditorChapterBar
-                            DataContext="{Binding $parent[Window].((vm:MainWindowViewModel)DataContext).WorkspaceViewModel.SelectedNode}"
-                            IsVisible="{Binding $parent[Window].((vm:MainWindowViewModel)DataContext).IsEditorChapterBarVisible}" />
-                    </views:EditorView.HeaderContent>
-                </views:EditorView>
-
-                <!-- ── SPLITTER (visible when any right pane is open) ─────────── -->
-                <GridSplitter Grid.Column="3"
-                              Width="4"
-                              ResizeDirection="Columns"
-                              Background="{DynamicResource BorderSubtleBrush}" />
-
-                <!-- ── RIGHT PANE ─────────────────────────────────────────────── -->
-                <Border Grid.Column="4"
-                        Background="{DynamicResource SurfaceElevatedBrush}"
-                        BorderBrush="{DynamicResource BorderSubtleBrush}"
-                        BorderThickness="1,0,0,0">
-                    <Panel>
-
-                        <!-- COLLAPSED: 48px icon strip — visible when neither pane is open -->
-                        <StackPanel Width="48"
-                                    IsVisible="{Binding !IsAnyRightPaneOpen}"
-                                    Margin="0,8,0,0">
-                            <!-- F3: Chapter Info -->
-                            <Button Classes="nav-icon"
-                                    Command="{Binding ChapterInfoViewModel.ToggleCommand}"
-                                    ToolTip.Tip="{Binding ChapterInfoViewModel.ToggleToolTip}">
-                                <Path Data="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-6h2v6zm0-8h-2V7h2v2z"
-                                      Fill="{DynamicResource OnSurfaceDimBrush}"
-                                      Width="18" Height="18"
-                                      Stretch="Uniform" />
-                            </Button>
-                            <!-- F4: Notes -->
-                            <Button Classes="nav-icon"
-                                    Command="{Binding NotesViewModel.ToggleCommand}"
-                                    ToolTip.Tip="Notes (F4)">
-                                <Path Data="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8zM14 2v6h6M16 13H8M16 17H8M10 9H8"
-                                      Stroke="{DynamicResource OnSurfaceDimBrush}"
-                                      StrokeThickness="1.5"
-                                      StrokeLineCap="Round"
-                                      Width="18" Height="18"
-                                      Stretch="Uniform" />
-                            </Button>
-                            <!-- AI Chat (Ctrl+Shift+A) -->
-                            <Button Classes="nav-icon"
-                                    Command="{Binding ToggleAiChatCommand}"
-                                    ToolTip.Tip="AI Chat (Ctrl+Shift+A)">
-                                <Path Data="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z"
-                                      Stroke="{DynamicResource OnSurfaceDimBrush}"
-                                      StrokeThickness="1.5"
-                                      StrokeLineCap="Round"
-                                      Width="18" Height="18"
-                                      Stretch="Uniform" />
-                            </Button>
-                        </StackPanel>
-
-                        <!-- EXPANDED: Outlook-style explorer bar.
-                             Both section headers are ALWAYS visible when the pane is expanded.
-                             Each section's content area collapses independently within its DockPanel.
-                             When both content areas are collapsed, IsAnyRightPaneOpen → false
-                             and the icon rail above takes over.
-
-                             Row 0: DockPanel — Chapter panel header (48px fixed) + Chapter panel content (*)
-                             Row 1: GridSplitter (auto; visible when both sections are open)
-                             Row 2: DockPanel — Notes header (48px fixed) + Notes content (*)
-
-                             Using DockPanel per section ensures the GridSplitter resizes the two
-                             full sections (header + content) rather than a header row directly.
-                        -->
-                        <Grid IsVisible="{Binding IsAnyRightPaneOpen}"
-                              RowDefinitions="*,Auto,*,Auto,*"
-                              x:Name="RightPaneGrid">
-
-                            <!-- Row 0: Chapter panel DockPanel (header pinned top + content fills rest) -->
-                            <DockPanel Grid.Row="0">
-                                <Border DockPanel.Dock="Top"
-                                        Height="48"
-                                        BorderBrush="{DynamicResource BorderSubtleBrush}"
-                                        BorderThickness="0,0,0,1">
-                                    <Grid ColumnDefinitions="48,*">
-                                        <Button Grid.Column="0"
-                                                Classes="nav-icon"
-                                                Command="{Binding ChapterInfoViewModel.ToggleCommand}"
-                                                ToolTip.Tip="{Binding ChapterInfoViewModel.ToggleToolTip}">
-                                            <Path Data="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-6h2v6zm0-8h-2V7h2v2z"
-                                                  Fill="{DynamicResource SynthwavePurpleBrush}"
-                                                  Width="18" Height="18"
-                                                  Stretch="Uniform" />
-                                        </Button>
-                                        <TextBlock Grid.Column="1"
-                                                   Text="{Binding ChapterPanelTitle}"
-                                                   VerticalAlignment="Center"
-                                                   Margin="4,0,0,0"
-                                                   FontSize="10"
-                                                   FontWeight="SemiBold"
-                                                   LetterSpacing="1.5"
-                                                   Foreground="{DynamicResource OnSurfaceDimBrush}" />
-                                    </Grid>
-                                </Border>
-                                <ContentControl x:Name="ChapterPanelContentControl"
-                                                Content="{Binding ChapterPanelContent}"
-                                                IsVisible="{Binding IsChapterPanelOpen}" />
-                            </DockPanel>
-
-                            <!-- Row 1: GridSplitter between Info and Notes (visible when both content areas open) -->
-                            <GridSplitter Grid.Row="1"
-                                          Height="4"
-                                          ResizeDirection="Rows"
-                                          IsVisible="{Binding IsInfoNotesSplitterVisible}"
-                                          Background="{DynamicResource BorderSubtleBrush}" />
-
-                            <!-- Row 2: Notes DockPanel (header pinned top + content fills rest) -->
-                            <DockPanel Grid.Row="2">
-                                <Border DockPanel.Dock="Top"
-                                        Height="48"
-                                        BorderBrush="{DynamicResource BorderSubtleBrush}"
-                                        BorderThickness="0,1,0,1">
-                                    <Grid ColumnDefinitions="48,*">
-                                        <Button Grid.Column="0"
-                                                Classes="nav-icon"
-                                                Command="{Binding NotesViewModel.ToggleCommand}"
-                                                ToolTip.Tip="Notes (F4)">
-                                            <Path Data="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8zM14 2v6h6M16 13H8M16 17H8M10 9H8"
-                                                  Stroke="{DynamicResource SynthwavePurpleBrush}"
-                                                  StrokeThickness="1.5"
-                                                  StrokeLineCap="Round"
-                                                  Width="18" Height="18"
-                                                  Stretch="Uniform" />
-                                        </Button>
-                                        <TextBlock Grid.Column="1"
-                                                   Text="NOTES"
-                                                   VerticalAlignment="Center"
-                                                   Margin="4,0,0,0"
-                                                   FontSize="10"
-                                                   FontWeight="SemiBold"
-                                                   LetterSpacing="1.5"
-                                                   Foreground="{DynamicResource OnSurfaceDimBrush}" />
-                                    </Grid>
-                                </Border>
-                                <views:NotesView x:Name="NotesViewContent"
-                                                 DataContext="{Binding NotesViewModel}" />
-                            </DockPanel>
-
-                            <!-- Row 3: GridSplitter between Notes and AI (visible when both content areas open) -->
-                            <GridSplitter Grid.Row="3"
-                                          Height="4"
-                                          ResizeDirection="Rows"
-                                          IsVisible="{Binding IsNotesChatSplitterVisible}"
-                                          Background="{DynamicResource BorderSubtleBrush}" />
-
-                            <!-- Row 4: AI Chat DockPanel (header always visible; content collapses) -->
-                            <DockPanel Grid.Row="4">
-                                <Border DockPanel.Dock="Top"
-                                        Height="48"
-                                        BorderBrush="{DynamicResource BorderSubtleBrush}"
-                                        BorderThickness="0,1,0,1">
-                                    <Grid ColumnDefinitions="48,*,Auto">
-                                        <Button Grid.Column="0"
-                                                Classes="nav-icon"
-                                                Command="{Binding ToggleAiChatCommand}"
-                                                ToolTip.Tip="AI Chat (Ctrl+Shift+A)">
-                                            <Path Data="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z"
-                                                  Stroke="{DynamicResource SynthwavePurpleBrush}"
-                                                  StrokeThickness="1.5"
-                                                  StrokeLineCap="Round"
-                                                  Width="18" Height="18"
-                                                  Stretch="Uniform" />
-                                        </Button>
-                                        <TextBlock Grid.Column="1"
-                                                   Text="AI CHAT"
-                                                   VerticalAlignment="Center"
-                                                   Margin="4,0,0,0"
-                                                   FontSize="10"
-                                                   FontWeight="SemiBold"
-                                                   LetterSpacing="1.5"
-                                                   Foreground="{DynamicResource OnSurfaceDimBrush}" />
-                                        <Button Grid.Column="2"
-                                                Classes="nav-icon"
-                                                Command="{Binding AiChatViewModel.NewConversationCommand}"
-                                                ToolTip.Tip="New conversation"
-                                                Margin="0,0,4,0">
-                                            <TextBlock Text="+"
-                                                       FontSize="16"
-                                                       Foreground="{DynamicResource SynthwavePurpleBrush}" />
-                                        </Button>
-                                    </Grid>
-                                </Border>
-                                <aiviews:AiChatView x:Name="AiChatViewContent"
-                                                    DataContext="{Binding AiChatViewModel}" />
-                            </DockPanel>
-
-                        </Grid>
-
-                    </Panel>
+                <!-- Faint synthwave horizon glow at bottom -->
+                <Border VerticalAlignment="Bottom" Height="220" Opacity="0.45">
+                    <Border.Background>
+                        <LinearGradientBrush StartPoint="0%,100%" EndPoint="0%,0%">
+                            <GradientStop Color="#60E91E8C" Offset="0" />
+                            <GradientStop Color="#289D4EDD" Offset="0.38" />
+                            <GradientStop Color="#0038BDF8" Offset="0.7" />
+                            <GradientStop Color="#00000000" Offset="1" />
+                        </LinearGradientBrush>
+                    </Border.Background>
                 </Border>
 
-            </Grid>
+                <!-- Layout: [left pane] [editor] [splitter] [right pane] — Write mode only -->
+                <Grid x:Name="ShellGrid"
+                      ColumnDefinitions="220,4,*,4,280"
+                      IsVisible="{Binding IsEditorVisible}">
 
-            <!-- Research / Ideas / Plan / Manage — lazy-loaded via ViewLocator, full width -->
-            <ContentControl IsVisible="{Binding !IsEditorVisible}"
-                            Content="{Binding SecondaryCentreContent}" />
-
-            <!-- Settings overlay — covers full shell area when IsSettingsOpen -->
-            <Border IsVisible="{Binding IsSettingsOpen}"
-                    Background="{DynamicResource SurfaceBaseBrush}"
-                    ZIndex="100">
-                <Grid RowDefinitions="48,*">
-                    <!-- Settings header bar -->
-                    <Border Grid.Row="0"
+                    <!-- ── LEFT PANE ─────────────────────────────────────────────── -->
+                    <Border Grid.Column="0"
                             Background="{DynamicResource SurfaceElevatedBrush}"
                             BorderBrush="{DynamicResource BorderSubtleBrush}"
-                            BorderThickness="0,0,0,1">
-                        <Grid ColumnDefinitions="*,Auto">
-                            <TextBlock Grid.Column="0"
-                                       Text="Settings"
-                                       FontSize="14"
-                                       FontWeight="SemiBold"
-                                       Foreground="{DynamicResource OnSurfaceBrush}"
-                                       VerticalAlignment="Center"
-                                       Margin="16,0" />
-                            <Button Grid.Column="1"
-                                    Classes="nav-icon"
-                                    Command="{Binding CloseSettingsCommand}"
-                                    ToolTip.Tip="Close settings (Esc)"
-                                    Margin="0,0,8,0">
-                                <TextBlock Text="✕"
-                                           FontSize="14"
-                                           Foreground="{DynamicResource OnSurfaceDimBrush}" />
-                            </Button>
-                        </Grid>
-                    </Border>
-                    <!-- Settings view -->
-                    <ContentControl Grid.Row="1"
-                                    Content="{Binding ActiveSettingsViewModel}">
-                        <ContentControl.DataTemplates>
-                            <DataTemplate DataType="{x:Type vm:SettingsViewModel}">
-                                <views:SettingsView />
-                            </DataTemplate>
-                        </ContentControl.DataTemplates>
-                    </ContentControl>
-                </Grid>
-            </Border>
+                            BorderThickness="0,0,1,0"
+                            MinWidth="48">
+                        <Panel>
 
-        </Panel>
+                            <!-- COLLAPSED: 48px icon rail — visible when neither content area is open -->
+                            <StackPanel Width="48"
+                                        IsVisible="{Binding !IsAnyLeftPaneOpen}"
+                                        Margin="0,8,0,0">
+                                <Button Classes="nav-icon"
+                                        Command="{Binding WorkspaceViewModel.ToggleChaptersPaneCommand}"
+                                        ToolTip.Tip="Chapters (Ctrl+B)">
+                                    <Path Data="M3 12h18M3 6h18M3 18h18"
+                                          Stroke="{DynamicResource OnSurfaceDimBrush}"
+                                          StrokeThickness="1.5"
+                                          StrokeLineCap="Round"
+                                          Width="18" Height="18"
+                                          Stretch="Uniform" />
+                                </Button>
+                                <Button Classes="nav-icon"
+                                        Command="{Binding SupplementalDocsViewModel.ToggleCommand}"
+                                        ToolTip.Tip="Supplemental docs">
+                                    <Path Data="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8zM14 2v6h6M16 13H8M16 17H8M10 9H8"
+                                          Stroke="{DynamicResource OnSurfaceDimBrush}"
+                                          StrokeThickness="1.5"
+                                          StrokeLineCap="Round"
+                                          Width="18" Height="18"
+                                          Stretch="Uniform" />
+                                </Button>
+                            </StackPanel>
+
+                            <!-- EXPANDED: Outlook-style explorer bar.
+                                 Both section headers are ALWAYS visible when the pane is expanded.
+                                 Each section's content area collapses independently.
+                                 When both content areas are collapsed, IsAnyLeftPaneOpen → false
+                                 and the icon rail above takes over.
+
+                                 Outer rows: Chapters section | splitter | Docs section
+                                 Each section is a nested grid: header (48px) + content (* or 0)
+                            -->
+                            <Grid IsVisible="{Binding IsAnyLeftPaneOpen}"
+                                  RowDefinitions="*,Auto,*"
+                                  x:Name="LeftPaneGrid">
+
+                                <!-- Chapters section -->
+                                <Grid Grid.Row="0"
+                                      x:Name="LeftChaptersSectionGrid"
+                                      RowDefinitions="48,*">
+                                    <Border Grid.Row="0"
+                                            BorderBrush="{DynamicResource BorderSubtleBrush}"
+                                            BorderThickness="0,0,0,1">
+                                        <Grid ColumnDefinitions="48,*,Auto">
+                                            <Button Grid.Column="0"
+                                                    Classes="nav-icon"
+                                                    Command="{Binding WorkspaceViewModel.ToggleChaptersPaneCommand}"
+                                                    ToolTip.Tip="Chapters (Ctrl+B)">
+                                                <Path Data="M3 12h18M3 6h18M3 18h18"
+                                                      Stroke="{DynamicResource SynthwavePurpleBrush}"
+                                                      StrokeThickness="1.5"
+                                                      StrokeLineCap="Round"
+                                                      Width="18" Height="18"
+                                                      Stretch="Uniform" />
+                                            </Button>
+                                            <TextBlock Grid.Column="1"
+                                                       Text="CHAPTERS"
+                                                       VerticalAlignment="Center"
+                                                       Margin="4,0,0,0"
+                                                       FontSize="10"
+                                                       FontWeight="SemiBold"
+                                                       LetterSpacing="1.5"
+                                                       Foreground="{DynamicResource OnSurfaceDimBrush}" />
+                                            <Button Grid.Column="2"
+                                                    x:Name="AddChapterButton"
+                                                    Content="+"
+                                                    Margin="0,0,8,0"
+                                                    Padding="8,2"
+                                                    MinWidth="28"
+                                                    MinHeight="24"
+                                                    FontSize="14"
+                                                    FontWeight="Bold"
+                                                    VerticalAlignment="Center"
+                                                    Background="Transparent"
+                                                    BorderBrush="{DynamicResource BorderSubtleBrush}"
+                                                    BorderThickness="1"
+                                                    CornerRadius="4"
+                                                    Foreground="{DynamicResource SynthwavePurpleBrush}"
+                                                    ToolTip.Tip="Add chapter or part"
+                                                    Click="AddChapterButton_Click" />
+                                        </Grid>
+                                    </Border>
+
+                                    <views:SidebarView Grid.Row="1"
+                                                       x:Name="ChaptersViewContent"
+                                                       DataContext="{Binding WorkspaceViewModel}"
+                                                       IsVisible="{Binding IsChaptersPaneVisible}" />
+                                </Grid>
+
+                                <GridSplitter Grid.Row="1"
+                                              Height="4"
+                                              ResizeDirection="Rows"
+                                              IsVisible="{Binding IsBothLeftPanesOpen}"
+                                              Background="{DynamicResource BorderSubtleBrush}" />
+
+                                <!-- Docs section -->
+                                <Grid Grid.Row="2"
+                                      x:Name="LeftDocsSectionGrid"
+                                      RowDefinitions="48,*">
+                                    <Border Grid.Row="0"
+                                            BorderBrush="{DynamicResource BorderSubtleBrush}"
+                                            BorderThickness="0,1,0,1">
+                                        <Grid ColumnDefinitions="48,*">
+                                            <Button Grid.Column="0"
+                                                    Classes="nav-icon"
+                                                    Command="{Binding SupplementalDocsViewModel.ToggleCommand}"
+                                                    ToolTip.Tip="Supplemental docs">
+                                                <Path Data="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8zM14 2v6h6M16 13H8M16 17H8M10 9H8"
+                                                      Stroke="{DynamicResource SynthwavePurpleBrush}"
+                                                      StrokeThickness="1.5"
+                                                      StrokeLineCap="Round"
+                                                      Width="18" Height="18"
+                                                      Stretch="Uniform" />
+                                            </Button>
+                                            <TextBlock Grid.Column="1"
+                                                       Text="DOCS"
+                                                       VerticalAlignment="Center"
+                                                       Margin="4,0,0,0"
+                                                       FontSize="10"
+                                                       FontWeight="SemiBold"
+                                                       LetterSpacing="1.5"
+                                                       Foreground="{DynamicResource OnSurfaceDimBrush}" />
+                                        </Grid>
+                                    </Border>
+
+                                    <views:SupplementalDocsView Grid.Row="1"
+                                                                 x:Name="SupplementalDocsViewContent"
+                                                                 DataContext="{Binding SupplementalDocsViewModel}"
+                                                                 IsVisible="{Binding IsVisible}" />
+                                </Grid>
+                            </Grid>
+
+                        </Panel>
+                    </Border>
+
+                    <!-- ── SPLITTER BETWEEN LEFT PANE AND EDITOR ─────────────── -->
+                    <GridSplitter Grid.Column="1"
+                                  Width="4"
+                                  ResizeDirection="Columns"
+                                  Background="{DynamicResource BorderSubtleBrush}" />
+
+                    <!-- ── EDITOR ─────────────────────────────────────── -->
+                    <!-- The chapter status bar shares the editor's header row with the Write / Split / Preview switch. -->
+                    <views:EditorView Grid.Column="2"
+                                      DataContext="{Binding EditorViewModel}"
+                                      PlaysTypingSounds="True"
+                                      Background="Transparent">
+                        <views:EditorView.HeaderContent>
+                            <views:EditorChapterBar
+                                DataContext="{Binding $parent[Window].((vm:MainWindowViewModel)DataContext).WorkspaceViewModel.SelectedNode}"
+                                IsVisible="{Binding $parent[Window].((vm:MainWindowViewModel)DataContext).IsEditorChapterBarVisible}" />
+                        </views:EditorView.HeaderContent>
+                    </views:EditorView>
+
+                    <!-- ── SPLITTER (visible when any right pane is open) ─────────── -->
+                    <GridSplitter Grid.Column="3"
+                                  Width="4"
+                                  ResizeDirection="Columns"
+                                  Background="{DynamicResource BorderSubtleBrush}" />
+
+                    <!-- ── RIGHT PANE ─────────────────────────────────────────────── -->
+                    <Border Grid.Column="4"
+                            Background="{DynamicResource SurfaceElevatedBrush}"
+                            BorderBrush="{DynamicResource BorderSubtleBrush}"
+                            BorderThickness="1,0,0,0">
+                        <Panel>
+
+                            <!-- COLLAPSED: 48px icon strip — visible when neither pane is open -->
+                            <StackPanel Width="48"
+                                        IsVisible="{Binding !IsAnyRightPaneOpen}"
+                                        Margin="0,8,0,0">
+                                <!-- F3: Chapter Info -->
+                                <Button Classes="nav-icon"
+                                        Command="{Binding ChapterInfoViewModel.ToggleCommand}"
+                                        ToolTip.Tip="{Binding ChapterInfoViewModel.ToggleToolTip}">
+                                    <Path Data="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-6h2v6zm0-8h-2V7h2v2z"
+                                          Fill="{DynamicResource OnSurfaceDimBrush}"
+                                          Width="18" Height="18"
+                                          Stretch="Uniform" />
+                                </Button>
+                                <!-- F4: Notes -->
+                                <Button Classes="nav-icon"
+                                        Command="{Binding NotesViewModel.ToggleCommand}"
+                                        ToolTip.Tip="Notes (F4)">
+                                    <Path Data="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8zM14 2v6h6M16 13H8M16 17H8M10 9H8"
+                                          Stroke="{DynamicResource OnSurfaceDimBrush}"
+                                          StrokeThickness="1.5"
+                                          StrokeLineCap="Round"
+                                          Width="18" Height="18"
+                                          Stretch="Uniform" />
+                                </Button>
+                                <!-- AI Chat (Ctrl+Shift+A) -->
+                                <Button Classes="nav-icon"
+                                        Command="{Binding ToggleAiChatCommand}"
+                                        ToolTip.Tip="AI Chat (Ctrl+Shift+A)">
+                                    <Path Data="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z"
+                                          Stroke="{DynamicResource OnSurfaceDimBrush}"
+                                          StrokeThickness="1.5"
+                                          StrokeLineCap="Round"
+                                          Width="18" Height="18"
+                                          Stretch="Uniform" />
+                                </Button>
+                            </StackPanel>
+
+                            <!-- EXPANDED: Outlook-style explorer bar.
+                                 Both section headers are ALWAYS visible when the pane is expanded.
+                                 Each section's content area collapses independently within its DockPanel.
+                                 When both content areas are collapsed, IsAnyRightPaneOpen → false
+                                 and the icon rail above takes over.
+
+                                 Row 0: DockPanel — Chapter panel header (48px fixed) + Chapter panel content (*)
+                                 Row 1: GridSplitter (auto; visible when both sections are open)
+                                 Row 2: DockPanel — Notes header (48px fixed) + Notes content (*)
+
+                                 Using DockPanel per section ensures the GridSplitter resizes the two
+                                 full sections (header + content) rather than a header row directly.
+                            -->
+                            <Grid IsVisible="{Binding IsAnyRightPaneOpen}"
+                                  RowDefinitions="*,Auto,*,Auto,*"
+                                  x:Name="RightPaneGrid">
+
+                                <!-- Row 0: Chapter panel DockPanel (header pinned top + content fills rest) -->
+                                <DockPanel Grid.Row="0">
+                                    <Border DockPanel.Dock="Top"
+                                            Height="48"
+                                            BorderBrush="{DynamicResource BorderSubtleBrush}"
+                                            BorderThickness="0,0,0,1">
+                                        <Grid ColumnDefinitions="48,*">
+                                            <Button Grid.Column="0"
+                                                    Classes="nav-icon"
+                                                    Command="{Binding ChapterInfoViewModel.ToggleCommand}"
+                                                    ToolTip.Tip="{Binding ChapterInfoViewModel.ToggleToolTip}">
+                                                <Path Data="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-6h2v6zm0-8h-2V7h2v2z"
+                                                      Fill="{DynamicResource SynthwavePurpleBrush}"
+                                                      Width="18" Height="18"
+                                                      Stretch="Uniform" />
+                                            </Button>
+                                            <TextBlock Grid.Column="1"
+                                                       Text="{Binding ChapterPanelTitle}"
+                                                       VerticalAlignment="Center"
+                                                       Margin="4,0,0,0"
+                                                       FontSize="10"
+                                                       FontWeight="SemiBold"
+                                                       LetterSpacing="1.5"
+                                                       Foreground="{DynamicResource OnSurfaceDimBrush}" />
+                                        </Grid>
+                                    </Border>
+                                    <ContentControl x:Name="ChapterPanelContentControl"
+                                                    Content="{Binding ChapterPanelContent}"
+                                                    IsVisible="{Binding IsChapterPanelOpen}" />
+                                </DockPanel>
+
+                                <!-- Row 1: GridSplitter between Info and Notes (visible when both content areas open) -->
+                                <GridSplitter Grid.Row="1"
+                                              Height="4"
+                                              ResizeDirection="Rows"
+                                              IsVisible="{Binding IsInfoNotesSplitterVisible}"
+                                              Background="{DynamicResource BorderSubtleBrush}" />
+
+                                <!-- Row 2: Notes DockPanel (header pinned top + content fills rest) -->
+                                <DockPanel Grid.Row="2">
+                                    <Border DockPanel.Dock="Top"
+                                            Height="48"
+                                            BorderBrush="{DynamicResource BorderSubtleBrush}"
+                                            BorderThickness="0,1,0,1">
+                                        <Grid ColumnDefinitions="48,*">
+                                            <Button Grid.Column="0"
+                                                    Classes="nav-icon"
+                                                    Command="{Binding NotesViewModel.ToggleCommand}"
+                                                    ToolTip.Tip="Notes (F4)">
+                                                <Path Data="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8zM14 2v6h6M16 13H8M16 17H8M10 9H8"
+                                                      Stroke="{DynamicResource SynthwavePurpleBrush}"
+                                                      StrokeThickness="1.5"
+                                                      StrokeLineCap="Round"
+                                                      Width="18" Height="18"
+                                                      Stretch="Uniform" />
+                                            </Button>
+                                            <TextBlock Grid.Column="1"
+                                                       Text="NOTES"
+                                                       VerticalAlignment="Center"
+                                                       Margin="4,0,0,0"
+                                                       FontSize="10"
+                                                       FontWeight="SemiBold"
+                                                       LetterSpacing="1.5"
+                                                       Foreground="{DynamicResource OnSurfaceDimBrush}" />
+                                        </Grid>
+                                    </Border>
+                                    <views:NotesView x:Name="NotesViewContent"
+                                                     DataContext="{Binding NotesViewModel}" />
+                                </DockPanel>
+
+                                <!-- Row 3: GridSplitter between Notes and AI (visible when both content areas open) -->
+                                <GridSplitter Grid.Row="3"
+                                              Height="4"
+                                              ResizeDirection="Rows"
+                                              IsVisible="{Binding IsNotesChatSplitterVisible}"
+                                              Background="{DynamicResource BorderSubtleBrush}" />
+
+                                <!-- Row 4: AI Chat DockPanel (header always visible; content collapses) -->
+                                <DockPanel Grid.Row="4">
+                                    <Border DockPanel.Dock="Top"
+                                            Height="48"
+                                            BorderBrush="{DynamicResource BorderSubtleBrush}"
+                                            BorderThickness="0,1,0,1">
+                                        <Grid ColumnDefinitions="48,*,Auto">
+                                            <Button Grid.Column="0"
+                                                    Classes="nav-icon"
+                                                    Command="{Binding ToggleAiChatCommand}"
+                                                    ToolTip.Tip="AI Chat (Ctrl+Shift+A)">
+                                                <Path Data="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z"
+                                                      Stroke="{DynamicResource SynthwavePurpleBrush}"
+                                                      StrokeThickness="1.5"
+                                                      StrokeLineCap="Round"
+                                                      Width="18" Height="18"
+                                                      Stretch="Uniform" />
+                                            </Button>
+                                            <TextBlock Grid.Column="1"
+                                                       Text="AI CHAT"
+                                                       VerticalAlignment="Center"
+                                                       Margin="4,0,0,0"
+                                                       FontSize="10"
+                                                       FontWeight="SemiBold"
+                                                       LetterSpacing="1.5"
+                                                       Foreground="{DynamicResource OnSurfaceDimBrush}" />
+                                            <Button Grid.Column="2"
+                                                    Classes="nav-icon"
+                                                    Command="{Binding AiChatViewModel.NewConversationCommand}"
+                                                    ToolTip.Tip="New conversation"
+                                                    Margin="0,0,4,0">
+                                                <TextBlock Text="+"
+                                                           FontSize="16"
+                                                           Foreground="{DynamicResource SynthwavePurpleBrush}" />
+                                            </Button>
+                                        </Grid>
+                                    </Border>
+                                    <aiviews:AiChatView x:Name="AiChatViewContent"
+                                                        DataContext="{Binding AiChatViewModel}" />
+                                </DockPanel>
+
+                            </Grid>
+
+                        </Panel>
+                    </Border>
+
+                </Grid>
+
+                <!-- Research / Ideas / Plan / Manage — lazy-loaded via ViewLocator, full width -->
+                <ContentControl IsVisible="{Binding !IsEditorVisible}"
+                                Content="{Binding SecondaryCentreContent}" />
+
+                <!-- Settings overlay — covers full shell area when IsSettingsOpen -->
+                <Border IsVisible="{Binding IsSettingsOpen}"
+                        Background="{DynamicResource SurfaceBaseBrush}"
+                        ZIndex="100">
+                    <Grid RowDefinitions="48,*">
+                        <!-- Settings header bar -->
+                        <Border Grid.Row="0"
+                                Background="{DynamicResource SurfaceElevatedBrush}"
+                                BorderBrush="{DynamicResource BorderSubtleBrush}"
+                                BorderThickness="0,0,0,1">
+                            <Grid ColumnDefinitions="*,Auto">
+                                <TextBlock Grid.Column="0"
+                                           Text="Settings"
+                                           FontSize="14"
+                                           FontWeight="SemiBold"
+                                           Foreground="{DynamicResource OnSurfaceBrush}"
+                                           VerticalAlignment="Center"
+                                           Margin="16,0" />
+                                <Button Grid.Column="1"
+                                        Classes="nav-icon"
+                                        Command="{Binding CloseSettingsCommand}"
+                                        ToolTip.Tip="Close settings (Esc)"
+                                        Margin="0,0,8,0">
+                                    <TextBlock Text="✕"
+                                               FontSize="14"
+                                               Foreground="{DynamicResource OnSurfaceDimBrush}" />
+                                </Button>
+                            </Grid>
+                        </Border>
+                        <!-- Settings view -->
+                        <ContentControl Grid.Row="1"
+                                        Content="{Binding ActiveSettingsViewModel}">
+                            <ContentControl.DataTemplates>
+                                <DataTemplate DataType="{x:Type vm:SettingsViewModel}">
+                                    <views:SettingsView />
+                                </DataTemplate>
+                            </ContentControl.DataTemplates>
+                        </ContentControl>
+                    </Grid>
+                </Border>
+
+            </Panel>
+        </DockPanel>
 
         <!-- Synthwave accent stripe bottom (Row 3) -->
         <Border Grid.Row="3"

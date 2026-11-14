@@ -4,6 +4,7 @@ using Hymnal.Core.Interfaces;
 using Hymnal.Core.Models;
 using Hymnal.Infrastructure;
 using Hymnal.ViewModels.Ai;
+using MattEland.HopeLab.Updates.ReactiveUI;
 using ReactiveUI;
 using System;
 using System.IO;
@@ -43,6 +44,9 @@ public class MainWindowViewModel : ViewModelBase
 
     /// <summary>App-wide sound preferences (View → Sound); null when the host has no sound.</summary>
     public Hymnal.Audio.SoundPreferences? SoundPreferences { get; }
+
+    /// <summary>Release updates: the banner and Help → Check for Updates bind here; null when the app runs without them.</summary>
+    public UpdatesViewModel? Updates { get; }
 
     /// <summary>View → Sound: turns all of Hymnal's sound on or off.</summary>
     public ReactiveCommand<Unit, Unit> ToggleSoundCommand { get; }
@@ -285,7 +289,8 @@ public class MainWindowViewModel : ViewModelBase
         Func<SettingsViewModel> settingsVmFactory,
         IdeasViewModel? ideasViewModel = null,
         PlanHostViewModel? planHostViewModel = null,
-        Hymnal.Audio.SoundPreferences? soundPreferences = null)
+        Hymnal.Audio.SoundPreferences? soundPreferences = null,
+        UpdatesViewModel? updates = null)
     {
         _settingsStore = settingsStore;
         _workspaceVm = workspaceViewModel;
@@ -307,6 +312,7 @@ public class MainWindowViewModel : ViewModelBase
         IdeasViewModel = ideasViewModel;
         PlanHostViewModel = planHostViewModel;
         SoundPreferences = soundPreferences;
+        Updates = updates;
         ToggleSoundCommand = ReactiveCommand.Create(() => soundPreferences?.ToggleSound());
         _settingsVmFactory = settingsVmFactory;
 
@@ -640,6 +646,40 @@ public class MainWindowViewModel : ViewModelBase
                     return false;
             }
             return await flush;
+        }
+        catch
+        {
+            return false;
+        }
+    }
+
+    /// <summary>
+    /// Saves everything before an installed update restarts Hymnal: the open file (unless it changed on disk while
+    /// it had edits, which needs the author's choice), then pending notes, schedule, idea and beat edits. False when
+    /// anything couldn't be saved, so the restart doesn't happen.
+    /// </summary>
+    public async Task<bool> SaveAllBeforeRestartAsync(TimeSpan timeout)
+    {
+        if (EditorViewModel.IsDirty)
+        {
+            if (EditorViewModel.HasConflict || !EditorViewModel.CanSave)
+                return false;
+            try
+            {
+                await EditorViewModel.SaveAsync();
+            }
+            catch
+            {
+                return false; // SaveAsync has shown the error
+            }
+        }
+
+        try
+        {
+            var notes = await NotesViewModel.FlushAsync();
+            var schedule = await ChapterInfoViewModel.FlushScheduleAsync();
+            var pending = await FlushPendingEditsBeforeCloseAsync(timeout);
+            return notes && schedule && pending && !EditorViewModel.IsDirty;
         }
         catch
         {
