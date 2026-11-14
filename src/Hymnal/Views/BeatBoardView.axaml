@@ -95,6 +95,20 @@
             <Setter Property="Cursor" Value="IBeam" />
             <Setter Property="Foreground" Value="{DynamicResource Cora.Text}" />
         </Style>
+        <!-- The page's title and note: focusable fields, ringed when reached from the keyboard -->
+        <Style Selector="Border.page-field">
+            <Setter Property="Focusable" Value="True" />
+            <Setter Property="IsTabStop" Value="True" />
+            <Setter Property="Background" Value="Transparent" />
+            <Setter Property="BorderBrush" Value="Transparent" />
+            <Setter Property="BorderThickness" Value="1" />
+            <Setter Property="CornerRadius" Value="3" />
+            <Setter Property="Padding" Value="4,2" />
+            <Setter Property="Cursor" Value="IBeam" />
+        </Style>
+        <Style Selector="Border.page-field:focus-visible">
+            <Setter Property="BorderBrush" Value="{DynamicResource Cora.Border.Focus}" />
+        </Style>
         <Style Selector="TextBox.page-title-editor">
             <Setter Property="FontFamily" Value="{DynamicResource Cora.Font.Heading}" />
             <Setter Property="FontSize" Value="26" />
@@ -151,7 +165,7 @@
         <Style Selector="Button.template-primary">
             <Setter Property="Padding" Value="14,6" />
             <Setter Property="Background" Value="{DynamicResource Cora.Accent.Store}" />
-            <Setter Property="Foreground" Value="{DynamicResource Cora.Text}" />
+            <Setter Property="Foreground" Value="{DynamicResource Cora.IconInk}" />
             <Setter Property="BorderThickness" Value="0" />
             <Setter Property="CornerRadius" Value="6" />
             <Setter Property="FontWeight" Value="SemiBold" />
@@ -381,6 +395,7 @@
                            Margin="20,14,16,6"
                            Text="CONTENTS" />
                 <ListBox x:Name="BeatList"
+                         KeyDown="BeatList_KeyDown"
                          Padding="12,0,12,16"
                          Background="Transparent"
                          ItemsSource="{Binding Beats}"
@@ -509,17 +524,25 @@
                                 <StackPanel Spacing="10" MaxWidth="720" HorizontalAlignment="Left">
                                     <!-- Title: read, or click to write -->
                                     <Panel>
-                                        <TextBlock x:Name="TitleDisplay"
-                                                   Classes="page-title"
-                                                   Text="{Binding Title}"
-                                                   Background="Transparent"
-                                                   MinHeight="34"
-                                                   ToolTip.Tip="Click to edit the title"
-                                                   Tapped="TitleDisplay_Tapped" />
-                                        <TextBlock Classes="page-title untitled"
-                                                   Text="Untitled beat"
-                                                   IsVisible="{Binding Title, Converter={x:Static StringConverters.IsNullOrEmpty}}"
-                                                   IsHitTestVisible="False" />
+                                        <!-- Focusable: Enter, Space or F2 edits it from the keyboard -->
+                                        <Border x:Name="TitleDisplay"
+                                                Classes="page-field"
+                                                Focusable="True"
+                                                IsTabStop="True"
+                                                MinHeight="34"
+                                                AutomationProperties.Name="Beat title"
+                                                AutomationProperties.HelpText="Press Enter to edit the title"
+                                                ToolTip.Tip="Click (or press Enter) to edit the title"
+                                                Tapped="TitleDisplay_Tapped"
+                                                KeyDown="TitleDisplay_KeyDown">
+                                            <Panel>
+                                                <TextBlock Classes="page-title" Text="{Binding Title}" />
+                                                <TextBlock Classes="page-title untitled"
+                                                           Text="Untitled beat"
+                                                           IsVisible="{Binding Title, Converter={x:Static StringConverters.IsNullOrEmpty}}"
+                                                           IsHitTestVisible="False" />
+                                            </Panel>
+                                        </Border>
                                         <TextBox x:Name="TitleEditor"
                                                  Classes="page-title-editor"
                                                  IsVisible="False"
@@ -543,11 +566,15 @@
                                     <!-- The note: read, or click to write on a full page -->
                                     <Panel>
                                         <Border x:Name="NoteDisplay"
-                                                Background="Transparent"
-                                                Cursor="IBeam"
+                                                Classes="page-field"
+                                                Focusable="True"
+                                                IsTabStop="True"
                                                 MinHeight="160"
-                                                ToolTip.Tip="Click to write"
-                                                Tapped="NoteDisplay_Tapped">
+                                                AutomationProperties.Name="Beat note"
+                                                AutomationProperties.HelpText="Press Enter to write the note"
+                                                ToolTip.Tip="Click (or press Enter) to write"
+                                                Tapped="NoteDisplay_Tapped"
+                                                KeyDown="NoteDisplay_KeyDown">
                                             <Panel>
                                                 <TextBlock Classes="page-note"
                                                            Text="{Binding Note}" />

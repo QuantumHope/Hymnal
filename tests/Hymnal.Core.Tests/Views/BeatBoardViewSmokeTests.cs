@@ -138,6 +138,56 @@ public sealed class BeatBoardViewSmokeTests
 
     // ── Helpers ───────────────────────────────────────────────────────────────
 
+    [Fact]
+    public async Task BeatBoardView_page_fields_can_be_edited_from_the_keyboard()
+    {
+        var root = CreateStory();
+        try
+        {
+            await Ui(root, 2, async context =>
+            {
+                context.CreateHost();
+                await PumpUntilAsync(() => context.Board.BoardKey == BeatBoardService.ShortStoryBoardKey);
+                await Within(context.Board.ApplyTemplateCommand
+                    .Execute(new ApplyTemplateRequest("threeAct", TemplateApplyMode.Append, null)).ToTask());
+                context.Board.Selected = context.Board.Beats[0];
+                var original = context.Board.Beats[0].Title;
+
+                var view = new BeatBoardView { DataContext = context.Board };
+                LayoutView(view);
+
+                var titleField = view.FindControl<Border>("TitleDisplay")!;
+                var titleEditor = view.FindControl<TextBox>("TitleEditor")!;
+                var noteField = view.FindControl<Border>("NoteDisplay")!;
+                var noteEditor = view.FindControl<TextBox>("NoteEditor")!;
+
+                // Both fields are tab stops with names a screen reader can announce.
+                Assert.True(titleField.Focusable && titleField.IsTabStop);
+                Assert.True(noteField.Focusable && noteField.IsTabStop);
+                Assert.Equal("Beat title", Avalonia.Automation.AutomationProperties.GetName(titleField));
+                Assert.Equal("Beat note", Avalonia.Automation.AutomationProperties.GetName(noteField));
+
+                // Enter on the title opens its editor; Esc puts the text back and closes it.
+                titleField.RaiseEvent(new Avalonia.Input.KeyEventArgs
+                    { RoutedEvent = Avalonia.Input.InputElement.KeyDownEvent, Key = Avalonia.Input.Key.Enter });
+                Assert.True(titleEditor.IsVisible);
+                Assert.False(titleField.IsVisible);
+                titleEditor.Text = "Changed";
+                titleEditor.RaiseEvent(new Avalonia.Input.KeyEventArgs
+                    { RoutedEvent = Avalonia.Input.InputElement.KeyDownEvent, Key = Avalonia.Input.Key.Escape });
+                Assert.False(titleEditor.IsVisible);
+                Assert.True(titleField.IsVisible);
+                Assert.Equal(original, context.Board.Beats[0].Title);
+
+                // Enter on the note opens the full-page note editor.
+                noteField.RaiseEvent(new Avalonia.Input.KeyEventArgs
+                    { RoutedEvent = Avalonia.Input.InputElement.KeyDownEvent, Key = Avalonia.Input.Key.Enter });
+                Assert.True(noteEditor.IsVisible);
+            });
+        }
+        finally { DeleteFolder(root); }
+    }
+
     private static void LayoutView(Control view)
     {
         view.ApplyTemplate();

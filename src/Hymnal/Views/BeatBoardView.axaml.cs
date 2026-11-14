@@ -161,6 +161,35 @@ public partial class BeatBoardView : UserControl
 
     private void NoteDisplay_Tapped(object? sender, TappedEventArgs e) => BeginEdit(NoteEditor, NoteDisplay);
 
+    // Keyboard: the title and note fields are tab stops; Enter, Space or F2 edits the focused one, and F2 on the
+    // contents edits the open beat's title.
+    private static bool IsEditKey(KeyEventArgs e) =>
+        e.KeyModifiers == KeyModifiers.None && e.Key is Key.Enter or Key.Space or Key.F2;
+
+    private void TitleDisplay_KeyDown(object? sender, KeyEventArgs e)
+    {
+        if (!IsEditKey(e))
+            return;
+        e.Handled = true;
+        BeginEdit(TitleEditor, TitleDisplay, selectAll: true);
+    }
+
+    private void NoteDisplay_KeyDown(object? sender, KeyEventArgs e)
+    {
+        if (!IsEditKey(e))
+            return;
+        e.Handled = true;
+        BeginEdit(NoteEditor, NoteDisplay);
+    }
+
+    private void BeatList_KeyDown(object? sender, KeyEventArgs e)
+    {
+        if (e.Key != Key.F2 || e.KeyModifiers != KeyModifiers.None || DataContext is not BeatBoardViewModel { Selected: not null })
+            return;
+        e.Handled = true;
+        BeginEdit(TitleEditor, TitleDisplay, selectAll: true);
+    }
+
     private void BeginEdit(TextBox editor, Control display, bool selectAll = false)
     {
         if (DataContext is not BeatBoardViewModel { CanEdit: true })
@@ -182,7 +211,8 @@ public partial class BeatBoardView : UserControl
         });
     }
 
-    private void EndEdit(bool revert = false)
+    /// <param name="refocus">Put the keyboard back on the field (after Enter or Esc, not after clicking away).</param>
+    private void EndEdit(bool revert = false, bool refocus = false)
     {
         if (_editing is not { } editor)
             return;
@@ -190,10 +220,13 @@ public partial class BeatBoardView : UserControl
         if (revert)
             editor.Text = _editingOriginal;
         editor.IsVisible = false;
-        if (_editingDisplay != null)
-            _editingDisplay.IsVisible = true;
+        var display = _editingDisplay;
+        if (display != null)
+            display.IsVisible = true;
         _editingDisplay = null;
         EditHint.IsVisible = false;
+        if (refocus && display != null)
+            Avalonia.Threading.Dispatcher.UIThread.Post(() => display.Focus(NavigationMethod.Tab));
     }
 
     private void TitleEditor_KeyDown(object? sender, KeyEventArgs e)
@@ -201,12 +234,12 @@ public partial class BeatBoardView : UserControl
         if (e.Key == Key.Enter)
         {
             e.Handled = true;
-            EndEdit();
+            EndEdit(refocus: true);
         }
         else if (e.Key == Key.Escape)
         {
             e.Handled = true;
-            EndEdit(revert: true);
+            EndEdit(revert: true, refocus: true);
         }
     }
 
@@ -215,12 +248,12 @@ public partial class BeatBoardView : UserControl
         if (e.Key == Key.Escape)
         {
             e.Handled = true;
-            EndEdit(revert: true);
+            EndEdit(revert: true, refocus: true);
         }
         else if (e.Key == Key.Enter && e.KeyModifiers.HasFlag(KeyModifiers.Control))
         {
             e.Handled = true;
-            EndEdit();
+            EndEdit(refocus: true);
         }
     }
 
