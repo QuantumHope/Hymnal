@@ -4,6 +4,7 @@ using Hymnal.Core.Interfaces;
 using Hymnal.Core.Models;
 using Hymnal.Infrastructure;
 using Hymnal.ViewModels.Ai;
+using MattEland.HopeLab.Updates.ReactiveUI;
 using ReactiveUI;
 using System;
 using System.IO;
@@ -44,6 +45,29 @@ public class MainWindowViewModel : ViewModelBase
 
     /// <summary>App-wide sound preferences (View → Sound); null when the host has no sound.</summary>
     public Hymnal.Audio.SoundPreferences? SoundPreferences { get; }
+
+    /// <summary>Release updates: the banner and Help → Check for Updates bind here; null when the app runs without them.</summary>
+    public UpdatesViewModel? Updates { get; }
+
+    private bool _isRestarting;
+    /// <summary>
+    /// True while an installed update saves everything and restarts Hymnal: the window disables its content and swallows
+    /// keys, so nothing is edited or switched until Hymnal exits (or the restart is called off).
+    /// </summary>
+    public bool IsRestarting
+    {
+        get => _isRestarting;
+        private set => this.RaiseAndSetIfChanged(ref _isRestarting, value);
+    }
+
+    /// <summary>True while anything typed hasn't been written: the editor, notes, schedule, ideas or beats.</summary>
+    public bool HasUnsavedWork =>
+        EditorViewModel.IsDirty
+        || NotesViewModel.HasPendingChanges
+        || ChapterInfoViewModel.HasPendingSchedule
+        || IdeasViewModel?.HasPendingChanges == true
+        || PlanHostViewModel?.BeatBoard.HasPendingChanges == true
+        || WriteBeatsViewModel?.Board.HasPendingChanges == true;
 
     /// <summary>View → Sound: turns all of Hymnal's sound on or off.</summary>
     public ReactiveCommand<Unit, Unit> ToggleSoundCommand { get; }
@@ -481,7 +505,8 @@ public class MainWindowViewModel : ViewModelBase
         Hymnal.Audio.SoundPreferences? soundPreferences = null,
         WriteBeatsViewModel? writeBeatsViewModel = null,
         CollectionsViewModel? collectionsViewModel = null,
-        SubmissionExportViewModel? submissionExportViewModel = null)
+        SubmissionExportViewModel? submissionExportViewModel = null,
+        UpdatesViewModel? updates = null)
     {
         CollectionsViewModel = collectionsViewModel;
         SubmissionExportViewModel = submissionExportViewModel;
@@ -505,6 +530,12 @@ public class MainWindowViewModel : ViewModelBase
         IdeasViewModel = ideasViewModel;
         PlanHostViewModel = planHostViewModel;
         SoundPreferences = soundPreferences;
+        Updates = updates;
+        // The banner's "unsaved changes" warning follows the editor: as it becomes dirty, is saved, or opens another file.
+        if (updates is not null)
+            Disposables.Add(editorViewModel
+                .WhenAnyValue(x => x.IsDirty, x => x.ActiveFilePath)
+                .Subscribe(_ => updates.RestartWarningChanged()));
         ToggleSoundCommand = ReactiveCommand.Create(() => soundPreferences?.ToggleSound());
         WriteBeatsViewModel = writeBeatsViewModel;
         _settingsVmFactory = settingsVmFactory;
@@ -587,7 +618,8 @@ public class MainWindowViewModel : ViewModelBase
             : Observable.CombineLatest(
                 this.WhenAnyValue(x => x.IsIdeasModeAvailable),
                 ideasViewModel.WhenAnyValue(x => x.CanEdit),
-                (available, canEdit) => available && canEdit);
+                this.WhenAnyValue(x => x.IsRestarting),
+                (available, canEdit, restarting) => available && canEdit && !restarting);
         QuickCaptureIdeaCommand = ReactiveCommand.CreateFromTask(QuickCaptureIdeaAsync, canQuickCapture);
         Disposables.Add(QuickCaptureIdeaCommand.ThrownExceptions.Subscribe(ex =>
             notificationService.ShowError($"Failed to capture idea: {ex.Message}")));
@@ -948,6 +980,67 @@ public class MainWindowViewModel : ViewModelBase
                     return false;
             }
             return await flush;
+        }
+        catch
+        {
+            return false;
+        }
+    }
+
+    /// <summary>
+    /// Saves everything before an installed update restarts Hymnal. Editing and switching are locked first
+    /// (<see cref="IsRestarting"/>), then the save rounds repeat until nothing is dirty or pending, so an edit made while
+    /// an earlier save was still awaited is written too. Null when everything is saved (editing stays locked: Hymnal is
+    /// about to exit); otherwise why not, with editing given back.
+    /// </summary>
+    public async Task<string?> SaveAllBeforeRestartAsync(TimeSpan timeout)
+    {
+        IsRestarting = true;
+        string? problem;
+        try
+        {
+            problem = await Hymnal.Infrastructure.Updates.UpdateRestart.SaveUntilCleanAsync(
+                () => SaveEverythingOnceAsync(timeout), () => HasUnsavedWork);
+        }
+        catch
+        {
+            problem = Hymnal.Infrastructure.Updates.UpdateRestart.CouldNotSave;
+        }
+
+        if (problem is not null)
+            IsRestarting = false;
+        return problem;
+    }
+
+    /// <summary>Gives editing back when an update's restart doesn't happen after all (the new copy wouldn't start).</summary>
+    public void CancelRestart() => IsRestarting = false;
+
+    /// <summary>
+    /// One save round: the open file (unless it changed on disk while it had edits, which needs the author's choice),
+    /// then pending notes, schedule, idea and beat edits. False when anything couldn't be saved.
+    /// </summary>
+    private async Task<bool> SaveEverythingOnceAsync(TimeSpan timeout)
+    {
+        if (EditorViewModel.IsDirty)
+        {
+            if (EditorViewModel.HasConflict || !EditorViewModel.CanSave)
+                return false;
+            try
+            {
+                await EditorViewModel.SaveAsync();
+            }
+            catch
+            {
+                return false; // SaveAsync has shown the error
+            }
+        }
+
+        try
+        {
+            var notes = await NotesViewModel.FlushAsync();
+            var schedule = await ChapterInfoViewModel.FlushScheduleAsync();
+            var pending = await FlushPendingEditsBeforeCloseAsync(timeout);
+            return notes && schedule && pending;
         }
         catch
         {

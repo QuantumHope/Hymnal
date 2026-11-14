@@ -76,6 +76,9 @@ public sealed class ChapterInfoViewModel : ViewModelBase, IDisposable
     /// <summary>True from a schedule row edit until the next schedule save starts, and again when it fails.</summary>
     private volatile bool _scheduleSavePending;
 
+    /// <summary>True while schedule edits are waiting on the debounce (or a failed save) to be written.</summary>
+    public bool HasPendingSchedule => _scheduleSavePending;
+
     private readonly SemaphoreSlim _scheduleSaveGate = new(1, 1);
 
     /// <summary>Change subscriptions for the current <see cref="PhaseScheduleRows"/>.</summary>

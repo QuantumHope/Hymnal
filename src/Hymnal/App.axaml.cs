@@ -11,13 +11,18 @@ using Hymnal.Core.Services;
 using Hymnal.Core.Submission;
 using Hymnal.Core.Services.Ai;
 using Hymnal.Infrastructure;
+using Hymnal.Infrastructure.Updates;
 using Hymnal.Theming;
 using Hymnal.ViewModels;
 using Hymnal.ViewModels.Ai;
 using Hymnal.Views;
 using Microsoft.Extensions.AI;
+using MattEland.HopeLab.Updates;
+using MattEland.HopeLab.Updates.ReactiveUI;
 using Microsoft.Extensions.DependencyInjection;
 using System;
+using System.Diagnostics;
+using System.Threading.Tasks;
 
 namespace Hymnal;
 
@@ -345,6 +350,16 @@ public partial class App : Application
                 sp.GetRequiredService<ManageContextBuilder>(),
                 sp.GetRequiredService<ConversationListViewModel>()));
 
+        // Releases and in-app updates (hopelab-app.json; the shared MattEland.HopeLab.Updates libraries).
+        services.AddSingleton<IUpdateService>(sp => HymnalUpdates.CreateService(sp.GetRequiredService<ICredentialStore>()));
+        services.AddSingleton<UpdatesViewModel>(sp => HymnalUpdates.CreateViewModel(
+            sp.GetRequiredService<IUpdateService>(),
+            new HymnalUpdateHost(
+                sp.GetRequiredService<INotificationService>(),
+                sp.GetRequiredService<IAppSettingsStore>(),
+                OpenUrlAsync),
+            () => sp.GetRequiredService<EditorViewModel>().IsDirty));
+
         services.AddTransient<SettingsViewModel>(sp =>
             new SettingsViewModel(
                 sp.GetRequiredService<IProviderProfileService>(),
@@ -365,7 +380,8 @@ public partial class App : Application
                 },
                 sp.GetRequiredService<SoundPreferences>(),
                 sp.GetRequiredService<TypingSoundPlayer>(),
-                sp.GetRequiredService<IThemeService>()));
+                sp.GetRequiredService<IThemeService>(),
+                sp.GetRequiredService<UpdatesViewModel>()));
 
         services.AddTransient<MainWindowViewModel>(sp =>
             new MainWindowViewModel(
@@ -388,7 +404,8 @@ public partial class App : Application
                 sp.GetRequiredService<SoundPreferences>(),
                 sp.GetRequiredService<WriteBeatsViewModel>(),
                 sp.GetRequiredService<CollectionsViewModel>(),
-                sp.GetRequiredService<SubmissionExportViewModel>()));
+                sp.GetRequiredService<SubmissionExportViewModel>(),
+                sp.GetRequiredService<UpdatesViewModel>()));
 
         _serviceProvider = services.BuildServiceProvider();
         Services = _serviceProvider;
@@ -402,10 +419,51 @@ public partial class App : Application
             // The saved theme, before the first window draws
             Services.GetRequiredService<ThemeManager>().ApplySaved();
             var vm = Services.GetRequiredService<MainWindowViewModel>();
-            desktop.MainWindow = new MainWindow { DataContext = vm };
+            var window = new MainWindow { DataContext = vm };
+            desktop.MainWindow = window;
+            SetUpUpdates(Services, desktop, window, vm);
         }
 
         base.OnFrameworkInitializationCompleted();
+    }
+
+    /// <summary>
+    /// Checks for updates once the window shows. An installed update saves everything, starts the new copy and exits
+    /// the way File → Exit does; if anything can't be saved, Hymnal keeps running and says so.
+    /// </summary>
+    private static void SetUpUpdates(
+        IServiceProvider services,
+        IClassicDesktopStyleApplicationLifetime desktop,
+        MainWindow window,
+        MainWindowViewModel vm)
+    {
+        var updates = services.GetRequiredService<UpdatesViewModel>();
+        var restart = new UpdateRestart(
+            services.GetRequiredService<IUpdateService>(),
+            () => vm.SaveAllBeforeRestartAsync(RestartSaveTimeout),
+            () => desktop.TryShutdown(),
+            services.GetRequiredService<INotificationService>(),
+            vm.CancelRestart);
+        updates.RestartRequested += async (_, executable) => await restart.RestartAsync(executable);
+
+        void StartChecks(object? sender, EventArgs e)
+        {
+            window.Opened -= StartChecks;
+            updates.Start();
+        }
+        window.Opened += StartChecks;
+    }
+
+    private static readonly TimeSpan RestartSaveTimeout = TimeSpan.FromSeconds(5);
+
+    /// <summary>Opens a web page (release notes) in the default browser.</summary>
+    private static async Task OpenUrlAsync(string url)
+    {
+        var window = (Current?.ApplicationLifetime as IClassicDesktopStyleApplicationLifetime)?.MainWindow;
+        if (window?.Launcher is { } launcher && await launcher.LaunchUriAsync(new Uri(url)))
+            return;
+
+        using var process = Process.Start(new ProcessStartInfo(url) { UseShellExecute = true });
     }
 
     private void DisposeServices()

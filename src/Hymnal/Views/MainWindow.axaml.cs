@@ -9,6 +9,7 @@ using System.Reactive.Linq;
 using System.Reactive.Subjects;
 using Avalonia;
 using Avalonia.Controls;
+using Avalonia.Input;
 using Avalonia.Interactivity;
 using Avalonia.Threading;
 using Hymnal.ViewModels;
@@ -30,6 +31,14 @@ public partial class MainWindow : Window
         InitializeComponent();
 
         Closing += OnClosingFlushPendingEdits;
+
+        // While an installed update saves everything and restarts, no key edits or switches anything
+        // (the window's own key bindings included); the content is disabled too (IsRestarting in the AXAML).
+        AddHandler(KeyDownEvent, (_, e) =>
+        {
+            if (DataContext is MainWindowViewModel { IsRestarting: true })
+                e.Handled = true;
+        }, RoutingStrategies.Tunnel, handledEventsToo: true);
 
         Closed += (_, _) =>
         {

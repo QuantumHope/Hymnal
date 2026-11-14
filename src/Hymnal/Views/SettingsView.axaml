@@ -4,6 +4,7 @@
              xmlns:aivm="using:Hymnal.ViewModels.Ai"
              xmlns:conv="using:Hymnal.Views.Converters"
              xmlns:controls="using:Hymnal.Views.Controls"
+             xmlns:views="using:Hymnal.Views"
              x:Class="Hymnal.Views.SettingsView"
              x:DataType="vm:SettingsViewModel"
              Background="{DynamicResource Cora.Surface.Void}">
@@ -106,6 +107,12 @@
                              IsChecked="{Binding IsAiProvidersSection, Mode=OneWay}"
                              Command="{Binding ShowSectionCommand}"
                              CommandParameter="{x:Static vm:SettingsSection.AiProviders}" />
+                <RadioButton Classes="settingsNav" GroupName="settingsSection"
+                             Content="Updates"
+                             IsVisible="{Binding HasUpdates}"
+                             IsChecked="{Binding IsUpdatesSection, Mode=OneWay}"
+                             Command="{Binding ShowSectionCommand}"
+                             CommandParameter="{x:Static vm:SettingsSection.Updates}" />
             </StackPanel>
         </Border>
 
@@ -360,6 +367,12 @@
                                TextWrapping="Wrap"
                                Foreground="{DynamicResource Cora.Text.Secondary}" />
                 </StackPanel>
+
+                <!-- Updates section (releases from GitHub, installed in place) -->
+                <Panel IsVisible="{Binding IsUpdatesSection}">
+                    <views:UpdatesSettingsView DataContext="{Binding Updates}"
+                                               IsVisible="{Binding IsAvailable, FallbackValue=False}" />
+                </Panel>
 
                 <!-- AI Providers section -->
                 <StackPanel Spacing="16" IsVisible="{Binding IsAiProvidersSection}">

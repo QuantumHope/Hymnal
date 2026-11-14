@@ -63,6 +63,9 @@ public sealed class BeatBoardViewModel : ViewModelBase, IDisposable
     private BoardTarget? _target;
     private IReadOnlyList<string> _sceneScope = [];
     private bool _savePending;
+
+    /// <summary>True while beat edits are waiting to be written.</summary>
+    public bool HasPendingChanges => _savePending;
     /// <summary>True when the open board's last save failed; a failure on a board since closed doesn't count.</summary>
     private bool _lastSaveFailed;
     private Task _saveChain = Task.CompletedTask;
