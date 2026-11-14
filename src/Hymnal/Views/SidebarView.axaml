@@ -71,7 +71,7 @@
                     Command="{Binding OpenWorkspaceCommand}"
                     HorizontalAlignment="Center"
                     Background="{DynamicResource Cora.Accent.Store}"
-                    Foreground="{DynamicResource Cora.Text}"
+                    Foreground="{DynamicResource Cora.IconInk}"
                     Padding="12,6"
                     CornerRadius="4" />
         </StackPanel>
@@ -550,7 +550,7 @@
                         <Button Content="Set"
                                 Command="{Binding ConfirmTargetCommand}"
                                 Background="{DynamicResource Cora.Accent.Store}"
-                                Foreground="{DynamicResource Cora.Text}"
+                                Foreground="{DynamicResource Cora.IconInk}"
                                 Padding="10,4" />
                         <Button Content="Clear"
                                 Command="{Binding ClearTargetCommand}"

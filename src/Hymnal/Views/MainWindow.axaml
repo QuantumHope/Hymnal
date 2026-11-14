@@ -369,7 +369,7 @@
                                     Padding="18,6"
                                     CornerRadius="6"
                                     Background="{DynamicResource Cora.Accent.Store}"
-                                    Foreground="{DynamicResource Cora.Text}"
+                                    Foreground="{DynamicResource Cora.IconInk}"
                                     ToolTip.Tip="Sync local changes, or pull when already up to date" />
                         </StackPanel>
                     </Border>

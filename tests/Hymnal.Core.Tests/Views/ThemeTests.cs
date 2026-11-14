@@ -390,6 +390,31 @@ public sealed class ThemeTests
         Assert.True(offenders.Count == 0, string.Join(Environment.NewLine, offenders));
     }
 
+    /// <summary>
+    /// Text on an accent fill uses <c>Cora.IconInk</c>: <c>Cora.Text</c> on <c>Cora.Accent.Store</c> falls far below
+    /// legible contrast in some themes (1.91:1 in Scriptorium of the Eye). Checks elements and styles alike.
+    /// </summary>
+    [Fact]
+    public void Text_on_an_accent_fill_uses_the_icon_ink()
+    {
+        const string accentFill = "{DynamicResource Cora.Accent.Store}";
+        const string plainText = "{DynamicResource Cora.Text}";
+        var offenders = new List<string>();
+        foreach (var file in Directory.EnumerateFiles(RepoPath("src/Hymnal"), "*.axaml", SearchOption.AllDirectories))
+        {
+            var text = File.ReadAllText(file);
+            foreach (Match tag in Regex.Matches(text, @"<[A-Za-z][^<>]*?>", RegexOptions.Singleline))
+                if (tag.Value.Contains($"Background=\"{accentFill}\"") && tag.Value.Contains($"Foreground=\"{plainText}\""))
+                    offenders.Add($"{Path.GetFileName(file)}:{text[..tag.Index].Count(c => c == '\n') + 1}: element");
+            foreach (Match style in Regex.Matches(text, @"<Style\b[^>]*>.*?</Style>", RegexOptions.Singleline))
+                if (style.Value.Contains($"Property=\"Background\" Value=\"{accentFill}\"")
+                    && style.Value.Contains($"Property=\"Foreground\" Value=\"{plainText}\""))
+                    offenders.Add($"{Path.GetFileName(file)}:{text[..style.Index].Count(c => c == '\n') + 1}: style");
+        }
+        Assert.True(offenders.Count == 0, "Use Cora.IconInk for text on Cora.Accent.Store:" + Environment.NewLine
+                                          + string.Join(Environment.NewLine, offenders));
+    }
+
     // ── Helpers ─────────────────────────────────────────────────────────────
 
     private static void Pump()

@@ -19,7 +19,7 @@
                         IsDefault="True"
                         Padding="12,6"
                         Background="{DynamicResource Cora.Accent.Store}"
-                        Foreground="{DynamicResource Cora.Text}"
+                        Foreground="{DynamicResource Cora.IconInk}"
                         BorderThickness="0"
                         Click="InitializeButton_Click" />
                 <Button Content="Cancel"

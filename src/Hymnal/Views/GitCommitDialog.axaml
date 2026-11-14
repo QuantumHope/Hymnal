@@ -101,7 +101,7 @@
                         Content="Sync"
                         Padding="16,6"
                         Background="{DynamicResource Cora.Accent.Store}"
-                        Foreground="{DynamicResource Cora.Text}"
+                        Foreground="{DynamicResource Cora.IconInk}"
                         Click="SyncButton_Click" />
             </StackPanel>
         </Grid>
