@@ -57,8 +57,10 @@ public sealed class PlanHostViewModel : ViewModelBase, IDisposable
         CorkboardViewModel corkboard,
         BeatBoardViewModel beatBoard,
         INotificationService? notifications = null,
-        IBeatBoardService? boards = null)
+        IBeatBoardService? boards = null,
+        CollectionPlannerViewModel? planner = null)
     {
+        Planner = planner;
         _workspace = workspace;
         _notifications = notifications;
         _boards = boards;
@@ -70,6 +72,8 @@ public sealed class PlanHostViewModel : ViewModelBase, IDisposable
         Disposables.Add(BackToCollectionCommand.ThrownExceptions.Subscribe(ex => _notifications?.ShowError(ex.Message)));
 
         Disposables.Add(corkboard.BeatsRequested.Subscribe(OpenStory));
+        if (planner != null)
+            Disposables.Add(planner.BeatsRequested.Subscribe(ShowStoryBoard));
         Disposables.Add(workspace.WhenAnyValue(x => x.CollectionDisplayName)
             .Subscribe(_ => this.RaisePropertyChanged(nameof(BreadcrumbParent))));
 
@@ -85,6 +89,29 @@ public sealed class PlanHostViewModel : ViewModelBase, IDisposable
     }
 
     public CorkboardViewModel Corkboard { get; }
+
+    /// <summary>An anthology's story planner (every collection side by side); null when the app runs without it.</summary>
+    public CollectionPlannerViewModel? Planner { get; }
+
+    private bool _isCardsView;
+    /// <summary>Anthology: show the open collection's cards (the Corkboard) instead of the planner.</summary>
+    public bool IsCardsView
+    {
+        get => _isCardsView;
+        set
+        {
+            this.RaiseAndSetIfChanged(ref _isCardsView, value);
+            Refresh();
+        }
+    }
+
+    private bool _showsViewSwitch;
+    /// <summary>True on an anthology's collection level (not inside a story's board) when the planner exists.</summary>
+    public bool ShowsViewSwitch
+    {
+        get => _showsViewSwitch;
+        private set => this.RaiseAndSetIfChanged(ref _showsViewSwitch, value);
+    }
     public BeatBoardViewModel BeatBoard { get; }
 
     private object _content;
@@ -214,6 +241,7 @@ public sealed class PlanHostViewModel : ViewModelBase, IDisposable
         RequestBoard(new BoardRequest(_shownRoot ?? "", story.Key, story.Title, story.Scope));
         Content = BeatBoard;
         ShowBreadcrumb = false;
+        ShowsViewSwitch = false;
         ShowFilesStrip = story.Scenes.Count >= 2;
     }
 
@@ -225,7 +253,18 @@ public sealed class PlanHostViewModel : ViewModelBase, IDisposable
             : _workspace.Nodes.FirstOrDefault(n => n.Uuid == _drilledStoryUuid && !n.Node.IsExcluded);
         if (story == null)
         {
-            ShowCorkboard();
+            // A story the planner knows that isn't in the open collection still has a board of its own.
+            if (_drilledStoryUuid != null
+                && Planner?.Library.FirstOrDefault(s => s.Uuid == _drilledStoryUuid) is { } planned)
+            {
+                var scope = planned.Story.IsMultiScene ? planned.Story.Lines.Skip(1).ToList() : planned.Story.Lines.ToList();
+                RequestBoard(new BoardRequest(_shownRoot ?? "", _drilledStoryUuid, planned.Title, scope));
+                Content = BeatBoard;
+                ShowBreadcrumb = true;
+                ShowsViewSwitch = false;
+                return;
+            }
+            ShowCorkboard(anthology: true);
             return;
         }
 
@@ -235,12 +274,17 @@ public sealed class PlanHostViewModel : ViewModelBase, IDisposable
         RequestBoard(request, story.Node.Kind == NodeKind.Part ? FindAdoption(request, scenes) : null);
         Content = BeatBoard;
         ShowBreadcrumb = true;
+        ShowsViewSwitch = false;
     }
 
-    private void ShowCorkboard()
+    private void ShowCorkboard(bool anthology = false)
     {
         _drilledStoryUuid = null;
-        Content = Corkboard;
+        var planner = anthology && Planner != null;
+        Content = planner && !IsCardsView ? Planner! : Corkboard;
+        ShowsViewSwitch = planner;
+        if (planner && !IsCardsView)
+            _ = Planner!.RefreshAsync();
         ShowBreadcrumb = false;
         ShowFilesStrip = false;
         if (_requested != null)

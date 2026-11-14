@@ -849,10 +849,7 @@
                  the collection bar on top (Write shows the collection as its sidebar's root row). -->
             <DockPanel IsVisible="{Binding !IsEditorVisible}">
                 <views:CollectionBar DockPanel.Dock="Top"
-                                     IsVisible="{Binding ShowsCollectionBar}" />
-                <views:CollectionShelf DockPanel.Dock="Top"
-                                       IsVisible="{Binding ShowsCollectionShelf}" />
-                <ContentControl Content="{Binding SecondaryCentreContent}" />
+                                     IsVisible="{Binding ShowsCollectionBar}" />                <ContentControl Content="{Binding SecondaryCentreContent}" />
             </DockPanel>
 
             <!-- Settings overlay — covers full shell area when IsSettingsOpen -->

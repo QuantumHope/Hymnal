@@ -300,7 +300,31 @@ public partial class App : Application
                 sp.GetRequiredService<CorkboardViewModel>(),
                 sp.GetRequiredService<BeatBoardViewModel>(),
                 sp.GetRequiredService<INotificationService>(),
-                sp.GetRequiredService<IBeatBoardService>()));
+                sp.GetRequiredService<IBeatBoardService>(),
+                sp.GetRequiredService<CollectionPlannerViewModel>()));
+
+        // An anthology's Plan mode: every collection side by side over a library of stories.
+        services.AddSingleton<CollectionPlanService>(sp =>
+            new CollectionPlanService(
+                sp.GetRequiredService<IMetadataStore>(),
+                sp.GetRequiredService<CollectionService>(),
+                sp.GetRequiredService<WordCountService>()));
+        services.AddSingleton<CollectionPlannerViewModel>(sp =>
+            new CollectionPlannerViewModel(
+                sp.GetRequiredService<WorkspaceViewModel>(),
+                sp.GetRequiredService<CollectionPlanService>(),
+                sp.GetRequiredService<ChapterRegistryService>(),
+                sp.GetRequiredService<INotificationService>(),
+                sp.GetRequiredService<CollectionsViewModel>(),
+                async () =>
+                {
+                    var notes = await sp.GetRequiredService<NotesViewModel>().FlushAsync();
+                    var schedule = await sp.GetRequiredService<ChapterInfoViewModel>().FlushScheduleAsync();
+                    var beats = await sp.GetRequiredService<PlanHostViewModel>().FlushAsync();
+                    var writeBeats = await sp.GetRequiredService<WriteBeatsViewModel>().FlushAsync();
+                    return notes && schedule && beats && writeBeats;
+                },
+                sp.GetRequiredService<EditorViewModel>()));
 
         // M006 — AI chat ViewModels (must be registered after Editor/Workspace VMs)
         services.AddSingleton<ConversationListViewModel>(sp =>
