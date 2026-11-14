@@ -84,6 +84,35 @@ public abstract class CorkboardItemViewModel : ViewModelBase, IDisposable
 
     public virtual bool IsVisibleOnBoard => true;
 
+    private string _noun = "Chapter";
+    /// <summary>
+    /// The profile's noun for what this item counts or creates: the unit for a top-level card, the subunit
+    /// for a Part and what goes inside it (Chapter in a novel; Story or Scene in an anthology).
+    /// </summary>
+    public string Noun
+    {
+        get => _noun;
+        internal set
+        {
+            if (_noun == value)
+                return;
+            this.RaiseAndSetIfChanged(ref _noun, value);
+            OnNounChanged();
+        }
+    }
+
+    /// <summary>Raises change notifications for text built from <see cref="Noun"/>.</summary>
+    protected virtual void OnNounChanged() { }
+
+    /// <summary>Lower-case plural of <paramref name="noun"/>: "scenes", "stories".</summary>
+    internal static string Plural(string noun)
+    {
+        var lower = noun.ToLowerInvariant();
+        return lower.EndsWith('y') && lower.Length > 1 && !"aeiou".Contains(lower[^2])
+            ? lower[..^1] + "ies"
+            : lower + "s";
+    }
+
     private bool _showsBeatsAction;
     /// <summary>Anthology: true when the item's story (itself or its Part) is in the book, so Beats applies.</summary>
     public bool ShowsBeatsAction
@@ -501,7 +530,22 @@ public sealed class PartDividerItemViewModel : CorkboardItemViewModel
 
 
 
-    public string ChapterCountDisplay => ChapterCount == 1 ? "1 chapter" : $"{ChapterCount} chapters";
+    public string ChapterCountDisplay =>
+        ChapterCount == 1 ? $"1 {Noun.ToLowerInvariant()}" : $"{ChapterCount} {Plural(Noun)}";
+
+    /// <summary>Tooltip for the header, which shows or hides what is in the Part.</summary>
+    public string ToggleTip => $"Click to show or hide the {Plural(Noun)} in {Title}";
+
+    /// <summary>Tooltip for the header's + button.</summary>
+    public string AddTip => $"Add a {Noun.ToLowerInvariant()} to {Title}";
+
+    protected override void OnNounChanged()
+    {
+        this.RaisePropertyChanged(nameof(ChapterCountDisplay));
+        this.RaisePropertyChanged(nameof(ChapterCountInParens));
+        this.RaisePropertyChanged(nameof(ToggleTip));
+        this.RaisePropertyChanged(nameof(AddTip));
+    }
 
     public string ChapterCountInParens => $"({ChapterCountDisplay})";
 
@@ -576,7 +620,9 @@ public sealed class EmptyPartHintItemViewModel : PartOwnedCorkboardItemViewModel
 
 
 
-    public string HintText => $"No chapters in {Part.Node.Title}";
+    public string HintText => $"No {Plural(Noun)} in {Part.Node.Title}";
+
+    protected override void OnNounChanged() => this.RaisePropertyChanged(nameof(HintText));
 
 
 
@@ -724,6 +770,17 @@ public sealed class InlineCreateItemViewModel : PartOwnedCorkboardItemViewModel
     public int BookTxtInsertIndex { get; }
 
     public string? PartPath { get; }
+
+    /// <summary>The card's caption: "NEW STORY", "NEW SCENE".</summary>
+    public string Heading => $"NEW {Noun.ToUpperInvariant()}";
+
+    public string TitlePlaceholder => $"{Noun} title...";
+
+    protected override void OnNounChanged()
+    {
+        this.RaisePropertyChanged(nameof(Heading));
+        this.RaisePropertyChanged(nameof(TitlePlaceholder));
+    }
 
 
 

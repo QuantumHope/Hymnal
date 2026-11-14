@@ -40,6 +40,9 @@ public sealed class ChapterInfoViewModel : ViewModelBase, IDisposable
     /// <summary>Panel heading for the current profile ("Chapter Info" / "Story Info").</summary>
     public string PanelTitle => Profile.InfoPanelTitle;
 
+    /// <summary>What the panel says when nothing is open, in the project's words.</summary>
+    public string EmptyStateText => Profile.OpenSomethingTo("view its info");
+
     /// <summary>View-menu header for the panel toggle, with access key.</summary>
     public string ToggleMenuHeader => $"Toggle _{PanelTitle}";
 
@@ -315,7 +318,7 @@ public sealed class ChapterInfoViewModel : ViewModelBase, IDisposable
             canExecute: hasActiveNode);
         Disposables.Add(
             ToggleCommand.ThrownExceptions
-                .Subscribe(ex => notificationService.ShowError($"Toggle chapter info failed: {ex.Message}")));
+                .Subscribe(ex => notificationService.ShowError($"Toggle info panel failed: {ex.Message}")));
 
         // ── SetStatusCommand ─────────────────────────────────────────────────
         SetStatusCommand = ReactiveCommand.CreateFromTask<ChapterStatus>(SetStatusAsync);
@@ -586,6 +589,7 @@ public sealed class ChapterInfoViewModel : ViewModelBase, IDisposable
         this.RaisePropertyChanged(nameof(Profile));
         this.RaisePropertyChanged(nameof(StatusOptions));
         this.RaisePropertyChanged(nameof(PanelTitle));
+        this.RaisePropertyChanged(nameof(EmptyStateText));
         this.RaisePropertyChanged(nameof(TargetPresets));
         this.RaisePropertyChanged(nameof(HasTargetPresets));
         this.RaisePropertyChanged(nameof(ToggleMenuHeader));

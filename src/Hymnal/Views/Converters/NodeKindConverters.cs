@@ -6,6 +6,7 @@ using Avalonia.Controls;
 using Avalonia.Data.Converters;
 using Avalonia.Media;
 using Hymnal.Core.Models;
+using Hymnal.Theming;
 
 namespace Hymnal.Views.Converters;
 
@@ -35,8 +36,8 @@ public class NodeKindToForegroundConverter : IValueConverter
 {
     public static readonly NodeKindToForegroundConverter Instance = new();
 
-    private static readonly SolidColorBrush PartBrush    = new(Color.Parse("#9D4EDD"));
-    private static readonly SolidColorBrush ChapterBrush = new(Color.Parse("#EDE8F5"));
+    private static SolidColorBrush PartBrush    => ThemeBrushes.Get("Cora.Accent.Store", "#9D4EDD");
+    private static SolidColorBrush ChapterBrush => ThemeBrushes.Get("Cora.Text", "#EDE8F5");
 
     public object? Convert(object? value, Type targetType, object? parameter, CultureInfo culture)
         => value is NodeKind.Part ? PartBrush : ChapterBrush;
@@ -50,10 +51,11 @@ public class NodeKindAndMissingToForegroundConverter : IMultiValueConverter
 {
     public static readonly NodeKindAndMissingToForegroundConverter Instance = new();
 
-    private static readonly SolidColorBrush PartBrush     = new(Color.Parse("#9D4EDD"));
-    private static readonly SolidColorBrush ChapterBrush  = new(Color.Parse("#EDE8F5"));
-    private static readonly SolidColorBrush MissingBrush  = new(Color.Parse("#6B7280"));
-    private static readonly SolidColorBrush ExcludedBrush = new(Color.Parse("#9589B0"));
+    // Theme brushes are stable and recoloured on a theme change, so caching them in fields is safe.
+    private static SolidColorBrush PartBrush     => ThemeBrushes.Get("Cora.Accent.Store", "#9D4EDD");
+    private static SolidColorBrush ChapterBrush  => ThemeBrushes.Get("Cora.Text", "#EDE8F5");
+    private static SolidColorBrush MissingBrush  => ThemeBrushes.Get("Cora.Text.Disabled", "#6B7280");
+    private static SolidColorBrush ExcludedBrush => ThemeBrushes.Get("Cora.Text.Secondary", "#9589B0");
 
     public object? Convert(IList<object?> values, Type targetType, object? parameter, CultureInfo culture)
     {
@@ -102,15 +104,15 @@ public class NodeKindIsPartConverter : IValueConverter
 }
 
 /// <summary>
-/// Converts bool → SynthwavePurpleBrush (active) or OnSurfaceDimBrush (inactive).
+/// Converts bool → Cora.Accent.Store (active) or Cora.Text.Secondary (inactive).
 /// Used for section-header icons in the explorer bar so the lit icon matches the expanded state.
 /// </summary>
 public sealed class ActiveIconBrushConverter : IValueConverter
 {
     public static readonly ActiveIconBrushConverter Instance = new();
 
-    private static readonly IBrush ActiveBrush  = new SolidColorBrush(Color.Parse("#9D4EDD"));
-    private static readonly IBrush InactiveBrush = new SolidColorBrush(Color.Parse("#88919B"));
+    private static IBrush ActiveBrush   => ThemeBrushes.Get("Cora.Accent.Store", "#9D4EDD");
+    private static IBrush InactiveBrush => ThemeBrushes.Get("Cora.Text.Secondary", "#88919B");
 
     public object? Convert(object? value, Type targetType, object? parameter, CultureInfo culture)
         => value is true ? ActiveBrush : InactiveBrush;

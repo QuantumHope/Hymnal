@@ -7,6 +7,7 @@ using Hymnal.ViewModels.Ai;
 using ReactiveUI;
 using System;
 using System.IO;
+using System.Linq;
 using System.Threading.Tasks;
 using System.Reactive;
 using System.Reactive.Disposables;
@@ -46,6 +47,14 @@ public class MainWindowViewModel : ViewModelBase
 
     /// <summary>View → Sound: turns all of Hymnal's sound on or off.</summary>
     public ReactiveCommand<Unit, Unit> ToggleSoundCommand { get; }
+    /// <summary>Write mode's Beats panel (story/anthology); null when the shell has none.</summary>
+    public WriteBeatsViewModel? WriteBeatsViewModel { get; }
+
+    /// <summary>Naming, switching and publishing collections; null when the shell has none.</summary>
+    public CollectionsViewModel? CollectionsViewModel { get; }
+
+    /// <summary>Export for submission (Standard Manuscript Format); null when the shell has none.</summary>
+    public SubmissionExportViewModel? SubmissionExportViewModel { get; }
 
     // ── Settings overlay ──────────────────────────────────────────────────────
 
@@ -53,7 +62,26 @@ public class MainWindowViewModel : ViewModelBase
     public bool IsSettingsOpen
     {
         get => _isSettingsOpen;
-        private set => this.RaiseAndSetIfChanged(ref _isSettingsOpen, value);
+        private set
+        {
+            this.RaiseAndSetIfChanged(ref _isSettingsOpen, value);
+            this.RaisePropertyChanged(nameof(HighlightedMode));
+        }
+    }
+
+    /// <summary>
+    /// The mode tab to underline: the active mode, or none while Settings covers the shell (so the tabs don't
+    /// claim a view that isn't showing).
+    /// </summary>
+    public ShellMode? HighlightedMode => IsSettingsOpen ? null : ActiveMode;
+
+    /// <summary>Closes Settings if it is open; picking a mode tab leaves Settings for that mode.</summary>
+    private void LeaveSettings()
+    {
+        if (!IsSettingsOpen)
+            return;
+        IsSettingsOpen = false;
+        ActiveSettingsViewModel = null;
     }
 
     private readonly Func<SettingsViewModel> _settingsVmFactory;
@@ -119,12 +147,15 @@ public class MainWindowViewModel : ViewModelBase
                 return;
 
             _activeMode = value;
+            if (value != ShellMode.Write)
+                IsFocusMode = false;
             EditorViewModel.IsResearchSurface = value == ShellMode.Research;
             EditorViewModel.IsEditorSurfaceVisible = value is ShellMode.Write or ShellMode.Research;
             CorkboardViewModel.SetViewActive(value == ShellMode.Plan);
             GanttViewModel.SetViewActive(value == ShellMode.Manage);
             AiChatViewModel.CurrentShellModeName = value.ToString();
             this.RaisePropertyChanged(nameof(ActiveMode));
+            this.RaisePropertyChanged(nameof(HighlightedMode));
             this.RaisePropertyChanged(nameof(IsEditorVisible));
             this.RaisePropertyChanged(nameof(IsGanttVisible));
             this.RaisePropertyChanged(nameof(IsCorkboardVisible));
@@ -156,6 +187,13 @@ public class MainWindowViewModel : ViewModelBase
 
     /// <summary>True when the Gantt/manage surface is the active centre-panel view.</summary>
     public bool IsGanttVisible => ActiveMode == ShellMode.Manage;
+
+    private readonly ObservableAsPropertyHelper<bool> _showsCollectionBar;
+    /// <summary>
+    /// True when the collection bar shows over the centre: Plan and Manage with a workspace open. (Write shows the
+    /// collection as its sidebar's root row.)
+    /// </summary>
+    public bool ShowsCollectionBar => _showsCollectionBar.Value;
 
     /// <summary>True when the research surface is the active centre-panel view.</summary>
     public bool IsResearchVisible => ActiveMode == ShellMode.Research;
@@ -195,6 +233,126 @@ public class MainWindowViewModel : ViewModelBase
 
     public ReactiveCommand<Unit, Unit> ToggleSidebarCommand { get; }
 
+    // ── Rail collapse (Write mode) ────────────────────────────────────────────
+    // A rail collapses to its 48px icon strip without closing its panes, so expanding it (Ctrl+B / Ctrl+Alt+B, a
+    // double-click on its splitter, dragging it back out, or an icon) brings back exactly what was open.
+
+    internal const string LeftRailCollapsedKey = "leftRailCollapsed";
+    internal const string RightRailCollapsedKey = "rightRailCollapsed";
+
+    private bool _isLeftRailCollapsed;
+    public bool IsLeftRailCollapsed
+    {
+        get => _isLeftRailCollapsed;
+        private set => this.RaiseAndSetIfChanged(ref _isLeftRailCollapsed, value);
+    }
+
+    private bool _isRightRailCollapsed;
+    public bool IsRightRailCollapsed
+    {
+        get => _isRightRailCollapsed;
+        private set => this.RaiseAndSetIfChanged(ref _isRightRailCollapsed, value);
+    }
+
+    public ReactiveCommand<Unit, Unit> ToggleRightRailCommand { get; }
+
+    /// <summary>F3 / F7 / F4 / Ctrl+Shift+A: toggles that pane, or on a collapsed rail expands it with the pane shown.</summary>
+    public ReactiveCommand<string, Unit> ToggleRightPaneCommand { get; }
+
+    /// <summary>The left icon strip's buttons: "chapters" or "docs". Expands the rail and shows that pane.</summary>
+    public ReactiveCommand<string, Unit> OpenLeftPaneCommand { get; }
+
+    /// <summary>The right icon strip's buttons: "info", "beats", "notes" or "chat". Expands the rail and shows that pane.</summary>
+    public ReactiveCommand<string, Unit> OpenRightPaneCommand { get; }
+
+    public void SetLeftRailCollapsed(bool collapsed)
+    {
+        IsLeftRailCollapsed = collapsed;
+        _ = SaveRailFlagAsync(LeftRailCollapsedKey, collapsed);
+    }
+
+    public void SetRightRailCollapsed(bool collapsed)
+    {
+        IsRightRailCollapsed = collapsed;
+        _ = SaveRailFlagAsync(RightRailCollapsedKey, collapsed);
+    }
+
+    /// <summary>Expands the left rail; with no pane open, it opens the sidebar's list.</summary>
+    public void ExpandLeftRail()
+    {
+        SetLeftRailCollapsed(false);
+        if (!_workspaceVm.IsChaptersPaneVisible && !_supplementalDocsVm.IsVisible)
+            _workspaceVm.IsChaptersPaneVisible = true;
+    }
+
+    /// <summary>Expands the right rail; with no pane open, it opens the Beats panel (story/anthology) or the info panel.</summary>
+    public void ExpandRightRail()
+    {
+        SetRightRailCollapsed(false);
+        if (IsAnyRightPaneOpen)
+            return;
+        if (IsBeatsSectionAvailable)
+            OpenRightPane("beats");
+        else
+            OpenRightPane("info");
+        if (!IsAnyRightPaneOpen)
+            OpenRightPane("notes");
+    }
+
+    private void OpenLeftPane(string pane)
+    {
+        SetLeftRailCollapsed(false);
+        if (pane == "docs")
+            _supplementalDocsVm.IsVisible = true;
+        else
+            _workspaceVm.IsChaptersPaneVisible = true;
+    }
+
+    private void OpenRightPane(string pane)
+    {
+        SetRightRailCollapsed(false);
+        switch (pane)
+        {
+            case "info" when !IsChapterPanelOpen:
+                _chapterInfoVm.ToggleCommand.Execute().Subscribe(_ => { }, _ => { });
+                break;
+            case "beats" when WriteBeatsViewModel is { IsVisible: false } beats:
+                beats.ToggleCommand.Execute().Subscribe(_ => { }, _ => { });
+                break;
+            case "notes" when !_notesVm.IsVisible:
+                _notesVm.ToggleCommand.Execute().Subscribe(_ => { }, _ => { });
+                break;
+            case "chat":
+                AiChatViewModel.IsVisible = true;
+                break;
+        }
+    }
+
+    private async Task SaveRailFlagAsync(string key, bool value)
+    {
+        try { await _settingsStore.SetAsync(key, value).ConfigureAwait(false); }
+        catch { /* Non-fatal: the rail just reopens expanded next time. */ }
+    }
+
+    private async Task RestoreRailStateAsync()
+    {
+        try
+        {
+            var left = await _settingsStore.GetAsync<bool?>(LeftRailCollapsedKey).ConfigureAwait(false);
+            var right = await _settingsStore.GetAsync<bool?>(RightRailCollapsedKey).ConfigureAwait(false);
+            if (left == true || right == true)
+                await Avalonia.Threading.Dispatcher.UIThread.InvokeAsync(() =>
+                {
+                    IsLeftRailCollapsed = left == true;
+                    IsRightRailCollapsed = right == true;
+                });
+        }
+        catch
+        {
+            // Non-fatal: both rails start expanded.
+        }
+    }
+
     // ── Right-rail pane aggregates ────────────────────────────────────────────
 
     private readonly ObservableAsPropertyHelper<object?> _chapterPanelContent;
@@ -226,6 +384,22 @@ public class MainWindowViewModel : ViewModelBase
     /// <summary>True when both Info and Notes content areas are open (shows the splitter between them).</summary>
     public bool IsInfoNotesSplitterVisible => _isInfoNotesSplitterVisible.Value;
 
+    private readonly ObservableAsPropertyHelper<bool> _isBeatsSectionAvailable;
+    /// <summary>True when the right rail has a Beats section: a story or anthology is open.</summary>
+    public bool IsBeatsSectionAvailable => _isBeatsSectionAvailable.Value;
+
+    private readonly ObservableAsPropertyHelper<bool> _isBeatsPanelOpen;
+    /// <summary>True when the Beats section's content is shown.</summary>
+    public bool IsBeatsPanelOpen => _isBeatsPanelOpen.Value;
+
+    private readonly ObservableAsPropertyHelper<bool> _isInfoBeatsSplitterVisible;
+    /// <summary>True when both the Info and Beats content areas are open (the splitter between them).</summary>
+    public bool IsInfoBeatsSplitterVisible => _isInfoBeatsSplitterVisible.Value;
+
+    private readonly ObservableAsPropertyHelper<bool> _isAboveNotesSplitterVisible;
+    /// <summary>True when Notes is open under an open Info or Beats area (the splitter above Notes).</summary>
+    public bool IsAboveNotesSplitterVisible => _isAboveNotesSplitterVisible.Value;
+
     private readonly ObservableAsPropertyHelper<bool> _isNotesChatSplitterVisible;
     /// <summary>True when both Notes and Chat content areas are open (shows the splitter between them).</summary>
     public bool IsNotesChatSplitterVisible => _isNotesChatSplitterVisible.Value;
@@ -253,6 +427,25 @@ public class MainWindowViewModel : ViewModelBase
     public IObservable<WriteLayoutSettings> WriteLayoutReset => _layoutReset.AsObservable();
 
     public ReactiveCommand<Unit, Unit> ResetWriteLayoutCommand { get; }
+
+    // ── Focus mode ───────────────────────────────────────────────────────────
+
+    private bool _isFocusMode;
+
+    /// <summary>
+    /// Write mode with nothing but the text: full screen, no menu, mode tabs, rails or status strip (F11 toggles,
+    /// Esc leaves). Leaving Write mode leaves focus mode. The saved Write layout is untouched.
+    /// </summary>
+    public bool IsFocusMode
+    {
+        get => _isFocusMode;
+        private set => this.RaiseAndSetIfChanged(ref _isFocusMode, value);
+    }
+
+    public ReactiveCommand<Unit, Unit> ToggleFocusModeCommand { get; }
+
+    /// <summary>Leaves focus mode; can't run outside it, so Esc is left alone the rest of the time.</summary>
+    public ReactiveCommand<Unit, Unit> ExitFocusModeCommand { get; }
 
     // ── Exit ─────────────────────────────────────────────────────────────────
 
@@ -285,8 +478,13 @@ public class MainWindowViewModel : ViewModelBase
         Func<SettingsViewModel> settingsVmFactory,
         IdeasViewModel? ideasViewModel = null,
         PlanHostViewModel? planHostViewModel = null,
-        Hymnal.Audio.SoundPreferences? soundPreferences = null)
+        Hymnal.Audio.SoundPreferences? soundPreferences = null,
+        WriteBeatsViewModel? writeBeatsViewModel = null,
+        CollectionsViewModel? collectionsViewModel = null,
+        SubmissionExportViewModel? submissionExportViewModel = null)
     {
+        CollectionsViewModel = collectionsViewModel;
+        SubmissionExportViewModel = submissionExportViewModel;
         _settingsStore = settingsStore;
         _workspaceVm = workspaceViewModel;
         _supplementalDocsVm = supplementalDocsViewModel;
@@ -308,6 +506,7 @@ public class MainWindowViewModel : ViewModelBase
         PlanHostViewModel = planHostViewModel;
         SoundPreferences = soundPreferences;
         ToggleSoundCommand = ReactiveCommand.Create(() => soundPreferences?.ToggleSound());
+        WriteBeatsViewModel = writeBeatsViewModel;
         _settingsVmFactory = settingsVmFactory;
 
         CorkboardViewModel.SetViewActive(false);
@@ -318,11 +517,7 @@ public class MainWindowViewModel : ViewModelBase
             ActiveSettingsViewModel = _settingsVmFactory();
             IsSettingsOpen = true;
         });
-        CloseSettingsCommand = ReactiveCommand.Create(() =>
-        {
-            IsSettingsOpen = false;
-            ActiveSettingsViewModel = null;
-        });
+        CloseSettingsCommand = ReactiveCommand.Create(LeaveSettings);
         ToggleAiChatCommand = ReactiveCommand.Create(() =>
         {
             AiChatViewModel.IsVisible = !AiChatViewModel.IsVisible;
@@ -333,10 +528,12 @@ public class MainWindowViewModel : ViewModelBase
         Disposables.Add(CloseSettingsCommand.ThrownExceptions
             .Subscribe(ex => notificationService.ShowError($"Failed to close settings: {ex.Message}")));
 
+        // A collapsed rail shows its icon strip whatever panes are open, and expanding it brings them back.
         _isAnyLeftPaneOpen = Observable.CombineLatest(
                 workspaceViewModel.WhenAnyValue(x => x.IsChaptersPaneVisible),
                 supplementalDocsViewModel.WhenAnyValue(x => x.IsVisible),
-                (chapters, docs) => chapters || docs)
+                this.WhenAnyValue(x => x.IsLeftRailCollapsed),
+                (chapters, docs, collapsed) => (chapters || docs) && !collapsed)
             .ToProperty(this, x => x.IsAnyLeftPaneOpen);
         Disposables.Add(_isAnyLeftPaneOpen);
 
@@ -347,17 +544,13 @@ public class MainWindowViewModel : ViewModelBase
             .ToProperty(this, x => x.IsBothLeftPanesOpen);
         Disposables.Add(_isBothLeftPanesOpen);
 
+        // Ctrl+B / Ctrl+Alt+B: collapse a rail to its icon strip (its panes are kept), or expand it again.
         ToggleSidebarCommand = ReactiveCommand.Create(() =>
         {
             if (IsAnyLeftPaneOpen)
-            {
-                workspaceViewModel.IsChaptersPaneVisible = false;
-                supplementalDocsViewModel.IsVisible = false;
-            }
+                SetLeftRailCollapsed(true);
             else
-            {
-                workspaceViewModel.IsChaptersPaneVisible = true;
-            }
+                ExpandLeftRail();
         });
 
         SelectResearchCommand = ReactiveCommand.CreateFromTask(EnterResearchModeAsync);
@@ -379,8 +572,14 @@ public class MainWindowViewModel : ViewModelBase
                 .Where(available => !available && ActiveMode == ShellMode.Ideas)
                 .Subscribe(_ => ActiveMode = ShellMode.Write));
 
+        _showsCollectionBar = this.WhenAnyValue(x => x.ActiveMode)
+            .CombineLatest(workspaceViewModel.WhenAnyValue(x => x.HasWorkspace),
+                (mode, hasWorkspace) => hasWorkspace && mode is ShellMode.Plan or ShellMode.Manage)
+            .ToProperty(this, x => x.ShowsCollectionBar);
+        Disposables.Add(_showsCollectionBar);
+
         SelectIdeasCommand = ReactiveCommand.Create(
-            () => { ActiveMode = ShellMode.Ideas; },
+            () => { LeaveSettings(); ActiveMode = ShellMode.Ideas; },
             this.WhenAnyValue(x => x.IsIdeasModeAvailable));
 
         var canQuickCapture = ideasViewModel == null
@@ -393,13 +592,29 @@ public class MainWindowViewModel : ViewModelBase
         Disposables.Add(QuickCaptureIdeaCommand.ThrownExceptions.Subscribe(ex =>
             notificationService.ShowError($"Failed to capture idea: {ex.Message}")));
 
-        SelectPlanCommand = ReactiveCommand.Create(() => { ActiveMode = ShellMode.Plan; });
-        SelectWriteCommand = ReactiveCommand.Create(() => { ActiveMode = ShellMode.Write; });
-        SelectManageCommand = ReactiveCommand.Create(() => { ActiveMode = ShellMode.Manage; });
+        SelectPlanCommand = ReactiveCommand.Create(() => { LeaveSettings(); ActiveMode = ShellMode.Plan; });
+        SelectWriteCommand = ReactiveCommand.Create(() => { LeaveSettings(); ActiveMode = ShellMode.Write; });
+        SelectManageCommand = ReactiveCommand.Create(() => { LeaveSettings(); ActiveMode = ShellMode.Manage; });
         ToggleGanttCommand = ReactiveCommand.Create(() =>
         {
+            LeaveSettings();
             ActiveMode = IsGanttVisible ? ShellMode.Write : ShellMode.Manage;
         });
+
+        ToggleFocusModeCommand = ReactiveCommand.Create(() =>
+        {
+            if (IsFocusMode)
+            {
+                IsFocusMode = false;
+                return;
+            }
+            LeaveSettings();
+            ActiveMode = ShellMode.Write;
+            IsFocusMode = true;
+        });
+        ExitFocusModeCommand = ReactiveCommand.Create(
+            () => { IsFocusMode = false; },
+            this.WhenAnyValue(x => x.IsFocusMode));
 
         ResetWriteLayoutCommand = ReactiveCommand.CreateFromTask(ResetWriteLayoutAsync);
         Disposables.Add(ResetWriteLayoutCommand.ThrownExceptions.Subscribe(ex =>
@@ -440,19 +655,70 @@ public class MainWindowViewModel : ViewModelBase
             .ToProperty(this, x => x.IsChapterPanelOpen);
         Disposables.Add(_isChapterPanelOpen);
 
+        var beatsOpenObs = writeBeatsViewModel == null
+            ? Observable.Return(false)
+            : writeBeatsViewModel.WhenAnyValue(x => x.IsOpen);
+        _isBeatsSectionAvailable = (writeBeatsViewModel == null
+                ? Observable.Return(false)
+                : writeBeatsViewModel.WhenAnyValue(x => x.IsAvailable))
+            .ToProperty(this, x => x.IsBeatsSectionAvailable);
+        Disposables.Add(_isBeatsSectionAvailable);
+        _isBeatsPanelOpen = beatsOpenObs.ToProperty(this, x => x.IsBeatsPanelOpen);
+        Disposables.Add(_isBeatsPanelOpen);
+
         _isAnyRightPaneOpen = Observable.CombineLatest(
                 chapterPanelOpenObs,
                 NotesViewModel.WhenAnyValue(x => x.IsVisible),
                 AiChatViewModel.WhenAnyValue(x => x.IsVisible),
-                (chPanel, notes, ai) => chPanel || notes || ai)
+                beatsOpenObs,
+                this.WhenAnyValue(x => x.IsRightRailCollapsed),
+                (chPanel, notes, ai, beats, collapsed) => (chPanel || notes || ai || beats) && !collapsed)
             .ToProperty(this, x => x.IsAnyRightPaneOpen);
+
+        ToggleRightRailCommand = ReactiveCommand.Create(() =>
+        {
+            if (IsAnyRightPaneOpen)
+                SetRightRailCollapsed(true);
+            else
+                ExpandRightRail();
+        });
+        OpenLeftPaneCommand = ReactiveCommand.Create<string>(OpenLeftPane);
+        OpenRightPaneCommand = ReactiveCommand.Create<string>(OpenRightPane);
+        ToggleRightPaneCommand = ReactiveCommand.Create<string>(pane =>
+        {
+            if (IsRightRailCollapsed)
+            {
+                OpenRightPane(pane);
+                return;
+            }
+            switch (pane)
+            {
+                case "info": _chapterInfoVm.ToggleCommand.Execute().Subscribe(_ => { }, _ => { }); break;
+                case "beats": WriteBeatsViewModel?.ToggleCommand.Execute().Subscribe(_ => { }, _ => { }); break;
+                case "notes": _notesVm.ToggleCommand.Execute().Subscribe(_ => { }, _ => { }); break;
+                case "chat": AiChatViewModel.IsVisible = !AiChatViewModel.IsVisible; break;
+            }
+        });
+
+        // Whatever opens a pane (a shortcut, the Beats panel's own links, a reset) also expands its rail.
+        void ExpandWhenShown(IObservable<bool> shown, Action expand) =>
+            Disposables.Add(shown.Skip(1).Where(v => v).Subscribe(_ => expand()));
+        ExpandWhenShown(workspaceViewModel.WhenAnyValue(x => x.IsChaptersPaneVisible),
+            () => { if (IsLeftRailCollapsed) SetLeftRailCollapsed(false); });
+        ExpandWhenShown(supplementalDocsViewModel.WhenAnyValue(x => x.IsVisible),
+            () => { if (IsLeftRailCollapsed) SetLeftRailCollapsed(false); });
+        foreach (var shown in new[] { chapterInfoViewModel.WhenAnyValue(x => x.IsVisible), NotesViewModel.WhenAnyValue(x => x.IsVisible),
+                     AiChatViewModel.WhenAnyValue(x => x.IsVisible), beatsOpenObs })
+            ExpandWhenShown(shown, () => { if (IsRightRailCollapsed) SetRightRailCollapsed(false); });
+        _ = RestoreRailStateAsync();
         Disposables.Add(_isAnyRightPaneOpen);
 
         _isBothRightPanesOpen = Observable.CombineLatest(
                 chapterPanelOpenObs,
                 NotesViewModel.WhenAnyValue(x => x.IsVisible),
                 AiChatViewModel.WhenAnyValue(x => x.IsVisible),
-                (chPanel, notes, ai) => (chPanel ? 1 : 0) + (notes ? 1 : 0) + (ai ? 1 : 0) >= 2)
+                beatsOpenObs,
+                (chPanel, notes, ai, beats) => (chPanel ? 1 : 0) + (notes ? 1 : 0) + (ai ? 1 : 0) + (beats ? 1 : 0) >= 2)
             .ToProperty(this, x => x.IsBothRightPanesOpen);
         Disposables.Add(_isBothRightPanesOpen);
 
@@ -462,6 +728,19 @@ public class MainWindowViewModel : ViewModelBase
                 (chPanel, notes) => chPanel && notes)
             .ToProperty(this, x => x.IsInfoNotesSplitterVisible);
         Disposables.Add(_isInfoNotesSplitterVisible);
+
+        _isInfoBeatsSplitterVisible = Observable.CombineLatest(
+                chapterPanelOpenObs, beatsOpenObs, (chPanel, beats) => chPanel && beats)
+            .ToProperty(this, x => x.IsInfoBeatsSplitterVisible);
+        Disposables.Add(_isInfoBeatsSplitterVisible);
+
+        _isAboveNotesSplitterVisible = Observable.CombineLatest(
+                chapterPanelOpenObs,
+                beatsOpenObs,
+                NotesViewModel.WhenAnyValue(x => x.IsVisible),
+                (chPanel, beats, notes) => notes && (chPanel || beats))
+            .ToProperty(this, x => x.IsAboveNotesSplitterVisible);
+        Disposables.Add(_isAboveNotesSplitterVisible);
 
         _isNotesChatSplitterVisible = Observable.CombineLatest(
                 NotesViewModel.WhenAnyValue(x => x.IsVisible),
@@ -482,8 +761,12 @@ public class MainWindowViewModel : ViewModelBase
         Disposables.Add(_isEditorChapterBarVisible);
 
         EditorViewModel.HasWorkspace = WorkspaceViewModel.HasWorkspace;
+        // The Corkboard's Open and the story planner's Write both open a chapter in Write.
+        var openChapter = planHostViewModel?.Planner is { } planner
+            ? CorkboardViewModel.OpenChapterRequested.Merge(planner.OpenChapterRequested)
+            : CorkboardViewModel.OpenChapterRequested;
         Disposables.Add(
-            CorkboardViewModel.OpenChapterRequested
+            openChapter
                 .Subscribe(chapter =>
                 {
                     WorkspaceViewModel.SelectedNode = chapter;
@@ -497,6 +780,28 @@ public class MainWindowViewModel : ViewModelBase
                     .Skip(1)
                     .Where(_ => ActiveMode == ShellMode.Plan)
                     .Subscribe(_ => this.RaisePropertyChanged(nameof(SecondaryCentreContent))));
+
+        // Focused on one anthology story: Plan opens on its beats rather than the whole collection.
+        if (planHostViewModel != null)
+            Disposables.Add(
+                Observable.CombineLatest(
+                        this.WhenAnyValue(x => x.ActiveMode),
+                        workspaceViewModel.WhenAnyValue(x => x.FocusedStory),
+                        (mode, story) => (mode, story))
+                    .Where(t => t.mode == ShellMode.Plan && t.story != null)
+                    .Subscribe(t => planHostViewModel.ShowStoryBoard(t.story!.Uuid)));
+
+        // The Beats panel's "Plan this story" opens Plan mode on the story being written.
+        if (writeBeatsViewModel != null)
+            Disposables.Add(
+                writeBeatsViewModel.PlanRequested
+                    .Subscribe(storyUuid =>
+                    {
+                        if (storyUuid != null)
+                            PlanHostViewModel?.ShowStoryBoard(storyUuid);
+                        LeaveSettings();
+                        ActiveMode = ShellMode.Plan;
+                    }));
 
         // Promoting an idea brings the author to the new story.
         if (ideasViewModel != null)
@@ -575,6 +880,8 @@ public class MainWindowViewModel : ViewModelBase
         await NotesViewModel.RestoreSettingsAsync().ConfigureAwait(false);
         await ChapterInfoViewModel.RestoreSettingsAsync().ConfigureAwait(false);
         await SupplementalDocsViewModel.RestoreSettingsAsync().ConfigureAwait(false);
+        if (WriteBeatsViewModel != null)
+            await WriteBeatsViewModel.RestoreSettingsAsync().ConfigureAwait(false);
         await RestoreWriteLayoutAsync().ConfigureAwait(false);
         CorkboardViewModel.SetViewActive(ActiveMode == ShellMode.Plan);
         GanttViewModel.SetViewActive(ActiveMode == ShellMode.Manage);
@@ -582,6 +889,7 @@ public class MainWindowViewModel : ViewModelBase
 
     private async Task EnterResearchModeAsync()
     {
+        LeaveSettings();
         if (EditorViewModel.ActiveNode != null
             || EditorViewModel.IsBookSelected
             || EditorViewModel.ShowMissingChapterPrompt)
@@ -625,7 +933,7 @@ public class MainWindowViewModel : ViewModelBase
     /// </summary>
     public async Task<bool> FlushPendingEditsBeforeCloseAsync(TimeSpan timeout)
     {
-        if (IdeasViewModel == null && PlanHostViewModel == null)
+        if (IdeasViewModel == null && PlanHostViewModel == null && WriteBeatsViewModel == null)
             return true;
 
         try
@@ -651,8 +959,9 @@ public class MainWindowViewModel : ViewModelBase
     {
         var ideas = IdeasViewModel == null ? Task.FromResult(true) : FlushAfterPromoteAsync(IdeasViewModel);
         var beats = PlanHostViewModel == null ? Task.FromResult(true) : PlanHostViewModel.FlushAsync();
-        var results = await Task.WhenAll(ideas, beats);
-        return results[0] && results[1];
+        var writeBeats = WriteBeatsViewModel == null ? Task.FromResult(true) : WriteBeatsViewModel.FlushAsync();
+        var results = await Task.WhenAll(ideas, beats, writeBeats);
+        return results.All(ok => ok);
     }
 
     /// <summary>Waits for an in-flight promote (it saves ideas itself), then writes pending idea edits.</summary>
@@ -707,6 +1016,9 @@ public class MainWindowViewModel : ViewModelBase
     {
         var defaults = WriteLayoutSettings.CreateDefault();
 
+        SetLeftRailCollapsed(false);
+        SetRightRailCollapsed(false);
+
         // WorkspaceViewModel and SupplementalDocsViewModel auto-persist on setter.
         _workspaceVm.IsChaptersPaneVisible = true;
         _supplementalDocsVm.IsVisible = false;
@@ -719,6 +1031,13 @@ public class MainWindowViewModel : ViewModelBase
 
         // Hide AI chat panel
         AiChatViewModel.IsVisible = false;
+
+        // The Beats panel is shown by default.
+        if (WriteBeatsViewModel != null)
+        {
+            WriteBeatsViewModel.ApplyVisibility(true);
+            await WriteBeatsViewModel.PersistVisibilityAsync().ConfigureAwait(false);
+        }
 
         // Persist and broadcast the geometry defaults.
         await PersistWriteLayoutAsync(defaults).ConfigureAwait(false);

@@ -102,6 +102,10 @@ public class NotesViewModel : ViewModelBase, IDisposable
 
     public ReactiveCommand<Unit, Unit> ToggleCommand { get; }
 
+    private readonly ObservableAsPropertyHelper<string> _emptyStateText;
+    /// <summary>What the panel says when nothing is open, in the project's words.</summary>
+    public string EmptyStateText => _emptyStateText.Value;
+
     // ── Constructor ───────────────────────────────────────────────────────────
 
     public NotesViewModel(
@@ -113,6 +117,11 @@ public class NotesViewModel : ViewModelBase, IDisposable
         _workspaceViewModel = workspaceViewModel;
         _notificationService = notificationService;
         _settingsStore = settingsStore;
+
+        _emptyStateText = workspaceViewModel.WhenAnyValue(x => x.Profile)
+            .Select(p => p.OpenSomethingTo("start taking notes"))
+            .ToProperty(this, x => x.EmptyStateText);
+        Disposables.Add(_emptyStateText);
 
         try
         {

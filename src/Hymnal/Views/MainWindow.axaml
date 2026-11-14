@@ -4,6 +4,7 @@
         xmlns:views="clr-namespace:Hymnal.Views"
         xmlns:aiviews="using:Hymnal.Views.Ai"
         xmlns:conv="using:Hymnal.Views.Converters"
+        xmlns:controls="using:Hymnal.Views.Controls"
         xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
         mc:Ignorable="d" d:DesignWidth="1280" d:DesignHeight="800"
@@ -12,8 +13,8 @@
         Icon="/Assets/hymnal.ico"
         Title="{Binding Title}"
         Width="1280" Height="800"
-        Background="#0B0820"
-        FontFamily="{DynamicResource InterFont}"
+        Background="{DynamicResource Cora.Surface.Void}"
+        FontFamily="{DynamicResource Cora.Font.Persona}"
         TransparencyLevelHint="None">
 
     <Window.Resources>
@@ -23,6 +24,86 @@
     </Window.Resources>
 
     <Window.Styles>
+        <!-- Splitters: a 6px grab area drawn as a 1px hairline, which brightens to the accent while hovered or
+             dragged. "rail" splitters size the Write rails (columns); "section" splitters the panes inside a rail
+             (rows). A rail splitter shows "snap" while letting go would collapse or expand its rail. -->
+        <Style Selector="GridSplitter.rail">
+            <Setter Property="Width" Value="6" />
+            <Setter Property="MinWidth" Value="6" />
+            <Setter Property="Cursor" Value="SizeWestEast" />
+            <Setter Property="Background">
+                <LinearGradientBrush StartPoint="0%,0%" EndPoint="100%,0%">
+                    <GradientStop Offset="0" Color="Transparent" />
+                    <GradientStop Offset="0.42" Color="Transparent" />
+                    <GradientStop Offset="0.42" Color="{DynamicResource Cora.Border.Subtle.Color}" />
+                    <GradientStop Offset="0.58" Color="{DynamicResource Cora.Border.Subtle.Color}" />
+                    <GradientStop Offset="0.58" Color="Transparent" />
+                    <GradientStop Offset="1" Color="Transparent" />
+                </LinearGradientBrush>
+            </Setter>
+        </Style>
+        <Style Selector="GridSplitter.rail:pointerover, GridSplitter.rail:pressed">
+            <Setter Property="Background">
+                <LinearGradientBrush StartPoint="0%,0%" EndPoint="100%,0%">
+                    <GradientStop Offset="0" Color="Transparent" />
+                    <GradientStop Offset="0.25" Color="Transparent" />
+                    <GradientStop Offset="0.25" Color="{DynamicResource Cora.Accent.Store.Color}" />
+                    <GradientStop Offset="0.75" Color="{DynamicResource Cora.Accent.Store.Color}" />
+                    <GradientStop Offset="0.75" Color="Transparent" />
+                    <GradientStop Offset="1" Color="Transparent" />
+                </LinearGradientBrush>
+            </Setter>
+        </Style>
+        <Style Selector="GridSplitter.rail.snap">
+            <Setter Property="Background">
+                <LinearGradientBrush StartPoint="0%,0%" EndPoint="100%,0%">
+                    <GradientStop Offset="0" Color="Transparent" />
+                    <GradientStop Offset="0.17" Color="Transparent" />
+                    <GradientStop Offset="0.17" Color="{DynamicResource Cora.Accent.Create.Color}" />
+                    <GradientStop Offset="0.83" Color="{DynamicResource Cora.Accent.Create.Color}" />
+                    <GradientStop Offset="0.83" Color="Transparent" />
+                    <GradientStop Offset="1" Color="Transparent" />
+                </LinearGradientBrush>
+            </Setter>
+        </Style>
+        <Style Selector="GridSplitter.section">
+            <Setter Property="Height" Value="6" />
+            <Setter Property="MinHeight" Value="6" />
+            <Setter Property="Cursor" Value="SizeNorthSouth" />
+            <Setter Property="Background">
+                <LinearGradientBrush StartPoint="0%,0%" EndPoint="0%,100%">
+                    <GradientStop Offset="0" Color="Transparent" />
+                    <GradientStop Offset="0.42" Color="Transparent" />
+                    <GradientStop Offset="0.42" Color="{DynamicResource Cora.Border.Subtle.Color}" />
+                    <GradientStop Offset="0.58" Color="{DynamicResource Cora.Border.Subtle.Color}" />
+                    <GradientStop Offset="0.58" Color="Transparent" />
+                    <GradientStop Offset="1" Color="Transparent" />
+                </LinearGradientBrush>
+            </Setter>
+        </Style>
+        <Style Selector="GridSplitter.section:pointerover, GridSplitter.section:pressed">
+            <Setter Property="Background">
+                <LinearGradientBrush StartPoint="0%,0%" EndPoint="0%,100%">
+                    <GradientStop Offset="0" Color="Transparent" />
+                    <GradientStop Offset="0.25" Color="Transparent" />
+                    <GradientStop Offset="0.25" Color="{DynamicResource Cora.Accent.Store.Color}" />
+                    <GradientStop Offset="0.75" Color="{DynamicResource Cora.Accent.Store.Color}" />
+                    <GradientStop Offset="0.75" Color="Transparent" />
+                    <GradientStop Offset="1" Color="Transparent" />
+                </LinearGradientBrush>
+            </Setter>
+        </Style>
+
+        <!-- A rail section's whole header collapses / expands that section (PaneHeader_Tapped runs the header's
+             toggle icon); its other buttons (⋯, +, Plan) keep their own actions. -->
+        <Style Selector="Border.pane-header">
+            <Setter Property="Background" Value="Transparent" />
+            <Setter Property="Cursor" Value="Hand" />
+        </Style>
+        <Style Selector="Border.pane-header:pointerover">
+            <Setter Property="Background" Value="{DynamicResource Cora.Wash.Hover}" />
+        </Style>
+
         <!-- nav-icon: borderless icon button used in collapsed rail and expanded pane headers -->
         <Style Selector="Button.nav-icon">
             <Setter Property="Background" Value="Transparent" />
@@ -32,20 +113,27 @@
             <Setter Property="Cursor" Value="Hand" />
         </Style>
         <Style Selector="Button.nav-icon:pointerover">
-            <Setter Property="Background" Value="{DynamicResource SurfaceOverlayBrush}" />
+            <Setter Property="Background" Value="{DynamicResource Cora.Surface.Elevated}" />
+        </Style>
+        <Style Selector="Button.nav-icon.active">
+            <Setter Property="Background" Value="{DynamicResource Cora.Wash.Selected}" />
+        </Style>
+        <Style Selector="Button.nav-icon.active Path">
+            <Setter Property="Fill" Value="{DynamicResource Cora.Accent.Store}" />
         </Style>
         <Style Selector="Button.nav-icon:pressed">
-            <Setter Property="Background" Value="{DynamicResource SurfaceHighBrush}" />
+            <Setter Property="Background" Value="{DynamicResource Cora.Wash.Selected}" />
         </Style>
 
         <!-- nav-mode: underline text tab used in the top navigation bar -->
         <Style Selector="ToggleButton.nav-mode">
+            <Setter Property="FontFamily" Value="{DynamicResource Cora.Font.Caps}" />
             <Setter Property="Background" Value="Transparent" />
             <Setter Property="BorderBrush" Value="Transparent" />
             <Setter Property="BorderThickness" Value="0" />
             <Setter Property="Padding" Value="16,0" />
             <Setter Property="VerticalAlignment" Value="Center" />
-            <Setter Property="Foreground" Value="{DynamicResource OnSurfaceDimBrush}" />
+            <Setter Property="Foreground" Value="{DynamicResource Cora.Text.Secondary}" />
             <Setter Property="FontSize" Value="11" />
             <Setter Property="FontWeight" Value="SemiBold" />
             <Setter Property="Cursor" Value="Hand" />
@@ -71,13 +159,13 @@
             </Setter>
         </Style>
         <Style Selector="ToggleButton.nav-mode:pointerover">
-            <Setter Property="Foreground" Value="{DynamicResource OnSurfaceBrush}" />
+            <Setter Property="Foreground" Value="{DynamicResource Cora.Text}" />
         </Style>
         <Style Selector="ToggleButton.nav-mode:checked">
-            <Setter Property="Foreground" Value="{DynamicResource SynthwavePurpleBrush}" />
+            <Setter Property="Foreground" Value="{DynamicResource Cora.Accent.Store}" />
         </Style>
         <Style Selector="ToggleButton.nav-mode:checked /template/ Border#ActiveIndicator">
-            <Setter Property="Background" Value="{DynamicResource SynthwavePurpleBrush}" />
+            <Setter Property="Background" Value="{DynamicResource Cora.Accent.Store}" />
         </Style>
         <Style Selector="ToggleButton.nav-mode:disabled">
             <Setter Property="Opacity" Value="0.45" />
@@ -86,31 +174,38 @@
 
     <Window.KeyBindings>
         <KeyBinding Gesture="Ctrl+B" Command="{Binding ToggleSidebarCommand}" />
+        <KeyBinding Gesture="Ctrl+Alt+B" Command="{Binding ToggleRightRailCommand}" />
         <KeyBinding Gesture="Ctrl+OemComma" Command="{Binding OpenSettingsCommand}" />
-        <KeyBinding Gesture="Ctrl+Shift+A" Command="{Binding ToggleAiChatCommand}" />
+        <KeyBinding Gesture="Ctrl+Shift+A" Command="{Binding ToggleRightPaneCommand}" CommandParameter="chat" />
         <KeyBinding Gesture="F1" Command="{Binding ShowAboutCommand}" />
-        <KeyBinding Gesture="F3" Command="{Binding ChapterInfoViewModel.ToggleCommand}" />
-        <KeyBinding Gesture="F4" Command="{Binding NotesViewModel.ToggleCommand}" />
+        <KeyBinding Gesture="F3" Command="{Binding ToggleRightPaneCommand}" CommandParameter="info" />
+        <KeyBinding Gesture="F4" Command="{Binding ToggleRightPaneCommand}" CommandParameter="notes" />
         <KeyBinding Gesture="F5" Command="{Binding ToggleGanttCommand}" />
         <KeyBinding Gesture="F6" Command="{Binding EditorViewModel.CycleViewModeCommand}" />
+        <KeyBinding Gesture="F7" Command="{Binding ToggleRightPaneCommand}" CommandParameter="beats" />
+        <KeyBinding Gesture="F11" Command="{Binding ToggleFocusModeCommand}" />
+        <KeyBinding Gesture="Escape" Command="{Binding ExitFocusModeCommand}" />
         <KeyBinding Gesture="Ctrl+Shift+I" Command="{Binding QuickCaptureIdeaCommand}" />
     </Window.KeyBindings>
 
-    <Grid RowDefinitions="48,Auto,*,Auto">
+    <!-- Row 0 is Auto (its bar is 48 high) so focus mode, which hides the bar, gives the text the whole window. -->
+    <Grid RowDefinitions="Auto,Auto,*,Auto">
 
         <!-- Row 0: Menu bar + mode tabs in a single row -->
         <Border Grid.Row="0"
-                Background="{DynamicResource SurfaceElevatedBrush}"
-                BorderBrush="{DynamicResource BorderSubtleBrush}"
+                Height="48"
+                IsVisible="{Binding !IsFocusMode}"
+                Background="{DynamicResource Cora.Surface.Panel}"
+                BorderBrush="{DynamicResource Cora.Border.Subtle}"
                 BorderThickness="0,0,0,1">
             <Grid ColumnDefinitions="Auto,*,Auto">
                 <!-- Left: application menu -->
                 <Menu Grid.Column="0"
                       Background="Transparent"
-                      Foreground="{DynamicResource OnSurfaceBrush}"
+                      Foreground="{DynamicResource Cora.Text}"
                       Padding="4,2"
                       VerticalAlignment="Center">
-                    <MenuItem Header="_File" Foreground="{DynamicResource OnSurfaceBrush}">
+                    <MenuItem Header="_File" Foreground="{DynamicResource Cora.Text}">
                         <MenuItem Header="_Open Workspace…"
                                   Command="{Binding WorkspaceViewModel.OpenWorkspaceCommand}" />
                         <MenuItem Header="_Close Workspace"
@@ -123,19 +218,29 @@
                         <MenuItem Header="E_xit"
                                   Command="{Binding ExitCommand}" />
                     </MenuItem>
-                    <MenuItem Header="_View" Foreground="{DynamicResource OnSurfaceBrush}">
-                        <MenuItem Header="Toggle _Sidebar"
+                    <MenuItem Header="_View" Foreground="{DynamicResource Cora.Text}">
+                        <MenuItem Header="Toggle _Left Sidebar"
                                   Command="{Binding ToggleSidebarCommand}"
                                   InputGesture="Ctrl+B" />
+                        <MenuItem Header="Toggle _Right Sidebar"
+                                  Command="{Binding ToggleRightRailCommand}"
+                                  InputGesture="Ctrl+Alt+B" />
                         <MenuItem Header="{Binding ChapterInfoViewModel.ToggleMenuHeader}"
-                                  Command="{Binding ChapterInfoViewModel.ToggleCommand}"
+                                  Command="{Binding ToggleRightPaneCommand}" CommandParameter="info"
                                   InputGesture="F3" />
                         <MenuItem Header="Toggle _Notes"
-                                  Command="{Binding NotesViewModel.ToggleCommand}"
+                                  Command="{Binding ToggleRightPaneCommand}" CommandParameter="notes"
                                   InputGesture="F4" />
                         <MenuItem Header="Toggle _Manage View"
                                   Command="{Binding ToggleGanttCommand}"
                                   InputGesture="F5" />
+                        <MenuItem Header="Toggle _Beats"
+                                  IsVisible="{Binding IsBeatsSectionAvailable}"
+                                  Command="{Binding ToggleRightPaneCommand}" CommandParameter="beats"
+                                  InputGesture="F7" />
+                        <MenuItem Header="_Focus Mode"
+                                  Command="{Binding ToggleFocusModeCommand}"
+                                  InputGesture="F11" />
                         <Separator />
                         <MenuItem Header="Markua _Preview">
                             <MenuItem Header="_Write Only"
@@ -159,11 +264,11 @@
                                   Command="{Binding ToggleSoundCommand}"
                                   IsChecked="{Binding SoundPreferences.SoundEnabled, Mode=OneWay}"
                                   IsVisible="{Binding SoundPreferences, Converter={x:Static ObjectConverters.IsNotNull}}"
-                                  Foreground="{DynamicResource OnSurfaceBrush}" />
+                                  Foreground="{DynamicResource Cora.Text}" />
                         <MenuItem Header="_Reset Write Layout"
                                   Command="{Binding ResetWriteLayoutCommand}" />
                     </MenuItem>
-                    <MenuItem Header="_Help" Foreground="{DynamicResource OnSurfaceBrush}">
+                    <MenuItem Header="_Help" Foreground="{DynamicResource Cora.Text}">
                         <MenuItem Header="_About Hymnal"
                                   Command="{Binding ShowAboutCommand}"
                                   InputGesture="F1" />
@@ -179,31 +284,31 @@
                     <ToggleButton Classes="nav-mode"
                                   Content="RESEARCH"
                                   Command="{Binding SelectResearchCommand}"
-                                  IsChecked="{Binding ActiveMode, Mode=OneWay, Converter={StaticResource ShellModeEqualsConverter}, ConverterParameter=Research}"
+                                  IsChecked="{Binding HighlightedMode, Mode=OneWay, Converter={StaticResource ShellModeEqualsConverter}, ConverterParameter=Research}"
                                   ToolTip.Tip="Research docs and AI chat" />
                     <ToggleButton Classes="nav-mode"
                                   Content="IDEAS"
                                   Command="{Binding SelectIdeasCommand}"
                                   IsVisible="{Binding IsIdeasModeAvailable}"
-                                  IsChecked="{Binding ActiveMode, Mode=OneWay, Converter={StaticResource ShellModeEqualsConverter}, ConverterParameter=Ideas}"
+                                  IsChecked="{Binding HighlightedMode, Mode=OneWay, Converter={StaticResource ShellModeEqualsConverter}, ConverterParameter=Ideas}"
                                   ToolTip.Tip="Story ideas (Ctrl+Shift+I to capture one)" />
                     <ToggleButton Classes="nav-mode"
                                   Content="PLAN"
                                   Command="{Binding SelectPlanCommand}"
-                                  IsChecked="{Binding ActiveMode, Mode=OneWay, Converter={StaticResource ShellModeEqualsConverter}, ConverterParameter=Plan}"
+                                  IsChecked="{Binding HighlightedMode, Mode=OneWay, Converter={StaticResource ShellModeEqualsConverter}, ConverterParameter=Plan}"
                                   ToolTip.Tip="Corkboard planning board" />
                     <ToggleButton Classes="nav-mode"
                                   Content="WRITE"
                                   Command="{Binding SelectWriteCommand}"
-                                  IsChecked="{Binding ActiveMode, Mode=OneWay, Converter={StaticResource ShellModeEqualsConverter}, ConverterParameter=Write}" />
+                                  IsChecked="{Binding HighlightedMode, Mode=OneWay, Converter={StaticResource ShellModeEqualsConverter}, ConverterParameter=Write}" />
                     <ToggleButton Classes="nav-mode"
                                   Content="MANAGE"
                                   Command="{Binding SelectManageCommand}"
-                                  IsChecked="{Binding ActiveMode, Mode=OneWay, Converter={StaticResource ShellModeEqualsConverter}, ConverterParameter=Manage}" />
+                                  IsChecked="{Binding HighlightedMode, Mode=OneWay, Converter={StaticResource ShellModeEqualsConverter}, ConverterParameter=Manage}" />
                     <ToggleButton Classes="nav-mode"
                                   Content="EDIT"
                                   IsEnabled="False"
-                                  IsChecked="{Binding ActiveMode, Mode=OneWay, Converter={StaticResource ShellModeEqualsConverter}, ConverterParameter=Edit}"
+                                  IsChecked="{Binding HighlightedMode, Mode=OneWay, Converter={StaticResource ShellModeEqualsConverter}, ConverterParameter=Edit}"
                                   ToolTip.Tip="Reserved for later" />
                 </StackPanel>
 
@@ -219,8 +324,8 @@
                     <Border Padding="12,6"
                             Margin="0,0,4,0"
                             CornerRadius="10"
-                            Background="{DynamicResource SurfaceHighBrush}"
-                            BorderBrush="{DynamicResource BorderSubtleBrush}"
+                            Background="{DynamicResource Cora.Wash.Selected}"
+                            BorderBrush="{DynamicResource Cora.Border.Subtle}"
                             BorderThickness="1"
                             VerticalAlignment="Center"
                             IsVisible="{Binding GitPanelViewModel.IsVisible}">
@@ -231,31 +336,31 @@
                                         VerticalAlignment="Center"
                                         Spacing="6"
                                         ToolTip.Tip="{Binding GitPanelViewModel.ChangeSummaryText}">
-                                <TextBlock Text="Changes"
+                                <TextBlock Classes="caps" Text="Changes"
                                            FontSize="11"
                                            FontWeight="SemiBold"
                                            LetterSpacing="0.5"
                                            VerticalAlignment="Center"
-                                           Foreground="{DynamicResource OnSurfaceDimBrush}" />
+                                           Foreground="{DynamicResource Cora.Text.Secondary}" />
                                 <StackPanel Orientation="Horizontal" Spacing="2" VerticalAlignment="Center">
                                     <TextBlock Text="↓"
                                                FontSize="12"
                                                VerticalAlignment="Center"
-                                               Foreground="{DynamicResource OnSurfaceDimBrush}" />
+                                               Foreground="{DynamicResource Cora.Text.Secondary}" />
                                     <TextBlock Text="{Binding GitPanelViewModel.BehindRemoteCount}"
                                                FontSize="12"
                                                VerticalAlignment="Center"
-                                               Foreground="{DynamicResource OnSurfaceDimBrush}" />
+                                               Foreground="{DynamicResource Cora.Text.Secondary}" />
                                 </StackPanel>
                                 <StackPanel Orientation="Horizontal" Spacing="2" VerticalAlignment="Center">
                                     <TextBlock Text="↑"
                                                FontSize="12"
                                                VerticalAlignment="Center"
-                                               Foreground="{DynamicResource OnSurfaceDimBrush}" />
+                                               Foreground="{DynamicResource Cora.Text.Secondary}" />
                                     <TextBlock Text="{Binding GitPanelViewModel.OutgoingCount}"
                                                FontSize="12"
                                                VerticalAlignment="Center"
-                                               Foreground="{DynamicResource OnSurfaceDimBrush}" />
+                                               Foreground="{DynamicResource Cora.Text.Secondary}" />
                                 </StackPanel>
                             </StackPanel>
                             <Button Content="{Binding GitPanelViewModel.PrimaryActionText}"
@@ -263,18 +368,19 @@
                                     IsEnabled="{Binding GitPanelViewModel.CanSync}"
                                     Padding="18,6"
                                     CornerRadius="6"
-                                    Background="{DynamicResource SynthwavePurpleBrush}"
-                                    Foreground="{DynamicResource OnSurfaceBrush}"
+                                    Background="{DynamicResource Cora.Accent.Store}"
+                                    Foreground="{DynamicResource Cora.IconInk}"
                                     ToolTip.Tip="Sync local changes, or pull when already up to date" />
                         </StackPanel>
                     </Border>
 
                     <!-- Settings — always visible -->
                     <Button Classes="nav-icon"
+                            Classes.active="{Binding IsSettingsOpen}"
                             Command="{Binding OpenSettingsCommand}"
                             ToolTip.Tip="Settings (Ctrl+,)">
                         <Path Data="M12 15.5A3.5 3.5 0 018.5 12 3.5 3.5 0 0112 8.5a3.5 3.5 0 013.5 3.5 3.5 3.5 0 01-3.5 3.5m7.43-2.92c.04-.32.07-.64.07-.97s-.03-.66-.07-1l2.16-1.63c.19-.15.24-.42.12-.64l-2.05-3.55c-.12-.22-.39-.3-.61-.22l-2.49 1c-.52-.4-1.08-.73-1.69-.98l-.38-2.65C14.46 2.18 14.25 2 14 2h-4c-.25 0-.46.18-.49.42l-.38 2.65c-.61.25-1.17.59-1.69.98l-2.49-1c-.23-.09-.49 0-.61.22L2.74 8.87c-.12.21-.08.49.12.64L5.02 11.1c-.04.34-.07.67-.07 1s.03.65.07.97l-2.16 1.66c-.19.15-.24.42-.12.64l2.05 3.55c.12.22.39.3.61.22l2.49-1c.52.4 1.08.73 1.69.98l.38 2.65c.03.24.24.42.49.42h4c.25 0 .46-.18.49-.42l.38-2.65c.61-.25 1.17-.58 1.69-.98l2.49 1c.23.09.49 0 .61-.22l2.05-3.55c.12-.22.07-.49-.12-.64l-2.16-1.66z"
-                              Fill="{DynamicResource OnSurfaceDimBrush}"
+                              Fill="{DynamicResource Cora.Text.Secondary}"
                               Width="18" Height="18"
                               Stretch="Uniform" />
                     </Button>
@@ -283,55 +389,27 @@
             </Grid>
         </Border>
 
-        <!-- Synthwave accent stripe (Row 1 — below the menu/tab bar) -->
-        <Border Grid.Row="1"
-                Height="3"
-                BoxShadow="0 2 12 1 #AA9D4EDD, 0 4 28 0 #559D4EDD">
-            <Border.Background>
-                <LinearGradientBrush StartPoint="0%,0%" EndPoint="100%,0%">
-                    <GradientStop Color="#9D4EDD" Offset="0" />
-                    <GradientStop Color="#E91E8C" Offset="0.5" />
-                    <GradientStop Color="#38BDF8" Offset="1" />
-                </LinearGradientBrush>
-            </Border.Background>
-        </Border>
+        <!-- Accent band (Row 1 — below the menu/tab bar): Synthwave's neon, a plain rule elsewhere -->
+        <Border Grid.Row="1" Classes="band top" IsVisible="{Binding !IsFocusMode}" />
 
         <!-- Main shell (Row 2) -->
         <Panel Grid.Row="2">
 
-            <!-- Synthwave gradient background (full main area) -->
-            <Border>
-                <Border.Background>
-                    <LinearGradientBrush StartPoint="0%,0%" EndPoint="0%,100%">
-                        <GradientStop Color="#0B0820" Offset="0" />
-                        <GradientStop Color="#0F082A" Offset="0.55" />
-                        <GradientStop Color="#160833" Offset="0.82" />
-                        <GradientStop Color="#1B0838" Offset="1" />
-                    </LinearGradientBrush>
-                </Border.Background>
-            </Border>
+            <!-- The theme's window background (Synthwave's night sky, Mordor's ember, a flat colour for most) -->
+            <Border Background="{DynamicResource Cora.Surface.Window}" />
 
-            <!-- Faint synthwave horizon glow at bottom -->
-            <Border VerticalAlignment="Bottom" Height="220" Opacity="0.45">
-                <Border.Background>
-                    <LinearGradientBrush StartPoint="0%,100%" EndPoint="0%,0%">
-                        <GradientStop Color="#60E91E8C" Offset="0" />
-                        <GradientStop Color="#289D4EDD" Offset="0.38" />
-                        <GradientStop Color="#0038BDF8" Offset="0.7" />
-                        <GradientStop Color="#00000000" Offset="1" />
-                    </LinearGradientBrush>
-                </Border.Background>
-            </Border>
+            <!-- Horizon glow at the bottom (Synthwave only; hidden by default) -->
+            <Border Classes="horizon" VerticalAlignment="Bottom" Height="220" Opacity="0.45" />
 
             <!-- Layout: [left pane] [editor] [splitter] [right pane] — Write mode only -->
             <Grid x:Name="ShellGrid"
-                  ColumnDefinitions="220,4,*,4,280"
+                  ColumnDefinitions="220,6,*,6,280"
                   IsVisible="{Binding IsEditorVisible}">
 
                 <!-- ── LEFT PANE ─────────────────────────────────────────────── -->
-                <Border Grid.Column="0"
-                        Background="{DynamicResource SurfaceElevatedBrush}"
-                        BorderBrush="{DynamicResource BorderSubtleBrush}"
+                <Border Grid.Column="0" IsVisible="{Binding !IsFocusMode}"
+                        Background="{DynamicResource Cora.Surface.Panel}"
+                        BorderBrush="{DynamicResource Cora.Border.Subtle}"
                         BorderThickness="0,0,1,0"
                         MinWidth="48">
                     <Panel>
@@ -341,20 +419,20 @@
                                     IsVisible="{Binding !IsAnyLeftPaneOpen}"
                                     Margin="0,8,0,0">
                             <Button Classes="nav-icon"
-                                    Command="{Binding WorkspaceViewModel.ToggleChaptersPaneCommand}"
-                                    ToolTip.Tip="Chapters (Ctrl+B)">
+                                    Command="{Binding OpenLeftPaneCommand}" CommandParameter="chapters"
+                                    ToolTip.Tip="{Binding WorkspaceViewModel.Profile.UnitPlural, StringFormat='{}{0} (Ctrl+B)'}">
                                 <Path Data="M3 12h18M3 6h18M3 18h18"
-                                      Stroke="{DynamicResource OnSurfaceDimBrush}"
+                                      Stroke="{DynamicResource Cora.Text.Secondary}"
                                       StrokeThickness="1.5"
                                       StrokeLineCap="Round"
                                       Width="18" Height="18"
                                       Stretch="Uniform" />
                             </Button>
                             <Button Classes="nav-icon"
-                                    Command="{Binding SupplementalDocsViewModel.ToggleCommand}"
+                                    Command="{Binding OpenLeftPaneCommand}" CommandParameter="docs"
                                     ToolTip.Tip="Supplemental docs">
                                 <Path Data="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8zM14 2v6h6M16 13H8M16 17H8M10 9H8"
-                                      Stroke="{DynamicResource OnSurfaceDimBrush}"
+                                      Stroke="{DynamicResource Cora.Text.Secondary}"
                                       StrokeThickness="1.5"
                                       StrokeLineCap="Round"
                                       Width="18" Height="18"
@@ -379,30 +457,48 @@
                             <Grid Grid.Row="0"
                                   x:Name="LeftChaptersSectionGrid"
                                   RowDefinitions="48,*">
-                                <Border Grid.Row="0"
-                                        BorderBrush="{DynamicResource BorderSubtleBrush}"
+                                <Border Classes="pane-header" Tapped="PaneHeader_Tapped" Grid.Row="0"
+                                        BorderBrush="{DynamicResource Cora.Border.Subtle}"
                                         BorderThickness="0,0,0,1">
-                                    <Grid ColumnDefinitions="48,*,Auto">
+                                    <Grid ColumnDefinitions="48,*,Auto,Auto">
                                         <Button Grid.Column="0"
                                                 Classes="nav-icon"
                                                 Command="{Binding WorkspaceViewModel.ToggleChaptersPaneCommand}"
-                                                ToolTip.Tip="Chapters (Ctrl+B)">
+                                                ToolTip.Tip="{Binding WorkspaceViewModel.Profile.UnitPlural, StringFormat='{}{0} (Ctrl+B)'}">
                                             <Path Data="M3 12h18M3 6h18M3 18h18"
-                                                  Stroke="{DynamicResource SynthwavePurpleBrush}"
+                                                  Stroke="{DynamicResource Cora.Accent.Store}"
                                                   StrokeThickness="1.5"
                                                   StrokeLineCap="Round"
                                                   Width="18" Height="18"
                                                   Stretch="Uniform" />
                                         </Button>
-                                        <TextBlock Grid.Column="1"
-                                                   Text="CHAPTERS"
+                                        <TextBlock Classes="caps" Grid.Column="1"
+                                                   Text="{Binding WorkspaceViewModel.Profile.ContentsTitle}"
                                                    VerticalAlignment="Center"
                                                    Margin="4,0,0,0"
                                                    FontSize="10"
                                                    FontWeight="SemiBold"
                                                    LetterSpacing="1.5"
-                                                   Foreground="{DynamicResource OnSurfaceDimBrush}" />
+                                                   Foreground="{DynamicResource Cora.Text.Secondary}" />
                                         <Button Grid.Column="2"
+                                                x:Name="CollectionButton"
+                                                Content="⋯"
+                                                Margin="0,0,4,0"
+                                                Padding="8,2"
+                                                MinWidth="28"
+                                                MinHeight="24"
+                                                FontSize="14"
+                                                FontWeight="Bold"
+                                                VerticalAlignment="Center"
+                                                Background="Transparent"
+                                                BorderBrush="{DynamicResource Cora.Border.Subtle}"
+                                                BorderThickness="1"
+                                                CornerRadius="4"
+                                                Foreground="{DynamicResource Cora.Accent.Store}"
+                                                IsVisible="{Binding WorkspaceViewModel.HasWorkspace}"
+                                                ToolTip.Tip="{Binding WorkspaceViewModel.Profile.CollectionNoun, StringFormat='{}{0}: name, switch, publish to LeanPub'}"
+                                                Click="CollectionButton_Click" />
+                                        <Button Grid.Column="3"
                                                 x:Name="AddChapterButton"
                                                 Content="+"
                                                 Margin="0,0,8,0"
@@ -413,11 +509,11 @@
                                                 FontWeight="Bold"
                                                 VerticalAlignment="Center"
                                                 Background="Transparent"
-                                                BorderBrush="{DynamicResource BorderSubtleBrush}"
+                                                BorderBrush="{DynamicResource Cora.Border.Subtle}"
                                                 BorderThickness="1"
                                                 CornerRadius="4"
-                                                Foreground="{DynamicResource SynthwavePurpleBrush}"
-                                                ToolTip.Tip="Add chapter or part"
+                                                Foreground="{DynamicResource Cora.Accent.Store}"
+                                                ToolTip.Tip="{Binding WorkspaceViewModel.Profile.AddContentsTip}"
                                                 Click="AddChapterButton_Click" />
                                     </Grid>
                                 </Border>
@@ -428,18 +524,18 @@
                                                    IsVisible="{Binding IsChaptersPaneVisible}" />
                             </Grid>
 
-                            <GridSplitter Grid.Row="1"
-                                          Height="4"
+                            <GridSplitter Classes="section" Grid.Row="1"
+                                          ResizeBehavior="PreviousAndNext"
                                           ResizeDirection="Rows"
                                           IsVisible="{Binding IsBothLeftPanesOpen}"
-                                          Background="{DynamicResource BorderSubtleBrush}" />
+                                          />
 
                             <!-- Docs section -->
                             <Grid Grid.Row="2"
                                   x:Name="LeftDocsSectionGrid"
                                   RowDefinitions="48,*">
-                                <Border Grid.Row="0"
-                                        BorderBrush="{DynamicResource BorderSubtleBrush}"
+                                <Border Classes="pane-header" Tapped="PaneHeader_Tapped" Grid.Row="0"
+                                        BorderBrush="{DynamicResource Cora.Border.Subtle}"
                                         BorderThickness="0,1,0,1">
                                     <Grid ColumnDefinitions="48,*">
                                         <Button Grid.Column="0"
@@ -447,20 +543,20 @@
                                                 Command="{Binding SupplementalDocsViewModel.ToggleCommand}"
                                                 ToolTip.Tip="Supplemental docs">
                                             <Path Data="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8zM14 2v6h6M16 13H8M16 17H8M10 9H8"
-                                                  Stroke="{DynamicResource SynthwavePurpleBrush}"
+                                                  Stroke="{DynamicResource Cora.Accent.Store}"
                                                   StrokeThickness="1.5"
                                                   StrokeLineCap="Round"
                                                   Width="18" Height="18"
                                                   Stretch="Uniform" />
                                         </Button>
-                                        <TextBlock Grid.Column="1"
+                                        <TextBlock Classes="caps" Grid.Column="1"
                                                    Text="DOCS"
                                                    VerticalAlignment="Center"
                                                    Margin="4,0,0,0"
                                                    FontSize="10"
                                                    FontWeight="SemiBold"
                                                    LetterSpacing="1.5"
-                                                   Foreground="{DynamicResource OnSurfaceDimBrush}" />
+                                                   Foreground="{DynamicResource Cora.Text.Secondary}" />
                                     </Grid>
                                 </Border>
 
@@ -475,14 +571,14 @@
                 </Border>
 
                 <!-- ── SPLITTER BETWEEN LEFT PANE AND EDITOR ─────────────── -->
-                <GridSplitter Grid.Column="1"
-                              Width="4"
+                <GridSplitter x:Name="LeftRailSplitter" Classes="rail" ToolTip.Tip="Drag to resize · drag closed or double-click to collapse" ToolTip.ShowDelay="900" Grid.Column="1" IsVisible="{Binding !IsFocusMode}"
+                              ResizeBehavior="PreviousAndNext"
                               ResizeDirection="Columns"
-                              Background="{DynamicResource BorderSubtleBrush}" />
+                              />
 
                 <!-- ── EDITOR ─────────────────────────────────────── -->
                 <!-- The chapter status bar shares the editor's header row with the Write / Split / Preview switch. -->
-                <views:EditorView Grid.Column="2"
+                <views:EditorView Grid.Column="2" IsDistractionFree="{Binding $parent[Window].((vm:MainWindowViewModel)DataContext).IsFocusMode}"
                                   DataContext="{Binding EditorViewModel}"
                                   PlaysTypingSounds="True"
                                   Background="Transparent">
@@ -494,15 +590,15 @@
                 </views:EditorView>
 
                 <!-- ── SPLITTER (visible when any right pane is open) ─────────── -->
-                <GridSplitter Grid.Column="3"
-                              Width="4"
+                <GridSplitter x:Name="RightRailSplitter" Classes="rail" ToolTip.Tip="Drag to resize · drag closed or double-click to collapse" ToolTip.ShowDelay="900" Grid.Column="3" IsVisible="{Binding !IsFocusMode}"
+                              ResizeBehavior="PreviousAndNext"
                               ResizeDirection="Columns"
-                              Background="{DynamicResource BorderSubtleBrush}" />
+                              />
 
                 <!-- ── RIGHT PANE ─────────────────────────────────────────────── -->
-                <Border Grid.Column="4"
-                        Background="{DynamicResource SurfaceElevatedBrush}"
-                        BorderBrush="{DynamicResource BorderSubtleBrush}"
+                <Border Grid.Column="4" IsVisible="{Binding !IsFocusMode}"
+                        Background="{DynamicResource Cora.Surface.Panel}"
+                        BorderBrush="{DynamicResource Cora.Border.Subtle}"
                         BorderThickness="1,0,0,0">
                     <Panel>
 
@@ -512,19 +608,31 @@
                                     Margin="0,8,0,0">
                             <!-- F3: Chapter Info -->
                             <Button Classes="nav-icon"
-                                    Command="{Binding ChapterInfoViewModel.ToggleCommand}"
+                                    Command="{Binding OpenRightPaneCommand}" CommandParameter="info"
                                     ToolTip.Tip="{Binding ChapterInfoViewModel.ToggleToolTip}">
                                 <Path Data="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-6h2v6zm0-8h-2V7h2v2z"
-                                      Fill="{DynamicResource OnSurfaceDimBrush}"
+                                      Fill="{DynamicResource Cora.Text.Secondary}"
+                                      Width="18" Height="18"
+                                      Stretch="Uniform" />
+                            </Button>
+                            <!-- F7: Beats (story/anthology) -->
+                            <Button Classes="nav-icon"
+                                    IsVisible="{Binding IsBeatsSectionAvailable}"
+                                    Command="{Binding OpenRightPaneCommand}" CommandParameter="beats"
+                                    ToolTip.Tip="Beats (F7)">
+                                <Path Data="M4 6h16M4 12h10M4 18h13"
+                                      Stroke="{DynamicResource Cora.Text.Secondary}"
+                                      StrokeThickness="1.5"
+                                      StrokeLineCap="Round"
                                       Width="18" Height="18"
                                       Stretch="Uniform" />
                             </Button>
                             <!-- F4: Notes -->
                             <Button Classes="nav-icon"
-                                    Command="{Binding NotesViewModel.ToggleCommand}"
+                                    Command="{Binding OpenRightPaneCommand}" CommandParameter="notes"
                                     ToolTip.Tip="Notes (F4)">
                                 <Path Data="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8zM14 2v6h6M16 13H8M16 17H8M10 9H8"
-                                      Stroke="{DynamicResource OnSurfaceDimBrush}"
+                                      Stroke="{DynamicResource Cora.Text.Secondary}"
                                       StrokeThickness="1.5"
                                       StrokeLineCap="Round"
                                       Width="18" Height="18"
@@ -532,10 +640,10 @@
                             </Button>
                             <!-- AI Chat (Ctrl+Shift+A) -->
                             <Button Classes="nav-icon"
-                                    Command="{Binding ToggleAiChatCommand}"
+                                    Command="{Binding OpenRightPaneCommand}" CommandParameter="chat"
                                     ToolTip.Tip="AI Chat (Ctrl+Shift+A)">
                                 <Path Data="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z"
-                                      Stroke="{DynamicResource OnSurfaceDimBrush}"
+                                      Stroke="{DynamicResource Cora.Text.Secondary}"
                                       StrokeThickness="1.5"
                                       StrokeLineCap="Round"
                                       Width="18" Height="18"
@@ -557,14 +665,14 @@
                              full sections (header + content) rather than a header row directly.
                         -->
                         <Grid IsVisible="{Binding IsAnyRightPaneOpen}"
-                              RowDefinitions="*,Auto,*,Auto,*"
+                              RowDefinitions="*,Auto,*,Auto,*,Auto,*"
                               x:Name="RightPaneGrid">
 
                             <!-- Row 0: Chapter panel DockPanel (header pinned top + content fills rest) -->
                             <DockPanel Grid.Row="0">
-                                <Border DockPanel.Dock="Top"
+                                <Border Classes="pane-header" Tapped="PaneHeader_Tapped" DockPanel.Dock="Top"
                                         Height="48"
-                                        BorderBrush="{DynamicResource BorderSubtleBrush}"
+                                        BorderBrush="{DynamicResource Cora.Border.Subtle}"
                                         BorderThickness="0,0,0,1">
                                     <Grid ColumnDefinitions="48,*">
                                         <Button Grid.Column="0"
@@ -572,18 +680,18 @@
                                                 Command="{Binding ChapterInfoViewModel.ToggleCommand}"
                                                 ToolTip.Tip="{Binding ChapterInfoViewModel.ToggleToolTip}">
                                             <Path Data="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-6h2v6zm0-8h-2V7h2v2z"
-                                                  Fill="{DynamicResource SynthwavePurpleBrush}"
+                                                  Fill="{DynamicResource Cora.Accent.Store}"
                                                   Width="18" Height="18"
                                                   Stretch="Uniform" />
                                         </Button>
-                                        <TextBlock Grid.Column="1"
+                                        <TextBlock Classes="caps" Grid.Column="1"
                                                    Text="{Binding ChapterPanelTitle}"
                                                    VerticalAlignment="Center"
                                                    Margin="4,0,0,0"
                                                    FontSize="10"
                                                    FontWeight="SemiBold"
                                                    LetterSpacing="1.5"
-                                                   Foreground="{DynamicResource OnSurfaceDimBrush}" />
+                                                   Foreground="{DynamicResource Cora.Text.Secondary}" />
                                     </Grid>
                                 </Border>
                                 <ContentControl x:Name="ChapterPanelContentControl"
@@ -591,18 +699,70 @@
                                                 IsVisible="{Binding IsChapterPanelOpen}" />
                             </DockPanel>
 
-                            <!-- Row 1: GridSplitter between Info and Notes (visible when both content areas open) -->
-                            <GridSplitter Grid.Row="1"
-                                          Height="4"
+                            <!-- Row 1: GridSplitter between Info and Beats (visible when both content areas open) -->
+                            <GridSplitter Classes="section" Grid.Row="1"
+                                          ResizeBehavior="PreviousAndNext"
                                           ResizeDirection="Rows"
-                                          IsVisible="{Binding IsInfoNotesSplitterVisible}"
-                                          Background="{DynamicResource BorderSubtleBrush}" />
+                                          IsVisible="{Binding IsInfoBeatsSplitterVisible}"
+                                          />
 
-                            <!-- Row 2: Notes DockPanel (header pinned top + content fills rest) -->
-                            <DockPanel Grid.Row="2">
-                                <Border DockPanel.Dock="Top"
+                            <!-- Row 2: Beats DockPanel (story/anthology only): the story's beats beside the draft -->
+                            <DockPanel Grid.Row="2"
+                                       IsVisible="{Binding IsBeatsSectionAvailable}">
+                                <Border Classes="pane-header" Tapped="PaneHeader_Tapped" DockPanel.Dock="Top"
                                         Height="48"
-                                        BorderBrush="{DynamicResource BorderSubtleBrush}"
+                                        BorderBrush="{DynamicResource Cora.Border.Subtle}"
+                                        BorderThickness="0,1,0,1">
+                                    <Grid ColumnDefinitions="48,*,Auto">
+                                        <Button Grid.Column="0"
+                                                Classes="nav-icon"
+                                                Command="{Binding WriteBeatsViewModel.ToggleCommand}"
+                                                ToolTip.Tip="Beats (F7)">
+                                            <Path Data="M4 6h16M4 12h10M4 18h13"
+                                                  Stroke="{DynamicResource Cora.Accent.Store}"
+                                                  StrokeThickness="1.5"
+                                                  StrokeLineCap="Round"
+                                                  Width="18" Height="18"
+                                                  Stretch="Uniform" />
+                                        </Button>
+                                        <TextBlock Classes="caps" Grid.Column="1"
+                                                   Text="BEATS"
+                                                   VerticalAlignment="Center"
+                                                   Margin="4,0,0,0"
+                                                   FontSize="10"
+                                                   FontWeight="SemiBold"
+                                                   LetterSpacing="1.5"
+                                                   Foreground="{DynamicResource Cora.Text.Secondary}" />
+                                        <Button Grid.Column="2"
+                                                Classes="nav-icon"
+                                                Command="{Binding WriteBeatsViewModel.PlanStoryCommand}"
+                                                ToolTip.Tip="Plan this story"
+                                                VerticalAlignment="Center"
+                                                Margin="0,0,8,0">
+                                            <TextBlock Text="PLAN"
+                                                       FontSize="9"
+                                                       FontWeight="SemiBold"
+                                                       LetterSpacing="1"
+                                                       Foreground="{DynamicResource Cora.Accent.Store}" />
+                                        </Button>
+                                    </Grid>
+                                </Border>
+                                <views:WriteBeatsView x:Name="WriteBeatsViewContent"
+                                                      DataContext="{Binding WriteBeatsViewModel}" />
+                            </DockPanel>
+
+                            <!-- Row 3: GridSplitter above Notes (visible when Notes and Info or Beats are open) -->
+                            <GridSplitter Classes="section" Grid.Row="3"
+                                          ResizeBehavior="PreviousAndNext"
+                                          ResizeDirection="Rows"
+                                          IsVisible="{Binding IsAboveNotesSplitterVisible}"
+                                          />
+
+                            <!-- Row 4: Notes DockPanel (header pinned top + content fills rest) -->
+                            <DockPanel Grid.Row="4">
+                                <Border Classes="pane-header" Tapped="PaneHeader_Tapped" DockPanel.Dock="Top"
+                                        Height="48"
+                                        BorderBrush="{DynamicResource Cora.Border.Subtle}"
                                         BorderThickness="0,1,0,1">
                                     <Grid ColumnDefinitions="48,*">
                                         <Button Grid.Column="0"
@@ -610,38 +770,38 @@
                                                 Command="{Binding NotesViewModel.ToggleCommand}"
                                                 ToolTip.Tip="Notes (F4)">
                                             <Path Data="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8zM14 2v6h6M16 13H8M16 17H8M10 9H8"
-                                                  Stroke="{DynamicResource SynthwavePurpleBrush}"
+                                                  Stroke="{DynamicResource Cora.Accent.Store}"
                                                   StrokeThickness="1.5"
                                                   StrokeLineCap="Round"
                                                   Width="18" Height="18"
                                                   Stretch="Uniform" />
                                         </Button>
-                                        <TextBlock Grid.Column="1"
+                                        <TextBlock Classes="caps" Grid.Column="1"
                                                    Text="NOTES"
                                                    VerticalAlignment="Center"
                                                    Margin="4,0,0,0"
                                                    FontSize="10"
                                                    FontWeight="SemiBold"
                                                    LetterSpacing="1.5"
-                                                   Foreground="{DynamicResource OnSurfaceDimBrush}" />
+                                                   Foreground="{DynamicResource Cora.Text.Secondary}" />
                                     </Grid>
                                 </Border>
                                 <views:NotesView x:Name="NotesViewContent"
                                                  DataContext="{Binding NotesViewModel}" />
                             </DockPanel>
 
-                            <!-- Row 3: GridSplitter between Notes and AI (visible when both content areas open) -->
-                            <GridSplitter Grid.Row="3"
-                                          Height="4"
+                            <!-- Row 5: GridSplitter between Notes and AI (visible when both content areas open) -->
+                            <GridSplitter Classes="section" Grid.Row="5"
+                                          ResizeBehavior="PreviousAndNext"
                                           ResizeDirection="Rows"
                                           IsVisible="{Binding IsNotesChatSplitterVisible}"
-                                          Background="{DynamicResource BorderSubtleBrush}" />
+                                          />
 
-                            <!-- Row 4: AI Chat DockPanel (header always visible; content collapses) -->
-                            <DockPanel Grid.Row="4">
-                                <Border DockPanel.Dock="Top"
+                            <!-- Row 6: AI Chat DockPanel (header always visible; content collapses) -->
+                            <DockPanel Grid.Row="6">
+                                <Border Classes="pane-header" Tapped="PaneHeader_Tapped" DockPanel.Dock="Top"
                                         Height="48"
-                                        BorderBrush="{DynamicResource BorderSubtleBrush}"
+                                        BorderBrush="{DynamicResource Cora.Border.Subtle}"
                                         BorderThickness="0,1,0,1">
                                     <Grid ColumnDefinitions="48,*,Auto">
                                         <Button Grid.Column="0"
@@ -649,20 +809,20 @@
                                                 Command="{Binding ToggleAiChatCommand}"
                                                 ToolTip.Tip="AI Chat (Ctrl+Shift+A)">
                                             <Path Data="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z"
-                                                  Stroke="{DynamicResource SynthwavePurpleBrush}"
+                                                  Stroke="{DynamicResource Cora.Accent.Store}"
                                                   StrokeThickness="1.5"
                                                   StrokeLineCap="Round"
                                                   Width="18" Height="18"
                                                   Stretch="Uniform" />
                                         </Button>
-                                        <TextBlock Grid.Column="1"
+                                        <TextBlock Classes="caps" Grid.Column="1"
                                                    Text="AI CHAT"
                                                    VerticalAlignment="Center"
                                                    Margin="4,0,0,0"
                                                    FontSize="10"
                                                    FontWeight="SemiBold"
                                                    LetterSpacing="1.5"
-                                                   Foreground="{DynamicResource OnSurfaceDimBrush}" />
+                                                   Foreground="{DynamicResource Cora.Text.Secondary}" />
                                         <Button Grid.Column="2"
                                                 Classes="nav-icon"
                                                 Command="{Binding AiChatViewModel.NewConversationCommand}"
@@ -670,7 +830,7 @@
                                                 Margin="0,0,4,0">
                                             <TextBlock Text="+"
                                                        FontSize="16"
-                                                       Foreground="{DynamicResource SynthwavePurpleBrush}" />
+                                                       Foreground="{DynamicResource Cora.Accent.Store}" />
                                         </Button>
                                     </Grid>
                                 </Border>
@@ -685,26 +845,29 @@
 
             </Grid>
 
-            <!-- Research / Ideas / Plan / Manage — lazy-loaded via ViewLocator, full width -->
-            <ContentControl IsVisible="{Binding !IsEditorVisible}"
-                            Content="{Binding SecondaryCentreContent}" />
+            <!-- Research / Ideas / Plan / Manage — lazy-loaded via ViewLocator, full width. Plan and Manage carry
+                 the collection bar on top (Write shows the collection as its sidebar's root row). -->
+            <DockPanel IsVisible="{Binding !IsEditorVisible}">
+                <views:CollectionBar DockPanel.Dock="Top"
+                                     IsVisible="{Binding ShowsCollectionBar}" />                <ContentControl Content="{Binding SecondaryCentreContent}" />
+            </DockPanel>
 
             <!-- Settings overlay — covers full shell area when IsSettingsOpen -->
             <Border IsVisible="{Binding IsSettingsOpen}"
-                    Background="{DynamicResource SurfaceBaseBrush}"
+                    Background="{DynamicResource Cora.Surface.Void}"
                     ZIndex="100">
                 <Grid RowDefinitions="48,*">
                     <!-- Settings header bar -->
                     <Border Grid.Row="0"
-                            Background="{DynamicResource SurfaceElevatedBrush}"
-                            BorderBrush="{DynamicResource BorderSubtleBrush}"
+                            Background="{DynamicResource Cora.Surface.Panel}"
+                            BorderBrush="{DynamicResource Cora.Border.Subtle}"
                             BorderThickness="0,0,0,1">
                         <Grid ColumnDefinitions="*,Auto">
                             <TextBlock Grid.Column="0"
                                        Text="Settings"
                                        FontSize="14"
                                        FontWeight="SemiBold"
-                                       Foreground="{DynamicResource OnSurfaceBrush}"
+                                       Foreground="{DynamicResource Cora.Text}"
                                        VerticalAlignment="Center"
                                        Margin="16,0" />
                             <Button Grid.Column="1"
@@ -714,7 +877,7 @@
                                     Margin="0,0,8,0">
                                 <TextBlock Text="✕"
                                            FontSize="14"
-                                           Foreground="{DynamicResource OnSurfaceDimBrush}" />
+                                           Foreground="{DynamicResource Cora.Text.Secondary}" />
                             </Button>
                         </Grid>
                     </Border>
@@ -732,18 +895,29 @@
 
         </Panel>
 
-        <!-- Synthwave accent stripe bottom (Row 3) -->
-        <Border Grid.Row="3"
-                Height="3"
-                BoxShadow="0 -2 12 1 #AA9D4EDD, 0 -4 28 0 #559D4EDD">
-            <Border.Background>
-                <LinearGradientBrush StartPoint="0%,0%" EndPoint="100%,0%">
-                    <GradientStop Color="#38BDF8" Offset="0" />
-                    <GradientStop Color="#E91E8C" Offset="0.5" />
-                    <GradientStop Color="#9D4EDD" Offset="1" />
-                </LinearGradientBrush>
-            </Border.Background>
-        </Border>
+        <!-- Row 3: the accent band, then the status strip with the theme's emblem, the window title, and a CORA
+             theme's motto and signature chrome -->
+        <DockPanel Grid.Row="3" IsVisible="{Binding !IsFocusMode}">
+            <Border DockPanel.Dock="Top" Classes="band bottom" />
+            <Border Classes="statusStrip">
+                <DockPanel>
+                    <controls:ThemeEmblem DockPanel.Dock="Left"
+                                          Kind="{DynamicResource Hymnal.Emblem}"
+                                          Width="16" Height="16"
+                                          Margin="0,0,8,0"
+                                          VerticalAlignment="Center" />
+                    <StackPanel DockPanel.Dock="Right"
+                                Orientation="Horizontal"
+                                Spacing="10"
+                                Margin="16,0,0,0"
+                                VerticalAlignment="Center">
+                        <TextBlock Classes="motto" />
+                        <controls:ThemeChrome Kind="{DynamicResource Theme.Chrome}" VerticalAlignment="Center" />
+                    </StackPanel>
+                    <TextBlock Classes="statusTitle" Text="{Binding Title}" />
+                </DockPanel>
+            </Border>
+        </DockPanel>
 
         <!-- Toast-style notifications -->
         <Border Grid.RowSpan="4"
@@ -752,12 +926,12 @@
                 Margin="16"
                 MaxWidth="460"
                 IsVisible="{Binding HasBanner}"
-                Background="{DynamicResource SurfaceElevatedBrush}"
-                BorderBrush="{DynamicResource BorderDefaultBrush}"
+                Background="{DynamicResource Cora.Surface.Panel}"
+                BorderBrush="{DynamicResource Cora.Border.Input}"
                 BorderThickness="1"
                 CornerRadius="12">
             <Grid ColumnDefinitions="8,*">
-                <Border Background="{DynamicResource SynthwavePurpleBrush}"
+                <Border Background="{DynamicResource Cora.Accent.Store}"
                         CornerRadius="12,0,0,12" />
                 <StackPanel Grid.Column="1"
                             Margin="14,12"
@@ -765,9 +939,9 @@
                     <TextBlock Text="{Binding BannerTitle}"
                                FontSize="13"
                                FontWeight="SemiBold"
-                               Foreground="{DynamicResource OnSurfaceBrush}" />
+                               Foreground="{DynamicResource Cora.Text}" />
                     <TextBlock Text="{Binding BannerMessage}"
-                               Foreground="{DynamicResource OnSurfaceDimBrush}"
+                               Foreground="{DynamicResource Cora.Text.Secondary}"
                                TextWrapping="Wrap" />
                 </StackPanel>
             </Grid>

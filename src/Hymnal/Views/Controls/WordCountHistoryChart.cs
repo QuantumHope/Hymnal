@@ -7,6 +7,7 @@ using Avalonia.Controls;
 using Avalonia.Controls.Primitives;
 using Avalonia.Layout;
 using Avalonia.Media;
+using Hymnal.Theming;
 using Hymnal.ViewModels;
 
 namespace Hymnal.Views.Controls;
@@ -32,6 +33,9 @@ public class WordCountHistoryChart : Control
         ItemsProperty.Changed.AddClassHandler<WordCountHistoryChart>((c, _) => c.UpdateTooltip());
     }
 
+    // The theme brushes recolour in place; redraw too when a theme switch swaps the app's resources.
+    public WordCountHistoryChart() => ResourcesChanged += (_, _) => InvalidateVisual();
+
     protected override Size MeasureOverride(Size availableSize)
     {
         var items = Items;
@@ -55,13 +59,13 @@ public class WordCountHistoryChart : Control
                 Text = FormatDate(point.Date),
                 Width = 60,
                 FontSize = 11,
-                Foreground = new SolidColorBrush(Color.Parse("#9589B0"))
+                Foreground = ThemeBrushes.Get("Cora.Text.Secondary", "#9589B0")
             });
             row.Children.Add(new TextBlock
             {
                 Text = $"{point.WordCount:N0} w",
                 FontSize = 11,
-                Foreground = new SolidColorBrush(Color.Parse("#EDE8F5"))
+                Foreground = ThemeBrushes.Get("Cora.Text", "#EDE8F5")
             });
             panel.Children.Add(row);
         }
@@ -88,9 +92,9 @@ public class WordCountHistoryChart : Control
         double barAreaWidth = totalWidth - AxisWidth;
         if (barAreaHeight <= 0 || barAreaWidth <= 0) return;
 
-        var gridBrush = new SolidColorBrush(Color.Parse("#2A2040"));
-        var labelBrush = new SolidColorBrush(Color.Parse("#9589B0"));
-        var barBrush = new SolidColorBrush(Color.Parse("#9D4EDD"));
+        var gridBrush = ThemeBrushes.Get("Cora.Border.Subtle", "#2A2040");
+        var labelBrush = ThemeBrushes.Get("Cora.Text.Secondary", "#9589B0");
+        var barBrush = ThemeBrushes.Get("Cora.Accent.Store", "#9D4EDD");
         var typeface = new Typeface("Inter");
 
         // Y-axis gridlines and labels at 0, niceMax/2, niceMax

@@ -863,6 +863,91 @@ public sealed class BeatBoardViewModelTests
         return await task;
     }
 
+    [Fact]
+    public async Task Apply_template_opens_the_gallery_over_the_beats_and_applying_closes_it()
+    {
+        var root = CreateWorkspace();
+        try
+        {
+            await Ui(root, async context =>
+            {
+                var vm = await Within(context.OpenBoardAsync(BoardA));
+                Assert.True(vm.ShowsTemplatePicker);
+                Assert.False(vm.ShowsBeats);
+                Assert.False(await vm.ChooseTemplateCommand.CanExecute.FirstAsync());
+
+                await Within(vm.ApplyTemplateCommand
+                    .Execute(new ApplyTemplateRequest("freytag", TemplateApplyMode.Append, null)).ToTask());
+                Assert.False(vm.ShowsTemplatePicker);
+                Assert.True(vm.ShowsBeats);
+
+                await Within(vm.ChooseTemplateCommand.Execute().ToTask());
+                Assert.True(vm.IsChoosingTemplate);
+                Assert.True(vm.ShowsTemplatePicker);
+                Assert.False(vm.ShowsBeats);
+
+                await Within(vm.ApplyTemplateCommand
+                    .Execute(new ApplyTemplateRequest("kishotenketsu", TemplateApplyMode.Append, null)).ToTask());
+                Assert.False(vm.IsChoosingTemplate);
+                Assert.True(vm.ShowsBeats);
+                Assert.Equal(9, vm.Beats.Count);
+            });
+        }
+        finally { DeleteFolder(root); }
+    }
+
+    [Fact]
+    public async Task Cancelling_the_gallery_or_declining_a_replace_keeps_the_beats()
+    {
+        var root = CreateWorkspace();
+        try
+        {
+            await Ui(root, async context =>
+            {
+                var vm = await Within(context.OpenBoardAsync(BoardA));
+                await Within(vm.ApplyTemplateCommand
+                    .Execute(new ApplyTemplateRequest("freytag", TemplateApplyMode.Append, null)).ToTask());
+
+                await Within(vm.ChooseTemplateCommand.Execute().ToTask());
+                await Within(vm.CancelTemplateChoiceCommand.Execute().ToTask());
+                Assert.False(vm.IsChoosingTemplate);
+                Assert.True(vm.ShowsBeats);
+
+                // Declining the confirmation leaves the gallery open, so another template can be picked.
+                vm.ConfirmAsync = _ => Task.FromResult(false);
+                await Within(vm.ChooseTemplateCommand.Execute().ToTask());
+                await Within(vm.ApplyTemplateCommand
+                    .Execute(new ApplyTemplateRequest("threeAct", TemplateApplyMode.Replace, null)).ToTask());
+                Assert.True(vm.IsChoosingTemplate);
+                Assert.Equal(5, vm.Beats.Count);
+                Assert.Equal("Exposition", vm.Beats[0].Title);
+
+                // Opening another board leaves the gallery.
+                await Within(vm.OpenBoardAsync(BoardB, "Story B", Scope));
+                Assert.False(vm.IsChoosingTemplate);
+            });
+        }
+        finally { DeleteFolder(root); }
+    }
+
+    [Fact]
+    public async Task Scene_links_show_only_when_the_story_has_several_scene_files()
+    {
+        var root = CreateWorkspace();
+        try
+        {
+            await Ui(root, async context =>
+            {
+                var vm = await Within(context.OpenBoardAsync(BoardA));
+                Assert.True(vm.ShowsSceneLinks);
+
+                await Within(vm.OpenBoardAsync(BoardB, "Story B", [SceneOne]));
+                Assert.False(vm.ShowsSceneLinks);
+            });
+        }
+        finally { DeleteFolder(root); }
+    }
+
     private static string CreateWorkspace()
     {
         var root = Path.Combine(Path.GetTempPath(), $"hymnal-beats-vm-{Guid.NewGuid():N}");

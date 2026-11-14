@@ -59,10 +59,11 @@ public partial class SidebarView : UserControl
         if (!CanRenameFromSidebar(chapter.Node))
             return;
 
-        var dialogTitle = chapter.Node.Kind == NodeKind.Part ? "Rename part" : "Rename chapter";
+        var noun = vm.NounFor(chapter).ToLowerInvariant();
+        var dialogTitle = $"Rename {noun}";
         var prompt = chapter.Node.Kind == NodeKind.Part
-            ? "Enter the new sidebar title for this Part:"
-            : "Enter the new sidebar title for this chapter:";
+            ? $"Enter the new sidebar title for this {noun}:"
+            : $"Enter the new sidebar title for this {noun}:";
 
         var replacementTitle = await PromptForTextAsync(dialogTitle, prompt, chapter.Node.Title);
         if (string.IsNullOrWhiteSpace(replacementTitle))
@@ -100,6 +101,19 @@ public partial class SidebarView : UserControl
 
             await ExecuteCommandAsync(vm.RemoveFromBookCommand.Execute(chapter.Node.RelativePath));
         }
+    }
+
+    private void FocusStory_Click(object? sender, RoutedEventArgs e)
+    {
+        if (DataContext is WorkspaceViewModel vm && sender is MenuItem { DataContext: ChapterViewModel chapter })
+            vm.FocusStory(chapter);
+    }
+
+    private async void ExportForSubmission_Click(object? sender, RoutedEventArgs e)
+    {
+        if (sender is MenuItem { DataContext: ChapterViewModel chapter }
+            && TopLevel.GetTopLevel(this) is Window { DataContext: MainWindowViewModel { SubmissionExportViewModel: { } export } } owner)
+            await SubmissionExportDialog.ShowAsync(owner, export, chapter);
     }
 
     private async void IncludeInBook_Click(object? sender, RoutedEventArgs e)
@@ -279,7 +293,8 @@ public partial class SidebarView : UserControl
             Height = 190,
             CanResize = false,
             WindowStartupLocation = WindowStartupLocation.CenterOwner,
-            Background = new SolidColorBrush(Color.Parse("#120932"))
+            Background = GetResource<IBrush>("Cora.Surface.Panel")
+                ?? new SolidColorBrush(Color.Parse("#120932"))
         };
 
         var input = new TextBox
@@ -287,11 +302,11 @@ public partial class SidebarView : UserControl
             Text = initialValue,
             FontSize = 12,
             Padding = new Thickness(8, 6),
-            Background = GetResource<IBrush>("SurfaceBaseBrush")
+            Background = GetResource<IBrush>("Cora.Surface.Void")
                 ?? new SolidColorBrush(Color.Parse("#0F0828")),
-            Foreground = GetResource<IBrush>("OnSurfaceBrush")
+            Foreground = GetResource<IBrush>("Cora.Text")
                 ?? Brushes.White,
-            BorderBrush = GetResource<IBrush>("BorderSubtleBrush")
+            BorderBrush = GetResource<IBrush>("Cora.Border.Subtle")
                 ?? new SolidColorBrush(Color.Parse("#2D1B5E")),
             BorderThickness = new Thickness(1)
         };
@@ -312,9 +327,9 @@ public partial class SidebarView : UserControl
         {
             Content = "OK",
             IsDefault = true,
-            Background = GetResource<IBrush>("SynthwavePurpleBrush")
+            Background = GetResource<IBrush>("Cora.Accent.Store")
                 ?? new SolidColorBrush(Color.Parse("#9D4EDD")),
-            Foreground = GetResource<IBrush>("OnSurfaceBrush")
+            Foreground = GetResource<IBrush>("Cora.IconInk")
                 ?? Brushes.White,
             BorderThickness = new Thickness(0),
             Padding = new Thickness(12, 6)
@@ -335,7 +350,8 @@ public partial class SidebarView : UserControl
 
         dialog.Content = new Border
         {
-            BorderBrush = new SolidColorBrush(Color.Parse("#2D1B5E")),
+            BorderBrush = GetResource<IBrush>("Cora.Border.Subtle")
+                ?? new SolidColorBrush(Color.Parse("#2D1B5E")),
             BorderThickness = new Thickness(1),
             Child = new StackPanel
             {
@@ -346,7 +362,7 @@ public partial class SidebarView : UserControl
                     new TextBlock
                     {
                         Text = prompt,
-                        Foreground = GetResource<IBrush>("OnSurfaceBrush")
+                        Foreground = GetResource<IBrush>("Cora.Text")
                             ?? Brushes.White,
                         TextWrapping = TextWrapping.Wrap
                     },

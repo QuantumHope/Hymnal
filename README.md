@@ -70,10 +70,17 @@ If a file contains the marker {class: part} in its first non-blank lines, Hymnal
 - If a file has a first-level markdown heading (# Heading), that heading becomes the display title.
 - Otherwise, the file name without extension is used.
 
+## Collections and publishing to LeanPub
+
+- Use the **⋯** button beside **+** in the sidebar header to name the collection (or book, or story).
+- An anthology can hold several collections over one folder of stories. Each collection is a folder in `collections/`, and the open one's list is `Book.txt`. **New collection…** and **Open “…”** switch between them, and **Add a story in no collection** lists stories no collection uses yet.
+- **Publish to LeanPub…** previews the open collection and copies it into `manuscript/` (its `Book.txt`, the files it lists without Hymnal's own data, and `resources/`). LeanPub reads `manuscript/Book.txt`, so commit and push, then preview or publish on LeanPub. The book's title itself is set on LeanPub.
+
 ## Keyboard Shortcuts
 
 - Ctrl+B: toggle chapter sidebar
 - F4: toggle notes panel
+- F7: toggle the Beats panel (Short Story and Anthology projects): the story's beats beside the draft
 - Ctrl+S: save active chapter
 
 ## Architecture Overview

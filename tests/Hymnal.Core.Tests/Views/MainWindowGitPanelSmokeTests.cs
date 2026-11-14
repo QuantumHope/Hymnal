@@ -24,7 +24,9 @@ public sealed class MainWindowGitPanelSmokeTests
         Assert.Contains("GitPanelViewModel.PrimaryActionText", mainWindowAxaml);
         Assert.Contains("HorizontalAlignment=\"Right\"", mainWindowAxaml);
         Assert.Contains("Click=\"SyncButton_Click\"", mainWindowAxaml);
-        Assert.Contains("RowDefinitions=\"48,Auto,*,Auto\"", mainWindowAxaml);
+        // The menu/tab bar row is Auto around a 48-high bar, so focus mode can hide it.
+        Assert.Contains("RowDefinitions=\"Auto,Auto,*,Auto\"", mainWindowAxaml);
+        Assert.Contains("Height=\"48\"", mainWindowAxaml);
         Assert.Contains("BoolNotConverter", mainWindowAxaml);
 
         var mainWindowCodeBehind = File.ReadAllText(FindRepositoryFile("src/Hymnal/Views/MainWindow.axaml.cs"));

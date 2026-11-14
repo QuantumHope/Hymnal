@@ -504,7 +504,7 @@ public partial class CorkboardView : UserControl
             return;
 
         var initial = card.RelativePath;
-        var replacement = await PromptForTextAsync("Rename chapter", "Enter the new Book.txt path:", initial);
+        var replacement = await PromptForTextAsync($"Rename {card.Noun.ToLowerInvariant()}", "Enter the new Book.txt path:", initial);
         if (string.IsNullOrWhiteSpace(replacement) || string.Equals(replacement, initial, StringComparison.OrdinalIgnoreCase))
             return;
 
@@ -525,7 +525,7 @@ public partial class CorkboardView : UserControl
         if (!TryGetCardFromMenu(sender, out var card) || DataContext is not CorkboardViewModel vm)
             return;
 
-        var path = await PromptForTextAsync("Include existing chapter", "Enter the existing chapter path:", string.Empty);
+        var path = await PromptForTextAsync("Include existing file", "Enter the path of the file to include:", string.Empty);
         if (string.IsNullOrWhiteSpace(path))
             return;
 
@@ -627,14 +627,13 @@ public partial class CorkboardView : UserControl
             || DataContext is not CorkboardViewModel vm)
             return;
 
-        var unit = vm.Profile.UnitNoun;
-        var partNoun = vm.Profile.PartNoun;
+        var unit = vm.Profile.SubunitNoun;
         var flyout = new MenuFlyout
         {
             Items =
             {
-                new MenuItem { Header = $"New {unit} in {partNoun}", Tag = ("chapter", part) },
-                new MenuItem { Header = $"New {unit} in {partNoun} (advanced)…", Tag = ("chapter-advanced", part) },
+                new MenuItem { Header = $"New {unit} in {part.Title}", Tag = ("chapter", part) },
+                new MenuItem { Header = $"New {unit} in {part.Title} (advanced)…", Tag = ("chapter-advanced", part) },
                 new MenuItem { Header = "Include Existing File…", Tag = ("include", part) }
             }
         };
@@ -679,16 +678,17 @@ public partial class CorkboardView : UserControl
     private async Task CreateBoardChapterAsync(CorkboardViewModel vm, PartDividerItemViewModel? part)
     {
         var suggestedPath = part == null
-            ? "new-chapter.md"
-            : BuildSuggestedNewChapterPath(part.RelativePath);
+            ? $"{vm.Profile.NewFileStem}.md"
+            : BuildSuggestedNewChapterPath(part.RelativePath, vm.Profile.NewFileStem);
 
+        var noun = part == null ? vm.Profile.UnitNoun : vm.Profile.SubunitNoun;
         var dialogResult = await NewChapterDialog.ShowAsync(
             TopLevel.GetTopLevel(this) as Window ?? throw new InvalidOperationException("No window owner."),
             NewManuscriptEntryKind.Chapter,
-            $"New {vm.Profile.UnitNoun}",
+            $"New {noun}",
             part == null
-                ? $"Enter the new {vm.Profile.UnitNoun.ToLowerInvariant()} path relative to the manuscript root."
-                : $"Enter the new {vm.Profile.UnitNoun.ToLowerInvariant()} path for {part.Title}.",
+                ? $"Enter the new {noun.ToLowerInvariant()} path relative to the project folder."
+                : $"Enter the new {noun.ToLowerInvariant()} path for {part.Title}.",
             suggestedPath);
 
         if (dialogResult is null)
@@ -713,7 +713,7 @@ public partial class CorkboardView : UserControl
             NewManuscriptEntryKind.Part,
             $"New {vm.Profile.PartNoun}",
             $"Enter the {vm.Profile.PartNoun.ToLowerInvariant()} divider path and title.",
-            "part-two/part.md");
+            vm.Profile.NewPartPath);
 
         if (dialogResult is null || string.IsNullOrWhiteSpace(dialogResult.Title))
             return;
@@ -828,8 +828,8 @@ public partial class CorkboardView : UserControl
             return;
 
         var confirmed = await ConfirmAsync(
-            "Delete chapter file",
-            $"Delete the chapter file for '{card.RelativePath}'? This cannot be undone.");
+            "Delete file",
+            $"Delete the file '{card.RelativePath}'? This cannot be undone.");
 
         if (!confirmed)
             return;
@@ -857,12 +857,12 @@ public partial class CorkboardView : UserControl
         _dragOperationStarted = false;
     }
 
-    private static string BuildSuggestedNewChapterPath(string relativePath)
+    private static string BuildSuggestedNewChapterPath(string relativePath, string stem)
     {
         var directory = Path.GetDirectoryName(relativePath)?.Replace('\\', '/') ?? string.Empty;
         return string.IsNullOrWhiteSpace(directory)
-            ? "new-chapter.md"
-            : $"{directory}/new-chapter.md";
+            ? $"{stem}.md"
+            : $"{directory}/{stem}.md";
     }
 
     private async Task<string?> PromptForTextAsync(string title, string prompt, string initialValue)
@@ -877,7 +877,7 @@ public partial class CorkboardView : UserControl
             Height = 190,
             CanResize = false,
             WindowStartupLocation = WindowStartupLocation.CenterOwner,
-            Background = new Avalonia.Media.SolidColorBrush(Avalonia.Media.Color.Parse("#120932"))
+            Background = Hymnal.Theming.ThemeBrushes.Get("Cora.Surface.Panel", "#120932")
         };
 
         var input = new TextBox
@@ -885,11 +885,11 @@ public partial class CorkboardView : UserControl
             Text = initialValue,
             FontSize = 12,
             Padding = new Thickness(8, 6),
-            Background = GetResource<Avalonia.Media.IBrush>("SurfaceBaseBrush")
+            Background = GetResource<Avalonia.Media.IBrush>("Cora.Surface.Void")
                 ?? new Avalonia.Media.SolidColorBrush(Avalonia.Media.Color.Parse("#0F0828")),
-            Foreground = GetResource<Avalonia.Media.IBrush>("OnSurfaceBrush")
+            Foreground = GetResource<Avalonia.Media.IBrush>("Cora.Text")
                 ?? Avalonia.Media.Brushes.White,
-            BorderBrush = GetResource<Avalonia.Media.IBrush>("BorderSubtleBrush")
+            BorderBrush = GetResource<Avalonia.Media.IBrush>("Cora.Border.Subtle")
                 ?? new Avalonia.Media.SolidColorBrush(Avalonia.Media.Color.Parse("#2D1B5E")),
             BorderThickness = new Thickness(1)
         };
@@ -910,9 +910,9 @@ public partial class CorkboardView : UserControl
         {
             Content = "OK",
             IsDefault = true,
-            Background = GetResource<Avalonia.Media.IBrush>("SynthwavePurpleBrush")
+            Background = GetResource<Avalonia.Media.IBrush>("Cora.Accent.Store")
                 ?? new Avalonia.Media.SolidColorBrush(Avalonia.Media.Color.Parse("#9D4EDD")),
-            Foreground = GetResource<Avalonia.Media.IBrush>("OnSurfaceBrush")
+            Foreground = GetResource<Avalonia.Media.IBrush>("Cora.IconInk")
                 ?? Avalonia.Media.Brushes.White,
             BorderThickness = new Thickness(0),
             Padding = new Thickness(12, 6)
@@ -933,7 +933,7 @@ public partial class CorkboardView : UserControl
 
         dialog.Content = new Border
         {
-            BorderBrush = new Avalonia.Media.SolidColorBrush(Avalonia.Media.Color.Parse("#2D1B5E")),
+            BorderBrush = Hymnal.Theming.ThemeBrushes.Get("Cora.Border.Subtle", "#2D1B5E"),
             BorderThickness = new Thickness(1),
             Child = new StackPanel
             {
@@ -944,7 +944,7 @@ public partial class CorkboardView : UserControl
                     new TextBlock
                     {
                         Text = prompt,
-                        Foreground = GetResource<Avalonia.Media.IBrush>("OnSurfaceBrush")
+                        Foreground = GetResource<Avalonia.Media.IBrush>("Cora.Text")
                             ?? Avalonia.Media.Brushes.White,
                         TextWrapping = Avalonia.Media.TextWrapping.Wrap
                     },
@@ -982,7 +982,7 @@ public partial class CorkboardView : UserControl
             Height = 180,
             CanResize = false,
             WindowStartupLocation = WindowStartupLocation.CenterOwner,
-            Background = new Avalonia.Media.SolidColorBrush(Avalonia.Media.Color.Parse("#120932"))
+            Background = Hymnal.Theming.ThemeBrushes.Get("Cora.Surface.Panel", "#120932")
         };
 
         var result = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
@@ -1002,9 +1002,9 @@ public partial class CorkboardView : UserControl
         {
             Content = "Delete",
             IsDefault = true,
-            Background = GetResource<Avalonia.Media.IBrush>("OrangeBrush")
+            Background = GetResource<Avalonia.Media.IBrush>("Cora.Accent.Unknown")
                 ?? new Avalonia.Media.SolidColorBrush(Avalonia.Media.Color.Parse("#F97316")),
-            Foreground = GetResource<Avalonia.Media.IBrush>("OnSurfaceBrush")
+            Foreground = GetResource<Avalonia.Media.IBrush>("Cora.IconInk")
                 ?? Avalonia.Media.Brushes.White,
             BorderThickness = new Thickness(0),
             Padding = new Thickness(12, 6)
@@ -1021,7 +1021,7 @@ public partial class CorkboardView : UserControl
 
         dialog.Content = new Border
         {
-            BorderBrush = new Avalonia.Media.SolidColorBrush(Avalonia.Media.Color.Parse("#2D1B5E")),
+            BorderBrush = Hymnal.Theming.ThemeBrushes.Get("Cora.Border.Subtle", "#2D1B5E"),
             BorderThickness = new Thickness(1),
             Child = new StackPanel
             {
@@ -1032,7 +1032,7 @@ public partial class CorkboardView : UserControl
                     new TextBlock
                     {
                         Text = message,
-                        Foreground = GetResource<Avalonia.Media.IBrush>("OnSurfaceBrush")
+                        Foreground = GetResource<Avalonia.Media.IBrush>("Cora.Text")
                             ?? Avalonia.Media.Brushes.White,
                         TextWrapping = Avalonia.Media.TextWrapping.Wrap
                     },

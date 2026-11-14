@@ -57,6 +57,8 @@ public partial class MainWindow : Window
                 SetupLeftPaneRowHeights(vm);
                 SetupRightPaneRowHeights(vm);
                 SetupLayoutPersistence(vm);
+                SetupFocusMode(vm);
+                SetupRailInteractions(vm);
 
                 vm.ShowQuickIdeaDialogAsync = () => QuickIdeaDialog.ShowAsync(this);
 
@@ -139,28 +141,39 @@ public partial class MainWindow : Window
 
         void ApplyColumnWidths(ShellMode mode, bool anyLeftOpen, bool anyRightOpen, WriteLayoutSettings layout)
         {
-            if (mode is ShellMode.Manage or ShellMode.Plan or ShellMode.Research or ShellMode.Ideas)
+            // Focus mode hides both rails too; the stored widths stay in the layout for when it ends (the layout
+            // capture never saves a rail narrower than MinSidebarWidth, so the zero widths aren't persisted).
+            if (mode is ShellMode.Manage or ShellMode.Plan or ShellMode.Research or ShellMode.Ideas || vm.IsFocusMode)
             {
-                grid.ColumnDefinitions[0].Width = new GridLength(0);
-                grid.ColumnDefinitions[1].Width = new GridLength(0);
-                grid.ColumnDefinitions[3].Width = new GridLength(0);
-                grid.ColumnDefinitions[4].Width = new GridLength(0);
+                foreach (var i in new[] { 0, 1, 3, 4 })
+                {
+                    StopRailAnimation(grid.ColumnDefinitions[i]);
+                    SetRailConstraints(grid.ColumnDefinitions[i], RailState.Hidden);
+                    grid.ColumnDefinitions[i].Width = new GridLength(0);
+                }
+                grid.ColumnDefinitions[2].MinWidth = 0;
+                _railsShown = false;
                 return;
             }
 
-            // Splitter columns are always 4px in Write mode.
-            grid.ColumnDefinitions[1].Width = new GridLength(4);
-            grid.ColumnDefinitions[3].Width = new GridLength(4);
+            grid.ColumnDefinitions[1].Width = new GridLength(RailSplitterWidth);
+            grid.ColumnDefinitions[3].Width = new GridLength(RailSplitterWidth);
+            grid.ColumnDefinitions[2].MinWidth = EditorMinWidth;
 
-            // Left sidebar: expanded uses stored width; collapsed uses 48px icon rail.
-            grid.ColumnDefinitions[0].Width = anyLeftOpen
-                ? new GridLength(layout.LeftSidebarWidth)
-                : new GridLength(48);
+            // A rail is only re-applied when its own state changes (or the stored layout does, or Write comes
+            // back), so toggling one rail never snaps the other back while it is being dragged. Opening and
+            // closing animate; anything else (startup, returning to Write, a reset) is immediate.
+            var reapplyAll = !_railsShown || !ReferenceEquals(layout, _lastRailLayout);
+            var animate = _railsShown;
+            ApplyRail(grid.ColumnDefinitions[0], anyLeftOpen, layout.LeftSidebarWidth,
+                reapplyAll || anyLeftOpen != _lastLeftOpen, animate && anyLeftOpen != _lastLeftOpen);
+            ApplyRail(grid.ColumnDefinitions[4], anyRightOpen, layout.RightSidebarWidth,
+                reapplyAll || anyRightOpen != _lastRightOpen, animate && anyRightOpen != _lastRightOpen);
 
-            // Right sidebar: expanded uses stored width; collapsed uses 48px icon rail.
-            grid.ColumnDefinitions[4].Width = anyRightOpen
-                ? new GridLength(layout.RightSidebarWidth)
-                : new GridLength(48);
+            _railsShown = true;
+            _lastLeftOpen = anyLeftOpen;
+            _lastRightOpen = anyRightOpen;
+            _lastRailLayout = layout;
         }
 
         ApplyColumnWidths(vm.ActiveMode, vm.IsAnyLeftPaneOpen, vm.IsAnyRightPaneOpen, vm.CurrentWriteLayout);
@@ -175,6 +188,49 @@ public partial class MainWindow : Window
                 .Subscribe(
                     t => ApplyColumnWidths(t.Item1, t.Item2, t.Item3, t.Item4),
                     _ => { /* non-fatal */ }));
+
+        _layoutDisposables.Add(
+            vm.WhenAnyValue(x => x.IsFocusMode)
+                .Skip(1)
+                .ObserveOn(AvaloniaScheduler.Instance)
+                .Subscribe(
+                    _ => ApplyColumnWidths(vm.ActiveMode, vm.IsAnyLeftPaneOpen, vm.IsAnyRightPaneOpen, vm.CurrentWriteLayout),
+                    _ => { /* non-fatal */ }));
+    }
+
+    // ── Focus mode ────────────────────────────────────────────────────────────
+
+    private WindowState _stateBeforeFocus = WindowState.Normal;
+
+    /// <summary>Focus mode fills the screen; leaving it puts the window back as it was.</summary>
+    private void SetupFocusMode(MainWindowViewModel vm)
+    {
+        _layoutDisposables.Add(
+            vm.WhenAnyValue(x => x.IsFocusMode)
+                .Skip(1)
+                .ObserveOn(AvaloniaScheduler.Instance)
+                .Subscribe(on =>
+                {
+                    // The layout capture runs on LayoutUpdated; keep it from seeing the rails mid-switch.
+                    _suppressLayoutCapture = true;
+                    try
+                    {
+                        if (on)
+                        {
+                            _stateBeforeFocus = WindowState == WindowState.FullScreen ? WindowState.Normal : WindowState;
+                            WindowState = WindowState.FullScreen;
+                        }
+                        else if (WindowState == WindowState.FullScreen)
+                        {
+                            WindowState = _stateBeforeFocus;
+                        }
+                    }
+                    finally
+                    {
+                        Avalonia.Threading.Dispatcher.UIThread.Post(
+                            () => _suppressLayoutCapture = false, Avalonia.Threading.DispatcherPriority.Background);
+                    }
+                }, _ => { /* non-fatal */ }));
     }
 
     // ── Left-pane row heights ──────────────────────────────────────────────────
@@ -193,6 +249,9 @@ public partial class MainWindow : Window
                 chaptersVisible ? new GridLength(1, GridUnitType.Star) : new GridLength(0);
             docsSection.RowDefinitions[1].Height =
                 docsVisible ? new GridLength(1, GridUnitType.Star) : new GridLength(0);
+            // An open section keeps room for its header and a few rows when the splitter is dragged.
+            outerGrid.RowDefinitions[0].MinHeight = chaptersVisible && docsVisible ? SectionMinHeight : 0;
+            outerGrid.RowDefinitions[2].MinHeight = chaptersVisible && docsVisible ? SectionMinHeight : 0;
 
             if (chaptersVisible && docsVisible)
             {
@@ -232,6 +291,8 @@ public partial class MainWindow : Window
 
     // ── Right-pane row heights ─────────────────────────────────────────────────
 
+    private const double BeatsRowMinHeight = 180;
+
     private void SetupRightPaneRowHeights(MainWindowViewModel vm)
     {
         var grid = RightPaneGrid;   // x:Name="RightPaneGrid" field from generated partial class
@@ -258,44 +319,61 @@ public partial class MainWindow : Window
                     .Subscribe(v => AiChatViewContent.IsVisible = v));
         }
 
+        if (WriteBeatsViewContent is not null)
+        {
+            WriteBeatsViewContent.IsVisible = vm.IsBeatsPanelOpen;
+            _layoutDisposables.Add(
+                vm.WhenAnyValue(x => x.IsBeatsPanelOpen)
+                    .ObserveOn(AvaloniaScheduler.Instance)
+                    .Subscribe(v => WriteBeatsViewContent.IsVisible = v));
+        }
+
         // ChapterPanelContentControl.IsVisible is bound in AXAML to IsChapterPanelOpen;
         // we only need to drive the row heights here.
 
-        // Outlook-style layout: 5 rows — DockPanel | splitter | DockPanel | splitter | DockPanel
-        // Rows 0, 2, 4: content rows (* or Auto — managed here)
+        // Outlook-style layout: 7 rows — Info | splitter | Beats | splitter | Notes | splitter | AI Chat
+        // Rows 0, 2, 4, 6: content rows (* or Auto — managed here). Beats exists for story/anthology only.
 
-        void ApplyRowHeights(bool chPanelVisible, bool notesVisible, bool chatVisible, WriteLayoutSettings layout)
+        void ApplyRowHeights(bool chPanelVisible, bool beatsVisible, bool notesVisible, bool chatVisible,
+            WriteLayoutSettings layout)
         {
-            var openCount = (chPanelVisible ? 1 : 0) + (notesVisible ? 1 : 0) + (chatVisible ? 1 : 0);
+            var openCount = (chPanelVisible ? 1 : 0) + (beatsVisible ? 1 : 0) + (notesVisible ? 1 : 0) + (chatVisible ? 1 : 0);
             var usePersistedStars = openCount >= 2;
 
-            grid.RowDefinitions[0].Height = chPanelVisible
-                ? new GridLength(usePersistedStars ? layout.RightPaneTopStar : 1.0, GridUnitType.Star)
+            GridLength Row(bool visible, double star) => visible
+                ? new GridLength(usePersistedStars ? star : 1.0, GridUnitType.Star)
                 : GridLength.Auto;
-            grid.RowDefinitions[2].Height = notesVisible
-                ? new GridLength(usePersistedStars ? layout.RightPaneBottomStar : 1.0, GridUnitType.Star)
-                : GridLength.Auto;
-            grid.RowDefinitions[4].Height = chatVisible
-                ? new GridLength(usePersistedStars ? layout.RightPaneChatStar : 1.0, GridUnitType.Star)
-                : GridLength.Auto;
+
+            grid.RowDefinitions[0].Height = Row(chPanelVisible, layout.RightPaneTopStar);
+            grid.RowDefinitions[2].Height = Row(beatsVisible, layout.RightPaneBeatsStar);
+            // Saved weights are often pixel-sized (hundreds) while a never-resized Beats row is 1, which would
+            // squeeze it to nothing beside them; while open it keeps room for its header and a few beats.
+            grid.RowDefinitions[2].MinHeight = beatsVisible ? BeatsRowMinHeight : 0;
+            grid.RowDefinitions[4].Height = Row(notesVisible, layout.RightPaneBottomStar);
+            grid.RowDefinitions[6].Height = Row(chatVisible, layout.RightPaneChatStar);
+            // Every open section keeps room for its header and some content when a splitter is dragged.
+            grid.RowDefinitions[0].MinHeight = chPanelVisible && openCount > 1 ? SectionMinHeight : 0;
+            grid.RowDefinitions[4].MinHeight = notesVisible && openCount > 1 ? SectionMinHeight : 0;
+            grid.RowDefinitions[6].MinHeight = chatVisible && openCount > 1 ? SectionMinHeight : 0;
         }
 
         ApplyRowHeights(
             vm.IsChapterPanelOpen,
+            vm.IsBeatsPanelOpen,
             vm.NotesViewModel.IsVisible,
             vm.AiChatViewModel.IsVisible,
             vm.CurrentWriteLayout);
 
         _layoutDisposables.Add(
-            vm.WhenAnyValue(x => x.IsChapterPanelOpen)
+            vm.WhenAnyValue(x => x.IsChapterPanelOpen, x => x.IsBeatsPanelOpen, (chPanel, beats) => (chPanel, beats))
                 .CombineLatest(
                     vm.NotesViewModel.WhenAnyValue(x => x.IsVisible),
                     vm.AiChatViewModel.WhenAnyValue(x => x.IsVisible),
                     vm.WhenAnyValue(x => x.CurrentWriteLayout),
-                    (chPanel, notes, chat, layout) => (chPanel, notes, chat, layout))
+                    (top, notes, chat, layout) => (top.chPanel, top.beats, notes, chat, layout))
                 .ObserveOn(AvaloniaScheduler.Instance)
                 .Subscribe(
-                    state => ApplyRowHeights(state.chPanel, state.notes, state.chat, state.layout),
+                    state => ApplyRowHeights(state.chPanel, state.beats, state.notes, state.chat, state.layout),
                     _ => { /* non-fatal */ }));
     }
 
@@ -342,7 +420,7 @@ public partial class MainWindow : Window
 
     private void OnShellGridLayoutUpdated(object? sender, EventArgs e)
     {
-        if (_suppressLayoutCapture) return;
+        if (_suppressLayoutCapture || _railAnimations.Count > 0) return;
         if (DataContext is not MainWindowViewModel vm) return;
         if (vm.ActiveMode != ShellMode.Write) return;
         _layoutChangedSubject.OnNext(Unit.Default);
@@ -371,6 +449,7 @@ public partial class MainWindow : Window
             LeftPaneTopStar     = current.LeftPaneTopStar,
             LeftPaneBottomStar  = current.LeftPaneBottomStar,
             RightPaneTopStar    = current.RightPaneTopStar,
+            RightPaneBeatsStar  = current.RightPaneBeatsStar,
             RightPaneBottomStar = current.RightPaneBottomStar,
             RightPaneChatStar   = current.RightPaneChatStar,
         };
@@ -404,22 +483,59 @@ public partial class MainWindow : Window
         }
 
         // Capture right-pane vertical star weights for each open content row.
-        if (rightPane?.RowDefinitions.Count >= 5)
+        if (rightPane?.RowDefinitions.Count >= 7)
         {
             var top = rightPane.RowDefinitions[0].Height;
             if (top.IsStar && top.Value > 0)
                 captured.RightPaneTopStar = top.Value;
 
-            var mid = rightPane.RowDefinitions[2].Height;
+            var beats = rightPane.RowDefinitions[2].Height;
+            if (beats.IsStar && beats.Value > 0)
+                captured.RightPaneBeatsStar = beats.Value;
+
+            var mid = rightPane.RowDefinitions[4].Height;
             if (mid.IsStar && mid.Value > 0)
                 captured.RightPaneBottomStar = mid.Value;
 
-            var chat = rightPane.RowDefinitions[4].Height;
+            var chat = rightPane.RowDefinitions[6].Height;
             if (chat.IsStar && chat.Value > 0)
                 captured.RightPaneChatStar = chat.Value;
         }
 
         _ = vm.PersistWriteLayoutAsync(captured);
+    }
+
+    // ── Collection menu ───────────────────────────────────────────────────────
+    // Name the open collection (book, story), open another collection, add a story that is in no collection,
+    // publish to LeanPub.
+
+    // ── Rail section headers ──────────────────────────────────────────────────
+    // The whole header of a rail section toggles it: a tap anywhere but on one of its buttons runs the header's
+    // toggle icon (its first nav-icon button), with that button's command and parameter.
+
+    private void PaneHeader_Tapped(object? sender, Avalonia.Input.TappedEventArgs e)
+    {
+        if (sender is not Border header || e.Source is not Avalonia.Visual source)
+            return;
+        // Taps on the header's own buttons (the toggle icon itself, ⋯, +, Plan) are theirs.
+        for (Avalonia.Visual? v = source; v != null && v != header; v = Avalonia.VisualTree.VisualExtensions.GetVisualParent(v))
+            if (v is Button)
+                return;
+
+        var toggle = Avalonia.VisualTree.VisualExtensions.GetVisualDescendants(header)
+            .OfType<Button>()
+            .FirstOrDefault(b => b.Classes.Contains("nav-icon"));
+        if (toggle?.Command is { } command && command.CanExecute(toggle.CommandParameter))
+        {
+            command.Execute(toggle.CommandParameter);
+            e.Handled = true;
+        }
+    }
+
+    private async void CollectionButton_Click(object? sender, RoutedEventArgs e)
+    {
+        if (sender is Button button && DataContext is MainWindowViewModel mainVm)
+            await CollectionMenu.ShowAsync(button, this, mainVm);
     }
 
     // ── Chapter add button ────────────────────────────────────────────────────
@@ -485,8 +601,8 @@ public partial class MainWindow : Window
             this,
             NewManuscriptEntryKind.Chapter,
             $"New {workspace.Profile.UnitNoun}",
-            $"Enter the new {workspace.Profile.UnitNoun.ToLowerInvariant()} path relative to the manuscript root.",
-            "new-chapter.md");
+            $"Enter the new {workspace.Profile.UnitNoun.ToLowerInvariant()} path relative to the project folder.",
+            $"{workspace.Profile.NewFileStem}.md");
 
         if (dialogResult is null)
             return;
@@ -507,7 +623,7 @@ public partial class MainWindow : Window
             NewManuscriptEntryKind.Part,
             $"New {workspace.Profile.PartNoun}",
             $"Enter the {workspace.Profile.PartNoun.ToLowerInvariant()} divider path and title.",
-            "part-two/part.md");
+            workspace.Profile.NewPartPath);
 
         if (dialogResult is null || string.IsNullOrWhiteSpace(dialogResult.Title))
             return;

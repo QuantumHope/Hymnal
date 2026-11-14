@@ -13,7 +13,9 @@ using Avalonia.Layout;
 using Avalonia.Media;
 using Avalonia.VisualTree;
 using Hymnal.Core.Models;
+using Hymnal.Theming;
 using Hymnal.ViewModels;
+using ReactiveUI;
 
 namespace Hymnal.Views;
 
@@ -34,6 +36,86 @@ public partial class GanttView : UserControl
         ChapterGrid.AddHandler(PointerMovedEvent, ChapterGrid_PointerMoved, RoutingStrategies.Tunnel);
         ChapterGrid.AddHandler(PointerReleasedEvent, ChapterGrid_PointerReleased, RoutingStrategies.Tunnel);
         ChapterGrid.AddHandler(PointerCaptureLostEvent, ChapterGrid_PointerCaptureLost, RoutingStrategies.Tunnel);
+
+        SetupPinnedTimelineScrollBar();
+
+        // A DataGrid column header can't bind to the view-model; it follows the project's noun from here.
+        DataContextChanged += (_, _) =>
+        {
+            _profileSubscription?.Dispose();
+            _profileSubscription = null;
+            if (DataContext is GanttViewModel vm)
+                _profileSubscription = vm.WhenAnyValue(x => x.Profile)
+                    .Subscribe(profile =>
+                    {
+                        if (ChapterGrid.Columns.Count > 0)
+                            ChapterGrid.Columns[0].Header = profile.ScheduleItemHeader;
+                    });
+        };
+        DetachedFromVisualTree += (_, _) =>
+        {
+            _profileSubscription?.Dispose();
+            _profileSubscription = null;
+        };
+    }
+
+    private IDisposable? _profileSubscription;
+
+    // ── Pinned timeline scrollbar ─────────────────────────────────────────────
+    // The timeline scrolls inside the rows' vertical ScrollViewer, so its own horizontal bar would sit right
+    // under the last row. Instead a ScrollBar in a strip at the bottom of the pane drives it, and the body is
+    // kept at least as tall as the viewport so the table's panel runs the full height.
+
+    private bool _syncingTimelineScroll;
+
+    private void SetupPinnedTimelineScrollBar()
+    {
+        GanttVerticalScroll.GetObservable(ScrollViewer.ViewportProperty)
+            .Subscribe(viewport => GanttBody.MinHeight = viewport.Height);
+
+        TimelineHorizontalScroll.ScrollChanged += (_, _) => UpdateTimelineScrollBar();
+        TimelineHorizontalScroll.SizeChanged += (_, _) => UpdateTimelineScrollBar();
+
+        TimelineScrollBar.GetObservable(RangeBase.ValueProperty).Subscribe(value =>
+        {
+            if (_syncingTimelineScroll)
+                return;
+            var offset = TimelineHorizontalScroll.Offset;
+            if (Math.Abs(offset.X - value) > 0.5)
+                TimelineHorizontalScroll.Offset = new Vector(value, offset.Y);
+        });
+
+        // The strip's left column tracks the table plus its splitter as the splitter is dragged.
+        ChapterGrid.SizeChanged += (_, _) => UpdateTimelineScrollStripColumns();
+    }
+
+    private void UpdateTimelineScrollStripColumns()
+    {
+        var left = GanttBody.ColumnDefinitions[0].ActualWidth + GanttBody.ColumnDefinitions[1].ActualWidth;
+        if (left > 0)
+            TimelineScrollStrip.ColumnDefinitions[0].Width = new GridLength(left);
+    }
+
+    private void UpdateTimelineScrollBar()
+    {
+        var scroll = TimelineHorizontalScroll;
+        var max = Math.Max(0, scroll.Extent.Width - scroll.Viewport.Width);
+        _syncingTimelineScroll = true;
+        try
+        {
+            TimelineScrollBar.Minimum = 0;
+            TimelineScrollBar.Maximum = max;
+            TimelineScrollBar.ViewportSize = scroll.Viewport.Width;
+            TimelineScrollBar.SmallChange = 28;
+            TimelineScrollBar.LargeChange = Math.Max(28, scroll.Viewport.Width * 0.9);
+            TimelineScrollBar.Value = Math.Min(scroll.Offset.X, max);
+        }
+        finally
+        {
+            _syncingTimelineScroll = false;
+        }
+        TimelineScrollStrip.IsVisible = max > 0.5;
+        UpdateTimelineScrollStripColumns();
     }
 
     private void DatePicker_GotFocus(object? sender, RoutedEventArgs e)
@@ -89,10 +171,10 @@ public partial class GanttView : UserControl
             Content = "Clear date",
             HorizontalAlignment = HorizontalAlignment.Stretch,
             HorizontalContentAlignment = HorizontalAlignment.Center,
-            Background = new SolidColorBrush(Color.Parse("#2D1B5E")),
-            Foreground = new SolidColorBrush(Color.Parse("#E2DDFF")),
+            Background = ThemeBrushes.Get("Cora.Surface.Elevated", "#2D1B5E"),
+            Foreground = ThemeBrushes.Get("Cora.Text", "#E2DDFF"),
             BorderThickness = new Thickness(0, 1, 0, 0),
-            BorderBrush = new SolidColorBrush(Color.Parse("#3D2B6E")),
+            BorderBrush = ThemeBrushes.Get("Cora.Border.Input", "#3D2B6E"),
             CornerRadius = new CornerRadius(0, 0, 4, 4),
             Padding = new Thickness(8, 7),
             FontSize = 11,

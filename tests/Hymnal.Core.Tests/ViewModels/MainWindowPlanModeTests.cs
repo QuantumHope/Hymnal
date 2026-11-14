@@ -77,6 +77,43 @@ public sealed class MainWindowPlanModeTests
     }
 
     [Fact]
+    public async Task PickingAModeWhileSettingsAreOpen_ClosesSettingsAndShowsThatMode()
+    {
+        using var context = new TestContext();
+        var window = context.CreateMainWindow();
+
+        await ExecuteCommandAsync(window.OpenSettingsCommand.Execute());
+        Assert.True(window.IsSettingsOpen);
+        Assert.Null(window.HighlightedMode); // no tab claims a view that Settings is covering
+
+        await ExecuteCommandAsync(window.SelectPlanCommand.Execute());
+        Assert.False(window.IsSettingsOpen);
+        Assert.Null(window.ActiveSettingsViewModel);
+        Assert.Equal(ShellMode.Plan, window.HighlightedMode);
+
+        // The mode that is already active closes Settings too
+        await ExecuteCommandAsync(window.OpenSettingsCommand.Execute());
+        await ExecuteCommandAsync(window.SelectPlanCommand.Execute());
+        Assert.False(window.IsSettingsOpen);
+        Assert.Equal(ShellMode.Plan, window.ActiveMode);
+
+        await ExecuteCommandAsync(window.OpenSettingsCommand.Execute());
+        await ExecuteCommandAsync(window.SelectManageCommand.Execute());
+        Assert.False(window.IsSettingsOpen);
+        Assert.True(window.IsGanttVisible);
+
+        await ExecuteCommandAsync(window.OpenSettingsCommand.Execute());
+        await ExecuteCommandAsync(window.SelectWriteCommand.Execute());
+        Assert.False(window.IsSettingsOpen);
+        Assert.True(window.IsEditorVisible);
+
+        await ExecuteCommandAsync(window.OpenSettingsCommand.Execute());
+        await ExecuteCommandAsync(window.SelectResearchCommand.Execute());
+        Assert.False(window.IsSettingsOpen);
+        Assert.Equal(ShellMode.Research, window.ActiveMode);
+    }
+
+    [Fact]
     public async Task OpenCardCommand_SelectsChapterAndReturnsToWrite()
     {
         using var context = new TestContext();

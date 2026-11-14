@@ -4,7 +4,7 @@
              xmlns:models="using:Hymnal.Core.Models"
              x:Class="Hymnal.Views.IdeasView"
              x:DataType="vm:IdeasViewModel"
-             Background="#0B0820">
+             Background="{DynamicResource Cora.Surface.Void}">
 
     <UserControl.Styles>
         <Style Selector="ListBox#IdeaCards ListBoxItem">
@@ -19,16 +19,16 @@
             <Setter Property="Background" Value="Transparent" />
         </Style>
         <Style Selector="ListBox#IdeaCards ListBoxItem Border.idea-card">
-            <Setter Property="BorderBrush" Value="{DynamicResource BorderSubtleBrush}" />
+            <Setter Property="BorderBrush" Value="{DynamicResource Cora.Border.Subtle}" />
         </Style>
         <Style Selector="ListBox#IdeaCards ListBoxItem:selected Border.idea-card">
-            <Setter Property="BorderBrush" Value="{DynamicResource SynthwavePurpleBrush}" />
+            <Setter Property="BorderBrush" Value="{DynamicResource Cora.Accent.Store}" />
         </Style>
         <Style Selector="TextBlock.field-label">
             <Setter Property="FontSize" Value="10" />
             <Setter Property="FontWeight" Value="SemiBold" />
             <Setter Property="LetterSpacing" Value="1.5" />
-            <Setter Property="Foreground" Value="{DynamicResource OnSurfaceDimBrush}" />
+            <Setter Property="Foreground" Value="{DynamicResource Cora.Text.Secondary}" />
         </Style>
     </UserControl.Styles>
 
@@ -38,23 +38,23 @@
         <Grid Grid.Column="0" RowDefinitions="Auto,Auto,*">
             <Border Grid.Row="0"
                     Padding="16,10"
-                    BorderBrush="{DynamicResource BorderSubtleBrush}"
+                    BorderBrush="{DynamicResource Cora.Border.Subtle}"
                     BorderThickness="0,0,0,1">
                 <DockPanel LastChildFill="False">
-                    <TextBlock DockPanel.Dock="Left"
+                    <TextBlock Classes="caps" DockPanel.Dock="Left"
                                Text="IDEAS"
                                VerticalAlignment="Center"
                                FontSize="10"
                                FontWeight="SemiBold"
                                LetterSpacing="1.5"
-                               Foreground="{DynamicResource OnSurfaceDimBrush}" />
+                               Foreground="{DynamicResource Cora.Text.Secondary}" />
                     <Button x:Name="NewIdeaButton"
                             DockPanel.Dock="Left"
                             Margin="16,0,0,0"
                             Content="+ New idea"
                             Padding="12,4"
-                            Background="{DynamicResource SynthwavePurpleBrush}"
-                            Foreground="{DynamicResource OnSurfaceBrush}"
+                            Background="{DynamicResource Cora.Accent.Store}"
+                            Foreground="{DynamicResource Cora.IconInk}"
                             BorderThickness="0"
                             IsEnabled="{Binding CanEdit}"
                             ToolTip.Tip="New idea (Ctrl+Shift+I)"
@@ -63,7 +63,7 @@
                               DockPanel.Dock="Right"
                               Margin="12,0,0,0"
                               Content="Show used &amp; shelved"
-                              Foreground="{DynamicResource OnSurfaceBrush}"
+                              Foreground="{DynamicResource Cora.Text}"
                               IsChecked="{Binding ShowUsedAndShelved, Mode=TwoWay}" />
                     <Button DockPanel.Dock="Right"
                             Margin="4,0,0,0"
@@ -84,9 +84,9 @@
             <Border Grid.Row="1"
                     IsVisible="{Binding IsReadOnly}"
                     Padding="16,8"
-                    Background="{DynamicResource SurfaceHighBrush}">
+                    Background="{DynamicResource Cora.Wash.Selected}">
                 <TextBlock Text="{x:Static vm:IdeasViewModel.ReadOnlyNotice}"
-                           Foreground="{DynamicResource OrangeBrush}"
+                           Foreground="{DynamicResource Cora.Accent.Unknown}"
                            TextWrapping="Wrap" />
             </Border>
 
@@ -96,7 +96,7 @@
                            IsVisible="{Binding !Cards.Count}"
                            HorizontalAlignment="Center"
                            VerticalAlignment="Center"
-                           Foreground="{DynamicResource OnSurfaceMutedBrush}" />
+                           Foreground="{DynamicResource Cora.Text.Disabled}" />
                 <ListBox x:Name="IdeaCards"
                          Background="Transparent"
                          Padding="16"
@@ -116,18 +116,18 @@
                                     Padding="12"
                                     CornerRadius="6"
                                     BorderThickness="1"
-                                    Background="{DynamicResource SurfaceElevatedBrush}">
+                                    Background="{DynamicResource Cora.Surface.Panel}">
                                 <StackPanel Spacing="6">
                                     <TextBlock Text="{Binding Title}"
                                                FontWeight="SemiBold"
                                                TextTrimming="CharacterEllipsis"
-                                               Foreground="{DynamicResource OnSurfaceBrush}" />
+                                               Foreground="{DynamicResource Cora.Text}" />
                                     <TextBlock Text="{Binding Premise}"
                                                TextWrapping="Wrap"
                                                MaxLines="3"
                                                TextTrimming="CharacterEllipsis"
                                                FontSize="12"
-                                               Foreground="{DynamicResource OnSurfaceMutedBrush}" />
+                                               Foreground="{DynamicResource Cora.Text.Disabled}" />
                                     <ItemsControl ItemsSource="{Binding Tags}">
                                         <ItemsControl.ItemsPanel>
                                             <ItemsPanelTemplate>
@@ -139,10 +139,10 @@
                                                 <Border Margin="0,0,4,4"
                                                         Padding="6,1"
                                                         CornerRadius="8"
-                                                        Background="{DynamicResource SurfaceHighBrush}">
+                                                        Background="{DynamicResource Cora.Wash.Selected}">
                                                     <TextBlock Text="{Binding}"
                                                                FontSize="10"
-                                                               Foreground="{DynamicResource OnSurfaceBrush}" />
+                                                               Foreground="{DynamicResource Cora.Text}" />
                                                 </Border>
                                             </DataTemplate>
                                         </ItemsControl.ItemTemplate>
@@ -151,11 +151,11 @@
                                         <TextBlock DockPanel.Dock="Left"
                                                    Text="{Binding TargetLabel}"
                                                    FontSize="10"
-                                                   Foreground="{DynamicResource SynthwavePurpleBrush}" />
+                                                   Foreground="{DynamicResource Cora.Accent.Store}" />
                                         <TextBlock DockPanel.Dock="Right"
                                                    Text="{Binding State}"
                                                    FontSize="10"
-                                                   Foreground="{DynamicResource OnSurfaceDimBrush}" />
+                                                   Foreground="{DynamicResource Cora.Text.Secondary}" />
                                     </DockPanel>
                                 </StackPanel>
                             </Border>
@@ -167,15 +167,15 @@
 
         <!-- Side editor for the selected idea -->
         <Border Grid.Column="1"
-                Background="{DynamicResource SurfaceElevatedBrush}"
-                BorderBrush="{DynamicResource BorderSubtleBrush}"
+                Background="{DynamicResource Cora.Surface.Panel}"
+                BorderBrush="{DynamicResource Cora.Border.Subtle}"
                 BorderThickness="1,0,0,0">
             <Panel>
                 <TextBlock Text="Select an idea to edit it."
                            IsVisible="{Binding Selected, Converter={x:Static ObjectConverters.IsNull}}"
                            HorizontalAlignment="Center"
                            VerticalAlignment="Center"
-                           Foreground="{DynamicResource OnSurfaceMutedBrush}" />
+                           Foreground="{DynamicResource Cora.Text.Disabled}" />
                 <ScrollViewer x:Name="IdeaEditor"
                               IsVisible="{Binding Selected, Converter={x:Static ObjectConverters.IsNotNull}}">
                     <StackPanel Margin="16" Spacing="12" IsEnabled="{Binding CanEdit}">
@@ -229,8 +229,8 @@
                             <Button x:Name="PromoteButton"
                                     Content="Promote to story"
                                     Padding="12,6"
-                                    Background="{DynamicResource SynthwavePurpleBrush}"
-                                    Foreground="{DynamicResource OnSurfaceBrush}"
+                                    Background="{DynamicResource Cora.Accent.Store}"
+                                    Foreground="{DynamicResource Cora.IconInk}"
                                     BorderThickness="0"
                                     IsVisible="{Binding ShowsPromote}"
                                     Command="{Binding PromoteSelectedCommand}" />

@@ -188,8 +188,14 @@ public sealed class CorkboardViewModel : ViewModelBase, IDisposable
                 {
                     this.RaisePropertyChanged(nameof(Profile));
                     this.RaisePropertyChanged(nameof(IsAnthology));
+                    this.RaisePropertyChanged(nameof(AddButtonTip));
+                    this.RaisePropertyChanged(nameof(EmptyBoardText));
+                    this.RaisePropertyChanged(nameof(OpenCardHint));
                     foreach (var item in _items)
+                    {
                         item.ShowsBeatsAction = CanShowBeats(item);
+                        item.Noun = NounFor(item);
+                    }
                 }));
 
         Disposables.Add(_openChapterRequested);
@@ -259,6 +265,18 @@ public sealed class CorkboardViewModel : ViewModelBase, IDisposable
     /// <summary>Profile of the open workspace; supplies UI nouns for board menus.</summary>
     public ProjectProfile Profile => _workspace.Profile;
 
+    /// <summary>The project's word for a book file in messages: chapter, scene, story.</summary>
+    private string UnitWord => Profile.UnitNoun.ToLowerInvariant();
+
+    /// <summary>The project's word for a divider in messages: part, section, story with scenes.</summary>
+    private string PartWord => Profile.PartNoun.ToLowerInvariant();
+
+    /// <summary>The whole book in messages: book, story, collection.</summary>
+    private string CollectionWord => Profile.CollectionNoun.ToLowerInvariant();
+
+    private static string Capital(string word) =>
+        word.Length == 0 ? word : char.ToUpperInvariant(word[0]) + word[1..];
+
     /// <summary>True in an anthology, where cards offer Beats and Open actions.</summary>
     public bool IsAnthology => _workspace.Profile.Kind == ProjectKind.Anthology;
 
@@ -326,6 +344,7 @@ public sealed class CorkboardViewModel : ViewModelBase, IDisposable
         CancelInlineCreate();
 
         var item = new InlineCreateItemViewModel(bookTxtInsertIndex, part?.RelativePath, part);
+        item.Noun = NounFor(item);
         _activeInlineCreate = item;
         InsertInlineCreateAtIndex(item, bookTxtInsertIndex);
     }
@@ -415,7 +434,7 @@ public sealed class CorkboardViewModel : ViewModelBase, IDisposable
         var content = $"# {title.Trim()}\n\n";
 
         await ExecuteStructuralOperationAsync(
-            "Create chapter",
+            $"Create {UnitWord}",
             filePath,
             () => _structureService.CreateNewChapterAsync(_workspace.BookTxtPath, filePath, content, insertIndex));
     }
@@ -430,7 +449,7 @@ public sealed class CorkboardViewModel : ViewModelBase, IDisposable
             slug = slug.Replace("--", "-");
 
         slug = slug.Trim('-');
-        return string.IsNullOrWhiteSpace(slug) ? "new-chapter" : slug;
+        return string.IsNullOrWhiteSpace(slug) ? "untitled" : slug;
     }
 
     private static string? GetPartFolderPrefix(string? partPath)
@@ -520,6 +539,7 @@ public sealed class CorkboardViewModel : ViewModelBase, IDisposable
                      ShowExcludedFiles))
         {
             item.ShowsBeatsAction = CanShowBeats(item);
+            item.Noun = NounFor(item);
             _items.Add(item);
         }
 
@@ -600,6 +620,35 @@ public sealed class CorkboardViewModel : ViewModelBase, IDisposable
         return Task.CompletedTask;
     }
 
+    /// <summary>
+    /// The noun an item shows: a Part counts and adds its subunit (scenes in an anthology story), and so do
+    /// the items inside it; a top-level item is a unit (a story in an anthology).
+    /// </summary>
+    private string NounFor(CorkboardItemViewModel item) => item switch
+    {
+        PartDividerItemViewModel => Profile.SubunitNoun,
+        _ when !string.IsNullOrEmpty(item.OwningPartPath) => Profile.SubunitNoun,
+        _ => Profile.UnitNoun
+    };
+
+    /// <summary>Tooltip of the board's + button.</summary>
+    public string AddButtonTip => Profile.Kind == ProjectKind.Novel
+        ? "Add chapter or part"
+        : $"Add a {Profile.UnitNoun.ToLowerInvariant()}";
+
+    /// <summary>What an empty board says, in the project's own words.</summary>
+    public string EmptyBoardText => Profile.Kind switch
+    {
+        ProjectKind.Anthology => "No stories in this collection yet. Use + to add your first story.",
+        ProjectKind.Story => "No scenes yet. Use + to add one.",
+        _ => "No chapters in this board yet. Open Book.txt or add chapters to see Plan mode cards."
+    };
+
+    /// <summary>What double-clicking a card does here: an anthology story opens its beats.</summary>
+    public string OpenCardHint => IsAnthology
+        ? "Double-click a story to plan its beats"
+        : "Double-click a card to open in Write mode";
+
     /// <summary>True when <paramref name="item"/> offers a Beats action: in an anthology, for a story that is in the book.</summary>
     public bool CanShowBeats(CorkboardItemViewModel? item) =>
         IsAnthology && FindStory(item) is { Node.IsExcluded: false };
@@ -620,7 +669,7 @@ public sealed class CorkboardViewModel : ViewModelBase, IDisposable
         if (!TryFindCurrentChapter(request.RelativePath, out _))
         {
             ReportStructuralFailure("Reorder card", request.RelativePath,
-                $"Chapter '{request.RelativePath}' is not on the current board.");
+                $"{Capital(UnitWord)} '{request.RelativePath}' is not on the current board.");
             return;
         }
 
@@ -687,8 +736,8 @@ public sealed class CorkboardViewModel : ViewModelBase, IDisposable
                 "Drop card",
                 request.RelativePath,
                 excludedMatch
-                    ? $"Chapter '{request.RelativePath}' is excluded and cannot be reordered as an included Book.txt entry."
-                    : $"Chapter '{request.RelativePath}' is not on the current board.");
+                    ? $"{Capital(UnitWord)} '{request.RelativePath}' is excluded and cannot be reordered as an included Book.txt entry."
+                    : $"{Capital(UnitWord)} '{request.RelativePath}' is not on the current board.");
             return;
         }
 
@@ -758,7 +807,7 @@ public sealed class CorkboardViewModel : ViewModelBase, IDisposable
         if (!TryFindCurrentChapter(request.ExistingPath, out _))
         {
             ReportStructuralFailure("Rename card", request.ExistingPath,
-                $"Chapter '{request.ExistingPath}' is not on the current board.");
+                $"{Capital(UnitWord)} '{request.ExistingPath}' is not on the current board.");
             return;
         }
 
@@ -776,7 +825,7 @@ public sealed class CorkboardViewModel : ViewModelBase, IDisposable
     private async Task CreateChapterAsync(CreateChapterRequest request)
     {
         await ExecuteStructuralOperationAsync(
-            "Create chapter",
+            $"Create {UnitWord}",
             request.ChapterPath,
             () => _structureService.CreateNewChapterAsync(_workspace.BookTxtPath, request.ChapterPath, request.Content, request.Index));
     }
@@ -784,7 +833,7 @@ public sealed class CorkboardViewModel : ViewModelBase, IDisposable
     private async Task CreatePartAsync(CreatePartRequest request)
     {
         await ExecuteStructuralOperationAsync(
-            "Create part",
+            $"Create {PartWord}",
             request.PartPath,
             () => _structureService.CreateNewPartAsync(_workspace.BookTxtPath, request.PartPath, request.Title, request.Index));
     }
@@ -810,26 +859,26 @@ public sealed class CorkboardViewModel : ViewModelBase, IDisposable
         else
         {
             ReportStructuralFailure(
-                "Include chapter",
+                $"Include {UnitWord}",
                 request.ChapterPath,
-                "Include chapter requires either an index or a part path.");
+                $"Include {UnitWord} requires either an index or a {PartWord} path.");
             return;
         }
 
-        await ExecuteStructuralOperationAsync("Include chapter", request.ChapterPath, action);
+        await ExecuteStructuralOperationAsync($"Include {UnitWord}", request.ChapterPath, action);
     }
 
     private async Task RemoveFromBookAsync(RemoveChapterRequest request)
     {
         if (!TryFindCurrentChapter(request.ChapterPath, out _))
         {
-            ReportStructuralFailure("Remove from book", request.ChapterPath,
-                $"Chapter '{request.ChapterPath}' is not on the current board.");
+            ReportStructuralFailure($"Remove from {CollectionWord}", request.ChapterPath,
+                $"{Capital(UnitWord)} '{request.ChapterPath}' is not on the current board.");
             return;
         }
 
         await ExecuteStructuralOperationAsync(
-            "Remove from book",
+            $"Remove from {CollectionWord}",
             request.ChapterPath,
             () => _structureService.ExcludeEntryAsync(_workspace.BookTxtPath, request.ChapterPath),
             string.Empty);
@@ -840,21 +889,21 @@ public sealed class CorkboardViewModel : ViewModelBase, IDisposable
         if (!request.Confirmed)
         {
             ReportStructuralFailure(
-                "Delete chapter",
+                $"Delete {UnitWord}",
                 request.ChapterPath,
-                "Delete chapter was rejected because confirmation was not provided.");
+                $"Delete {UnitWord} was rejected because confirmation was not provided.");
             return;
         }
 
         if (!TryFindCurrentChapter(request.ChapterPath, out _))
         {
-            ReportStructuralFailure("Delete chapter", request.ChapterPath,
-                $"Chapter '{request.ChapterPath}' is not on the current board.");
+            ReportStructuralFailure($"Delete {UnitWord}", request.ChapterPath,
+                $"{Capital(UnitWord)} '{request.ChapterPath}' is not on the current board.");
             return;
         }
 
         await ExecuteStructuralOperationAsync(
-            "Delete chapter",
+            $"Delete {UnitWord}",
             request.ChapterPath,
             () => _structureService.DeleteChapterFileAsync(_workspace.BookTxtPath, request.ChapterPath));
     }
@@ -962,7 +1011,7 @@ public sealed class CorkboardViewModel : ViewModelBase, IDisposable
         if (sourceIndex < 0)
         {
             newIndex = 0;
-            error = $"Chapter '{request.RelativePath}' is not on the current board.";
+            error = $"{Capital(UnitWord)} '{request.RelativePath}' is not on the current board.";
             return false;
         }
 
@@ -981,7 +1030,7 @@ public sealed class CorkboardViewModel : ViewModelBase, IDisposable
             if (afterIndex < 0)
             {
                 newIndex = 0;
-                error = $"Chapter '{request.AfterRelativePath}' was not found on the current board.";
+                error = $"{Capital(UnitWord)} '{request.AfterRelativePath}' was not found on the current board.";
                 return false;
             }
 
@@ -998,7 +1047,7 @@ public sealed class CorkboardViewModel : ViewModelBase, IDisposable
             if (beforeIndex < 0)
             {
                 newIndex = 0;
-                error = $"Chapter '{request.BeforeRelativePath}' was not found on the current board.";
+                error = $"{Capital(UnitWord)} '{request.BeforeRelativePath}' was not found on the current board.";
                 return false;
             }
 
@@ -1030,13 +1079,13 @@ public sealed class CorkboardViewModel : ViewModelBase, IDisposable
         var sourceIndex = FindNodeIndex(nodes, request.RelativePath);
         if (sourceIndex < 0 || nodes[sourceIndex].Node.Kind != NodeKind.Chapter)
         {
-            error = $"Chapter '{request.RelativePath}' is not on the current board.";
+            error = $"{Capital(UnitWord)} '{request.RelativePath}' is not on the current board.";
             return false;
         }
 
         if (IsSelfTarget(request))
         {
-            error = "A chapter cannot be dropped onto itself.";
+            error = $"A {UnitWord} cannot be dropped onto itself.";
             return false;
         }
 

@@ -131,6 +131,7 @@ internal sealed class PlanTestContext : IDisposable
     public IBeatBoardService Boards { get; }
     public WorkspaceViewModel Workspace { get; }
     public EditorViewModel Editor => _editor;
+    public IAppSettingsStore Settings => _settings;
     public CorkboardViewModel Corkboard { get; }
     public BeatBoardViewModel Board { get; }
     public StorageMigrator Migrator { get; }
@@ -205,7 +206,17 @@ internal sealed class PlanTestContext : IDisposable
             Migrator,
             flushStoryEdits);
 
-    public MainWindowViewModel CreateMainWindow(PlanHostViewModel host)
+    /// <summary>
+    /// Write mode's Beats panel with its own board (saves debounced on <see cref="Scheduler"/>), linked to
+    /// <paramref name="planBoard"/> (default: <see cref="Board"/>) so each re-reads what the other saves.
+    /// </summary>
+    public WriteBeatsViewModel CreateWriteBeats(BeatBoardViewModel? planBoard = null)
+    {
+        var board = _owned.Track(new BeatBoardViewModel(Workspace, Notifications, Scheduler));
+        return _owned.Track(new WriteBeatsViewModel(Workspace, board, planBoard ?? Board, _settings, Notifications));
+    }
+
+    public MainWindowViewModel CreateMainWindow(PlanHostViewModel host, WriteBeatsViewModel? writeBeats = null)
     {
         var docs = new SupplementalDocsViewModel(
             Workspace, new SupplementalDocsService(_store), _editor, Notifications, _settings, new StubFilePickerService());
@@ -227,7 +238,8 @@ internal sealed class PlanTestContext : IDisposable
             AiTestDoubles.CreateStubAiChatViewModel(_editor, Workspace, Notifications),
             AiTestDoubles.CreateStubSettingsFactory(Notifications),
             ideasViewModel: null,
-            planHostViewModel: host);
+            planHostViewModel: host,
+            writeBeatsViewModel: writeBeats);
     }
 
     public NotesViewModel CreateNotes() =>

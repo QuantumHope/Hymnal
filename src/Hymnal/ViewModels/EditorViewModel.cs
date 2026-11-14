@@ -163,6 +163,14 @@ public class EditorViewModel : ViewModelBase, IDisposable, IOpenStoryBuffer
         set => this.RaiseAndSetIfChanged(ref _hasWorkspace, value);
     }
 
+    private ProjectProfile _profile = ProjectProfile.Novel;
+    /// <summary>The open project's profile (set by the workspace), for the editor's own wording.</summary>
+    public ProjectProfile Profile
+    {
+        get => _profile;
+        set => this.RaiseAndSetIfChanged(ref _profile, value);
+    }
+
     // ── Conflict state ──────────────────────────────────────────────────────
 
     private bool _hasConflict;

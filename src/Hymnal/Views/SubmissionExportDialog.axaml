@@ -1,0 +1,152 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:vm="using:Hymnal.ViewModels"
+        x:Class="Hymnal.Views.SubmissionExportDialog"
+        x:DataType="vm:SubmissionExportViewModel"
+        Title="Export for submission"
+        Width="600" Height="760"
+        MinWidth="460" MinHeight="520"
+        ShowInTaskbar="False"
+        WindowStartupLocation="CenterOwner"
+        Background="{DynamicResource Cora.Surface.Panel}"
+        FontFamily="{DynamicResource Cora.Font.Persona}">
+
+    <Window.Styles>
+        <Style Selector="TextBlock.field">
+            <Setter Property="FontSize" Value="12" />
+            <Setter Property="Margin" Value="0,0,0,4" />
+            <Setter Property="Foreground" Value="{DynamicResource Cora.Text.Secondary}" />
+        </Style>
+        <Style Selector="TextBlock.section">
+            <Setter Property="Margin" Value="0,6,0,0" />
+            <Setter Property="FontSize" Value="11" />
+            <Setter Property="Foreground" Value="{DynamicResource Cora.Accent.Store}" />
+        </Style>
+    </Window.Styles>
+
+    <Border BorderBrush="{DynamicResource Cora.Border.Subtle}" BorderThickness="1" Padding="18">
+        <DockPanel>
+            <StackPanel DockPanel.Dock="Top" Spacing="4" Margin="0,0,0,12">
+                <TextBlock Classes="heading"
+                           Text="Export for submission"
+                           FontSize="18"
+                           FontWeight="SemiBold"
+                           Foreground="{DynamicResource Cora.Text}" />
+                <TextBlock Text="A Word document in Standard Manuscript Format, the layout most magazines and anthologies ask for: double spaced, 12 pt, your contact details and word count on the first page, your name and the title on every page after it."
+                           FontSize="12"
+                           TextWrapping="Wrap"
+                           Foreground="{DynamicResource Cora.Text.Secondary}" />
+            </StackPanel>
+
+            <!-- Result and actions -->
+            <StackPanel DockPanel.Dock="Bottom" Spacing="10" Margin="0,14,0,0">
+                <Border IsVisible="{Binding HasExported}"
+                        Background="{DynamicResource Cora.Wash.Store}"
+                        BorderBrush="{DynamicResource Cora.Accent.Success}"
+                        BorderThickness="1"
+                        CornerRadius="6"
+                        Padding="10,8">
+                    <Grid ColumnDefinitions="*,Auto">
+                        <StackPanel Grid.Column="0" Spacing="2" VerticalAlignment="Center">
+                            <TextBlock Text="Saved"
+                                       FontSize="12"
+                                       FontWeight="SemiBold"
+                                       Foreground="{DynamicResource Cora.Accent.Success}" />
+                            <TextBlock Text="{Binding LastExportPath}"
+                                       FontSize="11"
+                                       TextTrimming="PathSegmentEllipsis"
+                                       ToolTip.Tip="{Binding LastExportPath}"
+                                       Foreground="{DynamicResource Cora.Text.Secondary}" />
+                        </StackPanel>
+                        <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
+                            <Button Content="Open" Padding="10,4" Click="OpenButton_Click" />
+                            <Button Content="Show in folder" Padding="10,4" Click="ShowFolderButton_Click" />
+                        </StackPanel>
+                    </Grid>
+                </Border>
+                <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Spacing="8">
+                    <Button x:Name="ExportButton"
+                            Content="Export .docx…"
+                            Padding="12,6"
+                            IsDefault="True"
+                            IsEnabled="{Binding !IsBusy}"
+                            Background="{DynamicResource Cora.Accent.Store}"
+                            Foreground="{DynamicResource Cora.IconInk}"
+                            BorderThickness="0"
+                            Click="ExportButton_Click" />
+                    <Button Content="Close"
+                            IsCancel="True"
+                            Padding="12,6"
+                            Click="CloseButton_Click" />
+                </StackPanel>
+            </StackPanel>
+
+            <ScrollViewer HorizontalScrollBarVisibility="Disabled">
+                <StackPanel Spacing="12" Margin="0,0,16,0">
+
+                    <TextBlock Classes="caps section" Text="THE STORY" />
+                    <StackPanel>
+                        <TextBlock Classes="field" Text="Title" />
+                        <TextBox Text="{Binding Title}" />
+                    </StackPanel>
+                    <Border Background="{DynamicResource Cora.Surface.Void}"
+                            BorderBrush="{DynamicResource Cora.Border.Subtle}"
+                            BorderThickness="1"
+                            CornerRadius="6"
+                            Padding="10,8">
+                        <StackPanel Spacing="3">
+                            <TextBlock Text="{Binding Summary}"
+                                       FontSize="13"
+                                       FontWeight="SemiBold"
+                                       Foreground="{DynamicResource Cora.Text}" />
+                            <!-- Runs on one line: whitespace between Run elements would show as spaces. -->
+                            <TextBlock FontSize="12" TextWrapping="Wrap" Foreground="{DynamicResource Cora.Text.Secondary}"><Run Text="The first page will say " /><Run Text="{Binding WordCountDescription}" Foreground="{DynamicResource Cora.Text}" /><Run Text=". Every later page is headed " /><Run Text="{Binding HeaderPreview}" Foreground="{DynamicResource Cora.Text}" /><Run Text="." /></TextBlock>
+                        </StackPanel>
+                    </Border>
+
+                    <TextBlock Classes="caps section" Text="YOU" />
+                    <TextBlock Text="Remembered for every story you export."
+                               FontSize="11"
+                               Margin="0,-8,0,0"
+                               Foreground="{DynamicResource Cora.Text.Secondary}" />
+                    <StackPanel>
+                        <TextBlock Classes="field" Text="Legal name (who the contract and payment go to)" />
+                        <TextBox Text="{Binding LegalName}" />
+                    </StackPanel>
+                    <Grid ColumnDefinitions="*,12,*">
+                        <StackPanel Grid.Column="0">
+                            <TextBlock Classes="field" Text="Byline (pen name)" />
+                            <TextBox Text="{Binding Byline}" PlaceholderText="{Binding BylinePlaceholder}" />
+                        </StackPanel>
+                        <StackPanel Grid.Column="2">
+                            <TextBlock Classes="field" Text="Surname in the page header" />
+                            <TextBox Text="{Binding Surname}" PlaceholderText="{Binding SurnamePlaceholder}" />
+                        </StackPanel>
+                    </Grid>
+                    <StackPanel>
+                        <TextBlock Classes="field" Text="Contact details, one per line (address, phone, email, memberships)" />
+                        <TextBox Text="{Binding Contact}"
+                                 AcceptsReturn="True"
+                                 TextWrapping="Wrap"
+                                 MinHeight="96"
+                                 PlaceholderText="Street address&#10;City, State ZIP&#10;Phone&#10;Email" />
+                    </StackPanel>
+
+                    <TextBlock Classes="caps section" Text="TYPEFACE" />
+                    <StackPanel Orientation="Horizontal" Spacing="18" Margin="0,-6,0,0">
+                        <RadioButton GroupName="ManuscriptFont"
+                                     Content="Times New Roman"
+                                     IsChecked="{Binding !UseCourier}" />
+                        <RadioButton GroupName="ManuscriptFont"
+                                     Content="Courier New"
+                                     IsChecked="{Binding UseCourier}" />
+                    </StackPanel>
+                    <TextBlock Text="Check each market's guidelines: most accept either, a few insist on one."
+                               FontSize="11"
+                               TextWrapping="Wrap"
+                               Foreground="{DynamicResource Cora.Text.Secondary}" />
+                </StackPanel>
+            </ScrollViewer>
+        </DockPanel>
+    </Border>
+</Window>

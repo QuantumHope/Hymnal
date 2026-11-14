@@ -44,7 +44,7 @@ public sealed class BeatBoardViewSmokeTests
                 var picker = view.FindControl<ScrollViewer>("TemplatePickerPanel")!;
                 var beats = view.FindControl<ListBox>("BeatList")!;
                 Assert.True(picker.IsVisible);
-                Assert.False(beats.IsVisible);
+                Assert.False(beats.IsEffectivelyVisible);
                 Assert.Same(context.Board.TemplateOptions, view.FindControl<ItemsControl>("TemplatePicker")!.ItemsSource);
                 Assert.Same(context.Board.Beats, beats.ItemsSource);
 
@@ -53,9 +53,19 @@ public sealed class BeatBoardViewSmokeTests
                 LayoutView(view);
 
                 Assert.False(picker.IsVisible);
-                Assert.True(beats.IsVisible);
+                Assert.True(beats.IsEffectivelyVisible);
                 Assert.Equal(5, beats.ItemCount);
                 Assert.False(view.FindControl<Border>("ReadOnlyBanner")!.IsVisible);
+
+                // Apply template shows the same gallery in place of the beats.
+                var apply = view.FindControl<Button>("ApplyTemplateButton")!;
+                Assert.True(apply.IsVisible);
+                await Within(context.Board.ChooseTemplateCommand.Execute().ToTask());
+                LayoutView(view);
+                Assert.True(picker.IsVisible);
+                Assert.False(beats.IsEffectivelyVisible);
+                Assert.False(apply.IsVisible);
+                Assert.True(view.FindControl<Button>("BackToBeatsButton")!.IsVisible);
             });
         }
         finally { DeleteFolder(root); }
@@ -107,7 +117,10 @@ public sealed class BeatBoardViewSmokeTests
         Assert.Contains("Command=\"{Binding AddBeatCommand}\"", axaml);
         Assert.Contains("Loaded=\"BeatCard_Loaded\"", axaml);
         Assert.Contains("Text=\"Apply template…\"", axaml);
-        Assert.Contains("IsEnabled=\"{Binding CanAppend}\"", axaml);
+        Assert.Contains("Command=\"{Binding ChooseTemplateCommand}\"", axaml);
+        Assert.Contains("IsVisible=\"{Binding CanAppend}\"", axaml);
+        Assert.Contains("<controls:BeatShapeThumbnail Levels=\"{Binding Shape}\" />", axaml);
+        Assert.DoesNotContain("<Button.Flyout>", axaml);
     }
 
     [Fact]
@@ -124,6 +137,56 @@ public sealed class BeatBoardViewSmokeTests
     }
 
     // ── Helpers ───────────────────────────────────────────────────────────────
+
+    [Fact]
+    public async Task BeatBoardView_page_fields_can_be_edited_from_the_keyboard()
+    {
+        var root = CreateStory();
+        try
+        {
+            await Ui(root, 2, async context =>
+            {
+                context.CreateHost();
+                await PumpUntilAsync(() => context.Board.BoardKey == BeatBoardService.ShortStoryBoardKey);
+                await Within(context.Board.ApplyTemplateCommand
+                    .Execute(new ApplyTemplateRequest("threeAct", TemplateApplyMode.Append, null)).ToTask());
+                context.Board.Selected = context.Board.Beats[0];
+                var original = context.Board.Beats[0].Title;
+
+                var view = new BeatBoardView { DataContext = context.Board };
+                LayoutView(view);
+
+                var titleField = view.FindControl<Border>("TitleDisplay")!;
+                var titleEditor = view.FindControl<TextBox>("TitleEditor")!;
+                var noteField = view.FindControl<Border>("NoteDisplay")!;
+                var noteEditor = view.FindControl<TextBox>("NoteEditor")!;
+
+                // Both fields are tab stops with names a screen reader can announce.
+                Assert.True(titleField.Focusable && titleField.IsTabStop);
+                Assert.True(noteField.Focusable && noteField.IsTabStop);
+                Assert.Equal("Beat title", Avalonia.Automation.AutomationProperties.GetName(titleField));
+                Assert.Equal("Beat note", Avalonia.Automation.AutomationProperties.GetName(noteField));
+
+                // Enter on the title opens its editor; Esc puts the text back and closes it.
+                titleField.RaiseEvent(new Avalonia.Input.KeyEventArgs
+                    { RoutedEvent = Avalonia.Input.InputElement.KeyDownEvent, Key = Avalonia.Input.Key.Enter });
+                Assert.True(titleEditor.IsVisible);
+                Assert.False(titleField.IsVisible);
+                titleEditor.Text = "Changed";
+                titleEditor.RaiseEvent(new Avalonia.Input.KeyEventArgs
+                    { RoutedEvent = Avalonia.Input.InputElement.KeyDownEvent, Key = Avalonia.Input.Key.Escape });
+                Assert.False(titleEditor.IsVisible);
+                Assert.True(titleField.IsVisible);
+                Assert.Equal(original, context.Board.Beats[0].Title);
+
+                // Enter on the note opens the full-page note editor.
+                noteField.RaiseEvent(new Avalonia.Input.KeyEventArgs
+                    { RoutedEvent = Avalonia.Input.InputElement.KeyDownEvent, Key = Avalonia.Input.Key.Enter });
+                Assert.True(noteEditor.IsVisible);
+            });
+        }
+        finally { DeleteFolder(root); }
+    }
 
     private static void LayoutView(Control view)
     {

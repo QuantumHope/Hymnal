@@ -3,9 +3,9 @@
 
     <!-- Button ControlTheme -->
     <ControlTheme x:Key="{x:Type Button}" TargetType="Button">
-        <Setter Property="Background" Value="{DynamicResource SurfaceElevatedBrush}" />
-        <Setter Property="Foreground" Value="{DynamicResource OnSurfaceBrush}" />
-        <Setter Property="BorderBrush" Value="{DynamicResource BorderDefaultBrush}" />
+        <Setter Property="Background" Value="{DynamicResource Cora.Surface.Panel}" />
+        <Setter Property="Foreground" Value="{DynamicResource Cora.Text}" />
+        <Setter Property="BorderBrush" Value="{DynamicResource Cora.Border.Input}" />
         <Setter Property="BorderThickness" Value="1" />
         <Setter Property="Padding" Value="8,4" />
         <Setter Property="Cursor" Value="Hand" />
@@ -30,7 +30,7 @@
             </ControlTemplate>
         </Setter>
         <Style Selector="^:pointerover /template/ Border#PART_Overlay">
-            <Setter Property="Background" Value="#20FFFFFF" />
+            <Setter Property="Background" Value="{DynamicResource Cora.Wash.Hover}" />
         </Style>
         <Style Selector="^:pressed /template/ Border#PART_Overlay">
             <Setter Property="Background" Value="#40000000" />
@@ -39,12 +39,12 @@
 
     <!-- TextBox ControlTheme -->
     <ControlTheme x:Key="{x:Type TextBox}" TargetType="TextBox">
-        <Setter Property="Background" Value="{DynamicResource SurfaceBaseBrush}" />
-        <Setter Property="Foreground" Value="{DynamicResource OnSurfaceBrush}" />
-        <Setter Property="BorderBrush" Value="{DynamicResource BorderDefaultBrush}" />
+        <Setter Property="Background" Value="{DynamicResource Cora.Surface.Void}" />
+        <Setter Property="Foreground" Value="{DynamicResource Cora.Text}" />
+        <Setter Property="BorderBrush" Value="{DynamicResource Cora.Border.Input}" />
         <Setter Property="BorderThickness" Value="1" />
-        <Setter Property="CaretBrush" Value="{DynamicResource SynthwavePurpleBrush}" />
-        <Setter Property="SelectionBrush" Value="#669D4EDD" />
+        <Setter Property="CaretBrush" Value="{DynamicResource Cora.Accent.Store}" />
+        <Setter Property="SelectionBrush" Value="{DynamicResource Hymnal.Selection}" />
         <Setter Property="Padding" Value="8,4" />
         <Setter Property="Template">
             <ControlTemplate>
@@ -52,52 +52,64 @@
                         BorderBrush="{TemplateBinding BorderBrush}"
                         BorderThickness="{TemplateBinding BorderThickness}"
                         CornerRadius="4">
-                    <ScrollViewer HorizontalScrollBarVisibility="Hidden"
-                                  VerticalScrollBarVisibility="Hidden">
-                        <TextPresenter Name="PART_TextPresenter"
-                                       Text="{TemplateBinding Text, Mode=TwoWay}"
-                                       CaretBrush="{TemplateBinding CaretBrush}"
-                                       SelectionBrush="{TemplateBinding SelectionBrush}"
-                                       SelectionForegroundBrush="{TemplateBinding SelectionForegroundBrush}"
-                                       TextAlignment="{TemplateBinding TextAlignment}"
-                                       TextWrapping="{TemplateBinding TextWrapping}"
-                                       PasswordChar="{TemplateBinding PasswordChar}"
-                                       RevealPassword="{TemplateBinding RevealPassword}"
-                                       Margin="{TemplateBinding Padding}" />
-                    </ScrollViewer>
+                    <Panel>
+                        <!-- PlaceholderText, shown while the box is empty (the template once had none, so every
+                             placeholder in the app was invisible). -->
+                        <TextBlock Name="PART_Placeholder"
+                                   Text="{TemplateBinding PlaceholderText}"
+                                   Foreground="{DynamicResource Cora.Text.Disabled}"
+                                   TextAlignment="{TemplateBinding TextAlignment}"
+                                   TextWrapping="{TemplateBinding TextWrapping}"
+                                   Margin="{TemplateBinding Padding}"
+                                   IsHitTestVisible="False"
+                                   IsVisible="{TemplateBinding Text, Converter={x:Static StringConverters.IsNullOrEmpty}}" />
+                        <ScrollViewer HorizontalScrollBarVisibility="Hidden"
+                                      VerticalScrollBarVisibility="Hidden">
+                            <TextPresenter Name="PART_TextPresenter"
+                                           Text="{TemplateBinding Text, Mode=TwoWay}"
+                                           CaretBrush="{TemplateBinding CaretBrush}"
+                                           SelectionBrush="{TemplateBinding SelectionBrush}"
+                                           SelectionForegroundBrush="{TemplateBinding SelectionForegroundBrush}"
+                                           TextAlignment="{TemplateBinding TextAlignment}"
+                                           TextWrapping="{TemplateBinding TextWrapping}"
+                                           PasswordChar="{TemplateBinding PasswordChar}"
+                                           RevealPassword="{TemplateBinding RevealPassword}"
+                                           Margin="{TemplateBinding Padding}" />
+                        </ScrollViewer>
+                    </Panel>
                 </Border>
             </ControlTemplate>
         </Setter>
         <Style Selector="^:focus">
-            <Setter Property="BorderBrush" Value="{DynamicResource SynthwavePurpleBrush}" />
+            <Setter Property="BorderBrush" Value="{DynamicResource Cora.Accent.Store}" />
         </Style>
     </ControlTheme>
 
     <!-- TreeView ControlTheme -->
     <ControlTheme x:Key="{x:Type TreeView}" TargetType="TreeView">
-        <Setter Property="Background" Value="{DynamicResource SurfaceElevatedBrush}" />
-        <Setter Property="BorderBrush" Value="{DynamicResource BorderSubtleBrush}" />
+        <Setter Property="Background" Value="{DynamicResource Cora.Surface.Panel}" />
+        <Setter Property="BorderBrush" Value="{DynamicResource Cora.Border.Subtle}" />
         <Setter Property="BorderThickness" Value="1" />
     </ControlTheme>
 
     <!-- TreeViewItem ControlTheme -->
     <ControlTheme x:Key="{x:Type TreeViewItem}" TargetType="TreeViewItem">
         <Setter Property="Background" Value="Transparent" />
-        <Setter Property="Foreground" Value="{DynamicResource OnSurfaceBrush}" />
+        <Setter Property="Foreground" Value="{DynamicResource Cora.Text}" />
         <Setter Property="Padding" Value="4,2" />
         <Style Selector="^:selected">
-            <Setter Property="Background" Value="{DynamicResource SurfaceOverlayBrush}" />
+            <Setter Property="Background" Value="{DynamicResource Cora.Surface.Elevated}" />
         </Style>
         <Style Selector="^:selected /template/ Border#SelectionIndicator">
-            <Setter Property="Background" Value="{DynamicResource SynthwavePurpleBrush}" />
+            <Setter Property="Background" Value="{DynamicResource Cora.Accent.Store}" />
         </Style>
     </ControlTheme>
 
-    <!-- ToolTip ControlTheme: synthwave dark style matching the app palette -->
+    <!-- ToolTip ControlTheme: in the theme's colours rather than Fluent's grays -->
     <ControlTheme x:Key="{x:Type ToolTip}" TargetType="ToolTip">
-        <Setter Property="Background" Value="#1B1232" />
-        <Setter Property="Foreground" Value="{DynamicResource OnSurfaceBrush}" />
-        <Setter Property="BorderBrush" Value="#3D2B6E" />
+        <Setter Property="Background" Value="{DynamicResource Cora.Surface.Elevated}" />
+        <Setter Property="Foreground" Value="{DynamicResource Cora.Text}" />
+        <Setter Property="BorderBrush" Value="{DynamicResource Cora.Border.Input}" />
         <Setter Property="BorderThickness" Value="1" />
         <Setter Property="CornerRadius" Value="6" />
         <Setter Property="Padding" Value="10,7" />

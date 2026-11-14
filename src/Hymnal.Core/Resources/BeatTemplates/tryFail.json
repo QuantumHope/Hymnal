@@ -23,5 +23,14 @@
       "title": "Outcome",
       "note": "Show the consequences of how the attempts ended."
     }
+  ],
+  "shape": [
+    0.15,
+    0.5,
+    0.3,
+    0.7,
+    0.45,
+    1.0,
+    0.3
   ]
 }

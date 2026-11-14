@@ -2,7 +2,9 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Reactive;
+using Avalonia.Media;
 using Hymnal.Core.Models;
+using Hymnal.Theming;
 using ReactiveUI;
 
 namespace Hymnal.ViewModels;
@@ -128,20 +130,21 @@ public sealed class GanttRowViewModel : ViewModelBase
         }
     }
 
-    public string RowBackground => IsBook
-        ? "#2A1D46"
+    // Theme brushes (stable, recoloured on a theme change); the fallbacks are Synthwave's original colours.
+    public IBrush RowBackground => IsBook
+        ? ThemeBrushes.Get("Cora.Wash.Store", "#2A1D46")
         : IsPart
-            ? "#1A1235"
-            : "Transparent";
+            ? ThemeBrushes.Get("Cora.Wash.Hover", "#1A1235")
+            : Brushes.Transparent;
 
-    public string RowForeground => IsBook
-        ? "#E9D5FF"
+    public IBrush RowForeground => IsBook
+        ? ThemeBrushes.Get("Cora.Text", "#E9D5FF")
         : IsPart
-            ? "#94A3B8"
-            : "#CBD5E1";
+            ? ThemeBrushes.Get("Cora.Text.Secondary", "#94A3B8")
+            : ThemeBrushes.Get("Cora.Text", "#CBD5E1");
 
-    public string StatusForeground => IsEditable
-        ? StatusToColorHex(EditableStatus)
+    public IBrush StatusForeground => IsEditable
+        ? StatusBrush(EditableStatus)
         : RowForeground;
 
     public string StatusDisplay => IsEditable ? Profile.LabelFor(EditableStatus) : "Rollup";
@@ -231,18 +234,21 @@ public sealed class GanttRowViewModel : ViewModelBase
             string.Equals(s.PhaseName, Profile.DisplayStatus(status).ToString(), StringComparison.Ordinal));
     }
 
+    /// <summary>The theme key for a status colour, with Synthwave's value as the fallback.</summary>
+    internal static (string Key, string Fallback) StatusColorKey(ChapterStatus status) =>
+        StatusColors.KeyFor(status) ?? ("Cora.Text", "#CBD5E1");
+
+    /// <summary>The current theme's colour for a status as <c>#RRGGBB</c>.</summary>
     internal static string StatusToColorHex(ChapterStatus status)
     {
-        return status switch
-        {
-            ChapterStatus.Planned => "#FF6B35",
-            ChapterStatus.Outlining => "#9589B0",
-            ChapterStatus.Drafting => "#38BDF8",
-            ChapterStatus.Editing => "#9D4EDD",
-            ChapterStatus.Polishing => "#F5C842",
-            ChapterStatus.Reviewing => "#E91E8C",
-            ChapterStatus.Done => "#22D3A0",
-            _ => "#CBD5E1"
-        };
+        var (key, fallback) = StatusColorKey(status);
+        var c = ThemeBrushes.Color(key, fallback);
+        return $"#{c.R:X2}{c.G:X2}{c.B:X2}";
+    }
+
+    internal static IBrush StatusBrush(ChapterStatus status)
+    {
+        var (key, fallback) = StatusColorKey(status);
+        return ThemeBrushes.Get(key, fallback);
     }
 }

@@ -27,10 +27,13 @@ public sealed class WriteLayoutSettings
     /// <summary>Star weight for the Chapter Info content row (Row 0 of RightPaneGrid).</summary>
     public double RightPaneTopStar { get; set; } = 1.0;
 
-    /// <summary>Star weight for the Notes content row (Row 2 of RightPaneGrid).</summary>
+    /// <summary>Star weight for the Beats content row (Row 2 of RightPaneGrid; story/anthology only).</summary>
+    public double RightPaneBeatsStar { get; set; } = 1.0;
+
+    /// <summary>Star weight for the Notes content row (Row 4 of RightPaneGrid).</summary>
     public double RightPaneBottomStar { get; set; } = 1.0;
 
-    /// <summary>Star weight for the AI Chat content row (Row 4 of RightPaneGrid).</summary>
+    /// <summary>Star weight for the AI Chat content row (Row 6 of RightPaneGrid).</summary>
     public double RightPaneChatStar { get; set; } = 1.0;
 
     // ── Defaults ─────────────────────────────────────────────────────────────

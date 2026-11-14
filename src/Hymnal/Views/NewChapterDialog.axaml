@@ -1,51 +1,51 @@
 <Window xmlns="https://github.com/avaloniaui"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         x:Class="Hymnal.Views.NewChapterDialog"
-        Title="New Chapter"
+        Title="New"
         Width="460" Height="260"
         CanResize="False"
         ShowInTaskbar="False"
         WindowStartupLocation="CenterOwner"
-        Background="#120932"
-        FontFamily="{DynamicResource InterFont}">
+        Background="{DynamicResource Cora.Surface.Panel}"
+        FontFamily="{DynamicResource Cora.Font.Persona}">
 
-    <Border BorderBrush="#2D1B5E"
+    <Border BorderBrush="{DynamicResource Cora.Border.Subtle}"
             BorderThickness="1"
             Padding="16">
         <StackPanel Spacing="12">
             <TextBlock x:Name="PromptText"
                        Text="Enter the file path and optional title."
-                       Foreground="{DynamicResource OnSurfaceBrush}"
+                       Foreground="{DynamicResource Cora.Text}"
                        TextWrapping="Wrap" />
 
             <StackPanel Spacing="4">
-                <TextBlock Text="FILE PATH"
+                <TextBlock Classes="caps" Text="FILE PATH"
                            FontSize="10"
                            FontWeight="SemiBold"
                            LetterSpacing="1.5"
-                           Foreground="{DynamicResource OnSurfaceDimBrush}" />
+                           Foreground="{DynamicResource Cora.Text.Secondary}" />
                 <TextBox x:Name="FilePathInput"
                          FontSize="12"
                          Padding="8,6"
-                         Background="{DynamicResource SurfaceBaseBrush}"
-                         Foreground="{DynamicResource OnSurfaceBrush}"
-                         BorderBrush="{DynamicResource BorderSubtleBrush}"
+                         Background="{DynamicResource Cora.Surface.Void}"
+                         Foreground="{DynamicResource Cora.Text}"
+                         BorderBrush="{DynamicResource Cora.Border.Subtle}"
                          BorderThickness="1" />
             </StackPanel>
 
             <StackPanel Spacing="4">
-                <TextBlock x:Name="TitleLabel"
+                <TextBlock Classes="caps" x:Name="TitleLabel"
                            Text="TITLE (optional)"
                            FontSize="10"
                            FontWeight="SemiBold"
                            LetterSpacing="1.5"
-                           Foreground="{DynamicResource OnSurfaceDimBrush}" />
+                           Foreground="{DynamicResource Cora.Text.Secondary}" />
                 <TextBox x:Name="TitleInput"
                          FontSize="12"
                          Padding="8,6"
-                         Background="{DynamicResource SurfaceBaseBrush}"
-                         Foreground="{DynamicResource OnSurfaceBrush}"
-                         BorderBrush="{DynamicResource BorderSubtleBrush}"
+                         Background="{DynamicResource Cora.Surface.Void}"
+                         Foreground="{DynamicResource Cora.Text}"
+                         BorderBrush="{DynamicResource Cora.Border.Subtle}"
                          BorderThickness="1" />
             </StackPanel>
 
@@ -56,8 +56,8 @@
                         Content="Create"
                         IsDefault="True"
                         Padding="12,6"
-                        Background="{DynamicResource SynthwavePurpleBrush}"
-                        Foreground="{DynamicResource OnSurfaceBrush}"
+                        Background="{DynamicResource Cora.Accent.Store}"
+                        Foreground="{DynamicResource Cora.IconInk}"
                         BorderThickness="0"
                         Click="OkButton_Click" />
                 <Button Content="Cancel"

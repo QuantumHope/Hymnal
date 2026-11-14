@@ -10,8 +10,8 @@
         CanResize="True"
         ShowInTaskbar="False"
         WindowStartupLocation="CenterOwner"
-        Background="#0B0820"
-        FontFamily="{DynamicResource InterFont}">
+        Background="{DynamicResource Cora.Surface.Void}"
+        FontFamily="{DynamicResource Cora.Font.Persona}">
 
     <Grid RowDefinitions="5,Auto,*,Auto">
 
@@ -19,29 +19,29 @@
         <Border Grid.Row="0" Height="5">
             <Border.Background>
                 <LinearGradientBrush StartPoint="0%,0%" EndPoint="100%,0%">
-                    <GradientStop Color="#9D4EDD" Offset="0" />
-                    <GradientStop Color="#E91E8C" Offset="0.5" />
-                    <GradientStop Color="#38BDF8" Offset="1" />
+                    <GradientStop Color="{DynamicResource Cora.Accent.Store.Color}" Offset="0" />
+                    <GradientStop Color="{DynamicResource Cora.Accent.Merge.Color}" Offset="0.5" />
+                    <GradientStop Color="{DynamicResource Cora.Accent.Retrieve.Color}" Offset="1" />
                 </LinearGradientBrush>
             </Border.Background>
         </Border>
 
         <!-- Header -->
         <Border Grid.Row="1"
-                Background="#120932"
-                BorderBrush="#2D1B5E"
+                Background="{DynamicResource Cora.Surface.Panel}"
+                BorderBrush="{DynamicResource Cora.Border.Subtle}"
                 BorderThickness="0,0,0,1"
                 Padding="14,10">
             <StackPanel Spacing="2">
                 <TextBlock Text="{Binding ChapterTitle}"
                            FontSize="14"
                            FontWeight="SemiBold"
-                           Foreground="#E2DDFF"
+                           Foreground="{DynamicResource Cora.Text}"
                            TextWrapping="Wrap" />
-                <TextBlock Text="Chapter Details"
+                <TextBlock Classes="caps" Text="Details"
                            FontSize="10"
                            LetterSpacing="1.5"
-                           Foreground="#64748B" />
+                           Foreground="{DynamicResource Cora.Text.Secondary}" />
             </StackPanel>
         </Border>
 
@@ -51,8 +51,8 @@
 
         <!-- Footer with close button -->
         <Border Grid.Row="3"
-                Background="#120932"
-                BorderBrush="#2D1B5E"
+                Background="{DynamicResource Cora.Surface.Panel}"
+                BorderBrush="{DynamicResource Cora.Border.Subtle}"
                 BorderThickness="0,1,0,0"
                 Padding="14,10">
             <Button Content="Close"
@@ -60,8 +60,8 @@
                     HorizontalAlignment="Right"
                     Padding="20,6"
                     CornerRadius="4"
-                    Background="{DynamicResource SurfaceHighBrush}"
-                    Foreground="{DynamicResource OnSurfaceBrush}"
+                    Background="{DynamicResource Cora.Wash.Selected}"
+                    Foreground="{DynamicResource Cora.Text}"
                     BorderThickness="0"
                     FontSize="12" />
         </Border>

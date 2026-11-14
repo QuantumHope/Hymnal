@@ -4,26 +4,26 @@
              xmlns:models="using:Hymnal.Core.Models"
              x:Class="Hymnal.Views.SupplementalDocsView"
              x:DataType="vm:SupplementalDocsViewModel"
-             Background="{DynamicResource SurfaceElevatedBrush}">
+             Background="{DynamicResource Cora.Surface.Panel}">
 
     <UserControl.Styles>
         <Style Selector="Button.docs-action">
             <Setter Property="Background" Value="Transparent" />
-            <Setter Property="BorderBrush" Value="{DynamicResource BorderSubtleBrush}" />
+            <Setter Property="BorderBrush" Value="{DynamicResource Cora.Border.Subtle}" />
             <Setter Property="BorderThickness" Value="1" />
             <Setter Property="CornerRadius" Value="4" />
             <Setter Property="Padding" Value="6,3" />
-            <Setter Property="Foreground" Value="{DynamicResource OnSurfaceDimBrush}" />
+            <Setter Property="Foreground" Value="{DynamicResource Cora.Text.Secondary}" />
             <Setter Property="FontSize" Value="11" />
         </Style>
         <Style Selector="Button.docs-action:pointerover /template/ ContentPresenter">
-            <Setter Property="Background" Value="{DynamicResource SurfaceOverlayBrush}" />
+            <Setter Property="Background" Value="{DynamicResource Cora.Surface.Elevated}" />
         </Style>
         <Style Selector="TreeViewItem:pointerover /template/ ContentPresenter">
-            <Setter Property="Background" Value="{DynamicResource SurfaceHighBrush}" />
+            <Setter Property="Background" Value="{DynamicResource Cora.Wash.Selected}" />
         </Style>
         <Style Selector="TreeViewItem:selected /template/ ContentPresenter">
-            <Setter Property="Background" Value="{DynamicResource SurfaceHighBrush}" />
+            <Setter Property="Background" Value="{DynamicResource Cora.Wash.Selected}" />
         </Style>
     </UserControl.Styles>
 
@@ -60,7 +60,7 @@
                               Height="12"
                               Stretch="Uniform"
                               VerticalAlignment="Center"
-                              Fill="{DynamicResource OnSurfaceDimBrush}"
+                              Fill="{DynamicResource Cora.Text.Secondary}"
                               IsVisible="{Binding IsFolder}"
                               Data="M2 4h7l1.5 2H18v8.5A1.5 1.5 0 0116.5 16h-13A1.5 1.5 0 012 14.5V4z" />
                         <Path Grid.Column="0"
@@ -68,12 +68,12 @@
                               Height="13"
                               Stretch="Uniform"
                               VerticalAlignment="Center"
-                              Fill="{DynamicResource CyanBrush}"
+                              Fill="{DynamicResource Cora.Accent.Retrieve}"
                               IsVisible="{Binding IsFile}"
                               Data="M4 2h7l5 5v11a2 2 0 01-2 2H4a2 2 0 01-2-2V4a2 2 0 012-2zm7 1.5V8h4.5" />
                         <TextBlock Grid.Column="1"
                                    Text="{Binding DisplayName}"
-                                   Foreground="{DynamicResource OnSurfaceBrush}"
+                                   Foreground="{DynamicResource Cora.Text}"
                                    FontSize="12"
                                    TextTrimming="CharacterEllipsis"
                                    VerticalAlignment="Center" />

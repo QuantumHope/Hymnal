@@ -76,10 +76,13 @@ public sealed class GanttViewModel : ViewModelBase
     /// <summary>Statuses visible in the workspace profile.</summary>
     public IReadOnlyList<StatusOption> AvailableStatuses => _workspace.Profile.VisibleStatuses;
 
+    /// <summary>The open project's profile, for the schedule's own wording.</summary>
+    public ProjectProfile Profile => _workspace.Profile;
+
     /// <summary>Legend entries: one per Gantt phase of the workspace profile.</summary>
     public IReadOnlyList<GanttLegendItem> LegendItems => _workspace.Profile.GanttPhases
         .Select(name => Enum.Parse<ChapterStatus>(name))
-        .Select(s => new GanttLegendItem(_workspace.Profile.LabelFor(s), GanttRowViewModel.StatusToColorHex(s)))
+        .Select(s => new GanttLegendItem(_workspace.Profile.LabelFor(s), s))
         .ToList();
 
     private string _editingPhaseName = string.Empty;
@@ -168,11 +171,15 @@ public sealed class GanttViewModel : ViewModelBase
         Disposables.Add(_phaseSubscriptions);
         Disposables.Add(Disposable.Create(() => _rowEditRequested.OnCompleted()));
         Disposables.Add(_rowEditRequested.Subscribe(OpenEditForRow));
+        Disposables.Add(workspace.WhenAnyValue(x => x.FocusedStory, x => x.CollectionTitle, (s, t) => (s, t))
+            .Skip(1)
+            .Subscribe(_ => RequestRebuild()));
         Disposables.Add(workspace.WhenAnyValue(x => x.Profile)
             .Skip(1)
             .Subscribe(_ =>
             {
                 this.RaisePropertyChanged(nameof(AvailableStatuses));
+                this.RaisePropertyChanged(nameof(Profile));
                 this.RaisePropertyChanged(nameof(LegendItems));
             }));
 
@@ -266,7 +273,7 @@ public sealed class GanttViewModel : ViewModelBase
 
         if (chapterVm == null)
         {
-            _notificationService.ShowError($"Could not find chapter '{row.Title}'.");
+            _notificationService.ShowError($"Could not find '{row.Title}'.");
             return null;
         }
 
@@ -287,7 +294,7 @@ public sealed class GanttViewModel : ViewModelBase
 
         if (chapterVm == null)
         {
-            _notificationService.ShowError($"Could not find chapter '{row.Title}' to mark complete.");
+            _notificationService.ShowError($"Could not find '{row.Title}' to mark complete.");
             return;
         }
 
@@ -496,7 +503,7 @@ public sealed class GanttViewModel : ViewModelBase
 
         if (chapterVm == null)
         {
-            _notificationService.ShowError($"Could not find chapter '{row.Title}' to save edits.");
+            _notificationService.ShowError($"Could not find '{row.Title}' to save edits.");
             return;
         }
 
@@ -633,7 +640,7 @@ public sealed class GanttViewModel : ViewModelBase
 
         if (chapterVm == null)
         {
-            _notificationService.ShowError($"Could not find chapter '{row.Title}' to save edits.");
+            _notificationService.ShowError($"Could not find '{row.Title}' to save edits.");
             return;
         }
 
@@ -730,13 +737,16 @@ public sealed class GanttViewModel : ViewModelBase
         _rows.Clear();
 
         var phaseSubscriptions = new CompositeDisposable();
-        var nodes = _workspace.Nodes.ToList();
+        // Focused on one anthology story: only its rows, rolled up under its title.
+        var nodes = _workspace.Nodes.Where(_workspace.IsInFocus).ToList();
 
         var allChapters = nodes
             .Where(n => !n.Node.IsMissing && n.Node.Kind == NodeKind.Chapter)
             .ToList();
         var profile = _workspace.Profile;
-        var bookRowData = BuildBookRollup(allChapters, profile);
+        var bookRowData = BuildBookRollup(allChapters, profile,
+            _workspace.FocusedStory?.Node.Title.ToUpperInvariant()
+            ?? (string.IsNullOrWhiteSpace(_workspace.CollectionTitle) ? null : _workspace.CollectionTitle.ToUpperInvariant()));
         _rows.Add(new GanttRowViewModel(bookRowData, profile));
 
         for (int i = 0; i < nodes.Count; i++)
@@ -820,7 +830,8 @@ public sealed class GanttViewModel : ViewModelBase
             CompletionPercentage: completion);
     }
 
-    private static GanttRowData BuildBookRollup(IReadOnlyList<ChapterViewModel> chapters, ProjectProfile profile)
+    private static GanttRowData BuildBookRollup(IReadOnlyList<ChapterViewModel> chapters, ProjectProfile profile,
+        string? focusTitle = null)
     {
         DateOnly? minStart = null;
         DateOnly? maxEnd = null;
@@ -853,7 +864,7 @@ public sealed class GanttViewModel : ViewModelBase
 
         return new GanttRowData(
             RelativePath: "__book__",
-            Title: "BOOK",
+            Title: focusTitle ?? profile.ScheduleRollupLabel,
             Kind: NodeKind.Part,
             Status: ChapterStatus.Outlining,
             StartDate: minStart,
@@ -865,4 +876,11 @@ public sealed class GanttViewModel : ViewModelBase
 }
 
 /// <summary>One Gantt legend swatch: phase label and its colour.</summary>
-public sealed record GanttLegendItem(string Label, string ColorHex);
+public sealed record GanttLegendItem(string Label, ChapterStatus Status)
+{
+    /// <summary>The status colour in the current theme, as <c>#RRGGBB</c>.</summary>
+    public string ColorHex => GanttRowViewModel.StatusToColorHex(Status);
+
+    /// <summary>The status colour as a theme brush that follows theme changes (what the legend swatch binds to).</summary>
+    public Avalonia.Media.IBrush Brush => GanttRowViewModel.StatusBrush(Status);
+}
