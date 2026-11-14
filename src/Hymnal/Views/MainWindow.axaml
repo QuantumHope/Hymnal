@@ -264,7 +264,7 @@
                                   Command="{Binding ToggleSoundCommand}"
                                   IsChecked="{Binding SoundPreferences.SoundEnabled, Mode=OneWay}"
                                   IsVisible="{Binding SoundPreferences, Converter={x:Static ObjectConverters.IsNotNull}}"
-                                  Foreground="{DynamicResource OnSurfaceBrush}" />
+                                  Foreground="{DynamicResource Cora.Text}" />
                         <MenuItem Header="_Reset Write Layout"
                                   Command="{Binding ResetWriteLayoutCommand}" />
                     </MenuItem>
