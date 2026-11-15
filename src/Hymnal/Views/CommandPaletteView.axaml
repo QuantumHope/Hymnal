@@ -1,0 +1,132 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:Hymnal.ViewModels"
+             x:Class="Hymnal.Views.CommandPaletteView"
+             x:DataType="vm:CommandPaletteViewModel"
+             x:Name="Root"
+             IsVisible="{Binding IsOpen}"
+             FontFamily="{DynamicResource Cora.Font.Persona}">
+
+    <UserControl.Styles>
+        <Style Selector="ListBox#ResultsList ListBoxItem">
+            <Setter Property="Padding" Value="12,7" />
+            <Setter Property="Margin" Value="0" />
+            <Setter Property="Background" Value="Transparent" />
+            <Setter Property="Foreground" Value="{DynamicResource Cora.Text}" />
+            <Setter Property="BorderThickness" Value="2,0,0,0" />
+            <Setter Property="BorderBrush" Value="Transparent" />
+        </Style>
+        <Style Selector="ListBox#ResultsList ListBoxItem:pointerover /template/ ContentPresenter">
+            <Setter Property="Background" Value="{DynamicResource Cora.Wash.Hover}" />
+        </Style>
+        <Style Selector="ListBox#ResultsList ListBoxItem:selected /template/ ContentPresenter">
+            <Setter Property="Background" Value="{DynamicResource Cora.Wash.Selected}" />
+        </Style>
+        <Style Selector="ListBox#ResultsList ListBoxItem:selected">
+            <Setter Property="BorderBrush" Value="{DynamicResource Cora.Accent.Store}" />
+        </Style>
+        <Style Selector="TextBlock.palette-category">
+            <Setter Property="FontSize" Value="9" />
+            <Setter Property="FontWeight" Value="SemiBold" />
+            <Setter Property="LetterSpacing" Value="1.2" />
+            <Setter Property="Foreground" Value="{DynamicResource Cora.Text.Secondary}" />
+            <Setter Property="VerticalAlignment" Value="Center" />
+            <Setter Property="TextTrimming" Value="CharacterEllipsis" />
+        </Style>
+        <Style Selector="Border.palette-key">
+            <Setter Property="Background" Value="{DynamicResource Cora.Surface.Void}" />
+            <Setter Property="BorderBrush" Value="{DynamicResource Cora.Border.Subtle}" />
+            <Setter Property="BorderThickness" Value="1" />
+            <Setter Property="CornerRadius" Value="3" />
+            <Setter Property="Padding" Value="6,1" />
+            <Setter Property="VerticalAlignment" Value="Center" />
+        </Style>
+    </UserControl.Styles>
+
+    <Grid>
+        <!-- A click outside the box closes the palette. -->
+        <Border x:Name="Scrim"
+                Background="{DynamicResource Cora.Scrim}"
+                PointerPressed="Scrim_PointerPressed" />
+
+        <Border x:Name="PaletteBox"
+                Width="620"
+                MaxHeight="460"
+                Margin="16,72,16,16"
+                HorizontalAlignment="Center"
+                VerticalAlignment="Top"
+                Background="{DynamicResource Cora.Surface.Elevated}"
+                BorderBrush="{DynamicResource Cora.Border.Focus}"
+                BorderThickness="1"
+                CornerRadius="6"
+                ClipToBounds="True">
+            <DockPanel>
+                <TextBox x:Name="QueryInput"
+                         DockPanel.Dock="Top"
+                         Text="{Binding Query}"
+                         Watermark="{Binding Placeholder}"
+                         FontSize="14"
+                         Padding="14,10"
+                         Background="{DynamicResource Cora.Surface.Void}"
+                         Foreground="{DynamicResource Cora.Text}"
+                         BorderBrush="{DynamicResource Cora.Border.Subtle}"
+                         BorderThickness="0,0,0,1"
+                         CornerRadius="0" />
+
+                <Border DockPanel.Dock="Bottom"
+                        BorderBrush="{DynamicResource Cora.Border.Subtle}"
+                        BorderThickness="0,1,0,0"
+                        Padding="12,6">
+                    <TextBlock Classes="caps palette-category"
+                               Text="↑ ↓ MOVE  ·  ENTER RUN  ·  ESC CLOSE  ·  &gt; COMMANDS" />
+                </Border>
+
+                <Grid>
+                    <ListBox x:Name="ResultsList"
+                             ItemsSource="{Binding Results}"
+                             SelectedItem="{Binding Selected}"
+                             Background="Transparent"
+                             Focusable="False"
+                             Tapped="ResultsList_Tapped"
+                             ScrollViewer.HorizontalScrollBarVisibility="Disabled">
+                        <ListBox.ItemTemplate>
+                            <DataTemplate x:DataType="vm:PaletteEntry">
+                                <Grid ColumnDefinitions="88,*,Auto" ColumnSpacing="12">
+                                    <TextBlock Grid.Column="0"
+                                               Classes="caps palette-category"
+                                               Text="{Binding CategoryLabel}" />
+                                    <StackPanel Grid.Column="1" Spacing="1" VerticalAlignment="Center">
+                                        <TextBlock Text="{Binding Title}"
+                                                   FontSize="13"
+                                                   Foreground="{DynamicResource Cora.Text}"
+                                                   TextTrimming="CharacterEllipsis"
+                                                   TextWrapping="NoWrap" />
+                                        <TextBlock Text="{Binding Detail}"
+                                                   IsVisible="{Binding HasDetail}"
+                                                   FontSize="11"
+                                                   Foreground="{DynamicResource Cora.Text.Secondary}"
+                                                   TextTrimming="CharacterEllipsis"
+                                                   TextWrapping="NoWrap" />
+                                    </StackPanel>
+                                    <Border Grid.Column="2"
+                                            Classes="palette-key"
+                                            IsVisible="{Binding HasShortcut}">
+                                        <TextBlock Text="{Binding Shortcut}"
+                                                   FontSize="10"
+                                                   Foreground="{DynamicResource Cora.Text.Secondary}" />
+                                    </Border>
+                                </Grid>
+                            </DataTemplate>
+                        </ListBox.ItemTemplate>
+                    </ListBox>
+
+                    <TextBlock IsVisible="{Binding HasNoResults}"
+                               Text="{Binding EmptyText}"
+                               Margin="16,14"
+                               FontSize="12"
+                               Foreground="{DynamicResource Cora.Text.Secondary}" />
+                </Grid>
+            </DockPanel>
+        </Border>
+    </Grid>
+</UserControl>

@@ -301,7 +301,15 @@ public partial class App : Application
                 sp.GetRequiredService<BeatBoardViewModel>(),
                 sp.GetRequiredService<INotificationService>(),
                 sp.GetRequiredService<IBeatBoardService>(),
-                sp.GetRequiredService<CollectionPlannerViewModel>()));
+                sp.GetRequiredService<CollectionPlannerViewModel>(),
+                sp.GetRequiredService<CollectionDetailsViewModel>()));
+
+        // Plan's Details tab: the open collection at a glance.
+        services.AddSingleton<CollectionDetailsViewModel>(sp =>
+            new CollectionDetailsViewModel(
+                sp.GetRequiredService<WorkspaceViewModel>(),
+                sp.GetRequiredService<CollectionsViewModel>(),
+                export: sp.GetRequiredService<SubmissionExportViewModel>()));
 
         // An anthology's Plan mode: every collection side by side over a library of stories.
         services.AddSingleton<CollectionPlanService>(sp =>
@@ -388,7 +396,8 @@ public partial class App : Application
                 sp.GetRequiredService<SoundPreferences>(),
                 sp.GetRequiredService<WriteBeatsViewModel>(),
                 sp.GetRequiredService<CollectionsViewModel>(),
-                sp.GetRequiredService<SubmissionExportViewModel>()));
+                sp.GetRequiredService<SubmissionExportViewModel>(),
+                sp.GetRequiredService<IThemeService>()));
 
         _serviceProvider = services.BuildServiceProvider();
         Services = _serviceProvider;

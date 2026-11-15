@@ -28,6 +28,7 @@ public partial class MainWindow : Window
     public MainWindow()
     {
         InitializeComponent();
+        InsertMenu.Populate(PART_InsertMenu);
 
         Closing += OnClosingFlushPendingEdits;
 

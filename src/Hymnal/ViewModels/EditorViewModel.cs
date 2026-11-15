@@ -35,7 +35,7 @@ namespace Hymnal.ViewModels;
 /// saved together with any unsaved prose.
 /// </para>
 /// </summary>
-public class EditorViewModel : ViewModelBase, IDisposable, IOpenStoryBuffer
+public partial class EditorViewModel : ViewModelBase, IDisposable, IOpenStoryBuffer
 {
     private const char ByteOrderMark = '\uFEFF';
 
@@ -450,6 +450,8 @@ public class EditorViewModel : ViewModelBase, IDisposable, IOpenStoryBuffer
                 _ => EditorViewMode.Write,
             };
         }, editorSurfaceVisible);
+
+        InitializeInsertCommands();
 
         // Register watcher teardown with the composite disposable.
         Disposables.Add(Disposable.Create(StopWatcher));

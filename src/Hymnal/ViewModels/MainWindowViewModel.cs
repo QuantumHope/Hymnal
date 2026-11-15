@@ -16,7 +16,7 @@ using System.Reactive.Subjects;
 
 namespace Hymnal.ViewModels;
 
-public class MainWindowViewModel : ViewModelBase
+public partial class MainWindowViewModel : ViewModelBase
 {
     private readonly IAppSettingsStore _settingsStore;
     private readonly WorkspaceViewModel _workspaceVm;
@@ -66,6 +66,8 @@ public class MainWindowViewModel : ViewModelBase
         {
             this.RaiseAndSetIfChanged(ref _isSettingsOpen, value);
             this.RaisePropertyChanged(nameof(HighlightedMode));
+            // Settings overlays the editor rather than hiding it; Insert must not edit the chapter behind it.
+            EditorViewModel.IsSourceCovered = value;
         }
     }
 
@@ -165,9 +167,14 @@ public class MainWindowViewModel : ViewModelBase
         }
     }
 
-    /// <summary>Plan mode content: the beat-board host for story and anthology projects, else the Corkboard.</summary>
+    /// <summary>
+    /// Plan mode content: the host (its Details tab beside the beat board, planner or Corkboard) for every
+    /// project kind when it has Details; without them, the host for story and anthology projects, else the Corkboard.
+    /// </summary>
     private object PlanContent =>
-        PlanHostViewModel != null && WorkspaceViewModel.Profile.UsesBeatBoard ? PlanHostViewModel : CorkboardViewModel;
+        PlanHostViewModel != null && (PlanHostViewModel.Details != null || WorkspaceViewModel.Profile.UsesBeatBoard)
+            ? PlanHostViewModel
+            : CorkboardViewModel;
 
     /// <summary>View-model for the active non-Write centre panel (lazy-loaded via ViewLocator).</summary>
     public object? SecondaryCentreContent => ActiveMode switch
@@ -232,6 +239,12 @@ public class MainWindowViewModel : ViewModelBase
     // ── Sidebar visibility (Ctrl+B) ───────────────────────────────────────────
 
     public ReactiveCommand<Unit, Unit> ToggleSidebarCommand { get; }
+
+    /// <summary>
+    /// The window's Ctrl+B: <see cref="ToggleSidebarCommand"/>, except while the editor has focus, where Ctrl+B is
+    /// bold (<see cref="EditorViewModel.TakesInsertShortcuts"/>) and the key passes on to it.
+    /// </summary>
+    public ReactiveCommand<Unit, Unit> ToggleSidebarShortcutCommand { get; }
 
     // ── Rail collapse (Write mode) ────────────────────────────────────────────
     // A rail collapses to its 48px icon strip without closing its panes, so expanding it (Ctrl+B / Ctrl+Alt+B, a
@@ -481,8 +494,10 @@ public class MainWindowViewModel : ViewModelBase
         Hymnal.Audio.SoundPreferences? soundPreferences = null,
         WriteBeatsViewModel? writeBeatsViewModel = null,
         CollectionsViewModel? collectionsViewModel = null,
-        SubmissionExportViewModel? submissionExportViewModel = null)
+        SubmissionExportViewModel? submissionExportViewModel = null,
+        Hymnal.Theming.IThemeService? themes = null)
     {
+        _themes = themes;
         CollectionsViewModel = collectionsViewModel;
         SubmissionExportViewModel = submissionExportViewModel;
         _settingsStore = settingsStore;
@@ -545,13 +560,16 @@ public class MainWindowViewModel : ViewModelBase
         Disposables.Add(_isBothLeftPanesOpen);
 
         // Ctrl+B / Ctrl+Alt+B: collapse a rail to its icon strip (its panes are kept), or expand it again.
-        ToggleSidebarCommand = ReactiveCommand.Create(() =>
+        void ToggleSidebar()
         {
             if (IsAnyLeftPaneOpen)
                 SetLeftRailCollapsed(true);
             else
                 ExpandLeftRail();
-        });
+        }
+        ToggleSidebarCommand = ReactiveCommand.Create(ToggleSidebar);
+        ToggleSidebarShortcutCommand = ReactiveCommand.Create(ToggleSidebar,
+            EditorViewModel.WhenAnyValue(x => x.TakesInsertShortcuts).Select(takes => !takes));
 
         SelectResearchCommand = ReactiveCommand.CreateFromTask(EnterResearchModeAsync);
         Disposables.Add(SelectResearchCommand.ThrownExceptions.Subscribe(ex =>
@@ -601,6 +619,12 @@ public class MainWindowViewModel : ViewModelBase
             ActiveMode = IsGanttVisible ? ShellMode.Write : ShellMode.Manage;
         });
 
+        // Built before the focus-mode commands: Esc closes an open palette before it leaves focus mode.
+        CommandPalette = new CommandPaletteViewModel(BuildPaletteEntries, notificationService);
+        Disposables.Add(CommandPalette);
+        ShowGoToCommand = ReactiveCommand.Create(() => CommandPalette.OpenGoTo());
+        ShowCommandsCommand = ReactiveCommand.Create(() => CommandPalette.OpenCommands());
+
         ToggleFocusModeCommand = ReactiveCommand.Create(() =>
         {
             if (IsFocusMode)
@@ -614,7 +638,8 @@ public class MainWindowViewModel : ViewModelBase
         });
         ExitFocusModeCommand = ReactiveCommand.Create(
             () => { IsFocusMode = false; },
-            this.WhenAnyValue(x => x.IsFocusMode));
+            this.WhenAnyValue(x => x.IsFocusMode)
+                .CombineLatest(CommandPalette.WhenAnyValue(x => x.IsOpen), (focus, palette) => focus && !palette));
 
         ResetWriteLayoutCommand = ReactiveCommand.CreateFromTask(ResetWriteLayoutAsync);
         Disposables.Add(ResetWriteLayoutCommand.ThrownExceptions.Subscribe(ex =>
@@ -765,6 +790,10 @@ public class MainWindowViewModel : ViewModelBase
         var openChapter = planHostViewModel?.Planner is { } planner
             ? CorkboardViewModel.OpenChapterRequested.Merge(planner.OpenChapterRequested)
             : CorkboardViewModel.OpenChapterRequested;
+        // Plan's Details tab opens a file in Write too; the sidebar's collection row opens Details.
+        if (planHostViewModel?.Details is { } details)
+            openChapter = openChapter.Merge(details.OpenRequested);
+        Disposables.Add(workspaceViewModel.CollectionDetailsRequested.Subscribe(_ => ShowCollectionDetails()));
         Disposables.Add(
             openChapter
                 .Subscribe(chapter =>
