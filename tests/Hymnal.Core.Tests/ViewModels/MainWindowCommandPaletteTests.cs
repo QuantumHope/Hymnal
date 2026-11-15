@@ -30,8 +30,8 @@ public sealed class MainWindowCommandPaletteTests
                 var palette = window.CommandPalette;
                 Assert.True(palette.IsOpen);
 
-                // The divider can't be opened; its scenes carry its title.
-                Assert.Equal(["The Lighthouse", "Arrival", "Departure"], palette.Results.Select(r => r.Title));
+                // The collection comes first; the divider can't be opened, its scenes carry its title.
+                Assert.Equal(["Collection", "The Lighthouse", "Arrival", "Departure"], palette.Results.Select(r => r.Title));
                 var arrival = palette.Results.Single(r => r.Title == "Arrival");
                 Assert.Equal(context.Workspace.NounFor(context.Node("harbour/arrival.md")), arrival.Category);
                 Assert.Contains("Harbour Tales", arrival.Detail);
@@ -102,7 +102,7 @@ public sealed class MainWindowCommandPaletteTests
                 Assert.DoesNotContain(window.CommandPalette.Results, r => r.Title == "Toggle Beats");
 
                 await Within(window.ShowGoToCommand.Execute().ToTask());
-                Assert.Equal(["Chapter", "Chapter"], window.CommandPalette.Results.Select(r => r.Category));
+                Assert.Equal(["Book", "Chapter", "Chapter"], window.CommandPalette.Results.Select(r => r.Category));
                 window.CommandPalette.Close();
             });
         }

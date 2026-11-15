@@ -191,8 +191,16 @@ internal sealed class PlanTestContext : IDisposable
         _notificationLog.Dispose();
     }
 
-    public PlanHostViewModel CreateHost() =>
-        _owned.Track(new PlanHostViewModel(Workspace, Corkboard, Board, Notifications, Boards));
+    public PlanHostViewModel CreateHost(CollectionDetailsViewModel? details = null) =>
+        _owned.Track(new PlanHostViewModel(Workspace, Corkboard, Board, Notifications, Boards, details: details));
+
+    /// <summary>The workspace's collections, through the real <see cref="CollectionService"/>.</summary>
+    public CollectionsViewModel CreateCollections() =>
+        new(Workspace, new CollectionService(_store), Notifications, editor: _editor);
+
+    /// <summary>Plan's Details tab; changes are picked up on <see cref="Scheduler"/> (or by calling Rebuild).</summary>
+    public CollectionDetailsViewModel CreateDetails(CollectionsViewModel? collections = null) =>
+        _owned.Track(new CollectionDetailsViewModel(Workspace, collections, Scheduler));
 
     public SettingsViewModel CreateSettings(Func<Task<bool>>? flushStoryEdits = null) =>
         new(new AiTestDoubles.InMemoryProviderProfileService(),
@@ -216,7 +224,8 @@ internal sealed class PlanTestContext : IDisposable
         return _owned.Track(new WriteBeatsViewModel(Workspace, board, planBoard ?? Board, _settings, Notifications));
     }
 
-    public MainWindowViewModel CreateMainWindow(PlanHostViewModel host, WriteBeatsViewModel? writeBeats = null)
+    public MainWindowViewModel CreateMainWindow(PlanHostViewModel host, WriteBeatsViewModel? writeBeats = null,
+        CollectionsViewModel? collections = null, Hymnal.Theming.IThemeService? themes = null)
     {
         var docs = new SupplementalDocsViewModel(
             Workspace, new SupplementalDocsService(_store), _editor, Notifications, _settings, new StubFilePickerService());
@@ -239,7 +248,9 @@ internal sealed class PlanTestContext : IDisposable
             AiTestDoubles.CreateStubSettingsFactory(Notifications),
             ideasViewModel: null,
             planHostViewModel: host,
-            writeBeatsViewModel: writeBeats);
+            writeBeatsViewModel: writeBeats,
+            collectionsViewModel: collections,
+            themes: themes);
     }
 
     public NotesViewModel CreateNotes() =>
