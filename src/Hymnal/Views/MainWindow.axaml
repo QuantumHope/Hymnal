@@ -173,7 +173,8 @@
     </Window.Styles>
 
     <Window.KeyBindings>
-        <KeyBinding Gesture="Ctrl+B" Command="{Binding ToggleSidebarCommand}" />
+        <!-- Ctrl+B is bold while the editor has focus: this command stands down then, so the key reaches it. -->
+        <KeyBinding Gesture="Ctrl+B" Command="{Binding ToggleSidebarShortcutCommand}" />
         <KeyBinding Gesture="Ctrl+Alt+B" Command="{Binding ToggleRightRailCommand}" />
         <KeyBinding Gesture="Ctrl+OemComma" Command="{Binding OpenSettingsCommand}" />
         <KeyBinding Gesture="Ctrl+Shift+A" Command="{Binding ToggleRightPaneCommand}" CommandParameter="chat" />
@@ -279,6 +280,8 @@
                         <MenuItem Header="_Reset Write Layout"
                                   Command="{Binding ResetWriteLayoutCommand}" />
                     </MenuItem>
+                    <!-- Markua snippets; InsertMenu.Populate fills it from MarkuaSnippets. -->
+                    <MenuItem x:Name="PART_InsertMenu" Header="_Insert" Foreground="{DynamicResource Cora.Text}" />
                     <MenuItem Header="_Help" Foreground="{DynamicResource Cora.Text}">
                         <MenuItem Header="_About Hymnal"
                                   Command="{Binding ShowAboutCommand}"

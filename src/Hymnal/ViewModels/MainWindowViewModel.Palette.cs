@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Reactive;
 using System.Threading.Tasks;
 using System.Windows.Input;
+using Hymnal.Core.Markua.Editing;
 using Hymnal.Core.Models;
 using ReactiveUI;
 
@@ -33,11 +34,11 @@ public partial class MainWindowViewModel
     {
         // Only what can run now goes in, so the palette never offers a command that would do nothing.
         void Add(string id, string category, string title, ICommand command, object? parameter = null,
-            string? shortcut = null)
+            string? shortcut = null, string? detail = null)
         {
             if (!command.CanExecute(parameter))
                 return;
-            entries.Add(new PaletteEntry($"command:{id}", PaletteEntryKind.Command, title, category, null, shortcut,
+            entries.Add(new PaletteEntry($"command:{id}", PaletteEntryKind.Command, title, category, detail, shortcut,
                 () =>
                 {
                     command.Execute(parameter);
@@ -88,6 +89,11 @@ public partial class MainWindowViewModel
             Add("toggle-sound", "View", SoundPreferences.SoundEnabled ? "Turn Sound Off" : "Turn Sound On",
                 ToggleSoundCommand);
         Add("reset-write-layout", "View", "Reset Write Layout", ResetWriteLayoutCommand);
+
+        // Insert: the Insert menu's Markua snippets, while an editor's source is on screen.
+        foreach (var snippet in MarkuaSnippets.All)
+            Add($"insert-{snippet.Id}", "Insert", snippet.PaletteTitle, EditorViewModel.InsertSnippetCommand, snippet,
+                snippet.Shortcut?.Display, snippet.Syntax);
 
         if (WorkspaceViewModel.FocusedStory != null)
             Add("show-whole-collection", "View", $"Show the Whole {WorkspaceViewModel.Profile.CollectionNoun}",

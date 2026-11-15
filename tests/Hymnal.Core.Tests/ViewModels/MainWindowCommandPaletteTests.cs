@@ -1,5 +1,6 @@
 using System.Reactive.Threading.Tasks;
 using System.Threading.Tasks;
+using Hymnal.Core.Markua.Editing;
 using Hymnal.Core.Tests.Infrastructure;
 using static Hymnal.Core.Tests.Infrastructure.PlanTestHarness;
 
@@ -107,6 +108,79 @@ public sealed class MainWindowCommandPaletteTests
             });
         }
         finally { DeleteFolder(root); }
+    }
+
+    [Fact]
+    public async Task Insert_commands_are_listed_while_a_chapters_source_shows_and_apply_to_the_editor()
+    {
+        var root = CreateWorkspace(StoryJson, ("story.md", "# Story\n\nText.\n"));
+        try
+        {
+            await Ui(root, 1, async context =>
+            {
+                var window = context.CreateMainWindow(context.CreateHost());
+                var palette = window.CommandPalette;
+                var editor = context.Editor;
+                var surface = new FakeSurface();
+                using var _ = editor.AttachSurface(surface);
+
+                // Nothing open yet: nothing to insert into.
+                await Within(window.ShowCommandsCommand.Execute().ToTask());
+                Assert.DoesNotContain(palette.Results, r => r.Category == "Insert");
+                palette.Close();
+
+                context.Workspace.SelectedNode = context.Node("story.md");
+                await PumpUntilAsync(() => editor.ActiveNode != null && editor.CanInsertMarkua);
+
+                await Within(window.ShowCommandsCommand.Execute().ToTask());
+                var bold = palette.Results.Single(r => r.Title == "Bold");
+                Assert.Equal("Insert", bold.Category);
+                Assert.Equal("Ctrl+B", bold.Shortcut);
+                Assert.Equal("**text**", bold.Detail);
+                Assert.Contains(palette.Results, r => r.Title == "Callout: Warning (W>)");
+
+                surface.Text = editor.Text;
+                surface.Selection = new TextSpan(surface.Text.IndexOf("Text", StringComparison.Ordinal), 4);
+                palette.Query = ">bold";
+                Assert.Equal("Bold", palette.Selected?.Title);
+                await Within(palette.RunSelectedCommand.Execute().ToTask());
+                Assert.Equal("# Story\n\n**Text**.\n", surface.Text);
+
+                // Ctrl+B is bold while the editor has focus; the window's Ctrl+B (sidebar) stands down then.
+                Assert.True(await window.ToggleSidebarShortcutCommand.CanExecute.FirstAsyncTask());
+                editor.IsSourceFocused = true;
+                Assert.False(await window.ToggleSidebarShortcutCommand.CanExecute.FirstAsyncTask());
+                Assert.True(await window.ToggleSidebarCommand.CanExecute.FirstAsyncTask()); // menu and palette
+                editor.IsSourceFocused = false;
+
+                // Preview only hides the source, and Plan the editor: nothing to insert into.
+                await Within(editor.SetViewModeCommand.Execute(EditorViewMode.Preview).ToTask());
+                await Within(window.ShowCommandsCommand.Execute().ToTask());
+                Assert.DoesNotContain(palette.Results, r => r.Category == "Insert");
+                palette.Close();
+
+                await Within(editor.SetViewModeCommand.Execute(EditorViewMode.Split).ToTask());
+                Assert.True(editor.CanInsertMarkua);
+                await Within(window.SelectPlanCommand.Execute().ToTask());
+                Assert.False(editor.CanInsertMarkua);
+                Assert.False(editor.InsertSnippet(MarkuaSnippets.Get("bold")));
+            });
+        }
+        finally { DeleteFolder(root); }
+    }
+
+    /// <summary>Stands in for EditorView: holds text and a selection, and applies edits to them.</summary>
+    private sealed class FakeSurface : IEditorTextSurface
+    {
+        public bool IsReadyForEdits { get; set; } = true;
+        public string Text { get; set; } = "";
+        public TextSpan Selection { get; set; }
+
+        public void Apply(TextEdit edit)
+        {
+            Text = edit.ApplyTo(Text);
+            Selection = edit.Selection;
+        }
     }
 
     [Fact]

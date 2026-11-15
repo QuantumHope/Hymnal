@@ -233,6 +233,12 @@ public partial class MainWindowViewModel : ViewModelBase
 
     public ReactiveCommand<Unit, Unit> ToggleSidebarCommand { get; }
 
+    /// <summary>
+    /// The window's Ctrl+B: <see cref="ToggleSidebarCommand"/>, except while the editor has focus, where Ctrl+B is
+    /// bold (<see cref="EditorViewModel.TakesInsertShortcuts"/>) and the key passes on to it.
+    /// </summary>
+    public ReactiveCommand<Unit, Unit> ToggleSidebarShortcutCommand { get; }
+
     // ── Rail collapse (Write mode) ────────────────────────────────────────────
     // A rail collapses to its 48px icon strip without closing its panes, so expanding it (Ctrl+B / Ctrl+Alt+B, a
     // double-click on its splitter, dragging it back out, or an icon) brings back exactly what was open.
@@ -545,13 +551,16 @@ public partial class MainWindowViewModel : ViewModelBase
         Disposables.Add(_isBothLeftPanesOpen);
 
         // Ctrl+B / Ctrl+Alt+B: collapse a rail to its icon strip (its panes are kept), or expand it again.
-        ToggleSidebarCommand = ReactiveCommand.Create(() =>
+        void ToggleSidebar()
         {
             if (IsAnyLeftPaneOpen)
                 SetLeftRailCollapsed(true);
             else
                 ExpandLeftRail();
-        });
+        }
+        ToggleSidebarCommand = ReactiveCommand.Create(ToggleSidebar);
+        ToggleSidebarShortcutCommand = ReactiveCommand.Create(ToggleSidebar,
+            EditorViewModel.WhenAnyValue(x => x.TakesInsertShortcuts).Select(takes => !takes));
 
         SelectResearchCommand = ReactiveCommand.CreateFromTask(EnterResearchModeAsync);
         Disposables.Add(SelectResearchCommand.ThrownExceptions.Subscribe(ex =>
