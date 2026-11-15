@@ -226,12 +226,14 @@
                                                 Height="4"
                                                 Background="{Binding ColourIndex, Converter={x:Static conv:CollectionColourConverter.Instance}}" />
                                         <StackPanel DockPanel.Dock="Top" Margin="12,10,12,8" Spacing="2">
-                                            <Grid ColumnDefinitions="*,Auto">
+                                            <Grid ColumnDefinitions="*,Auto,Auto">
                                                 <TextBlock Classes="heading"
                                                            Text="{Binding Title}"
                                                            FontSize="15"
                                                            FontWeight="Bold"
                                                            TextTrimming="CharacterEllipsis"
+                                                           ToolTip.Tip="Double-click to rename"
+                                                           DoubleTapped="ColumnTitle_DoubleTapped"
                                                            Foreground="{DynamicResource Cora.Text}" />
                                                 <TextBlock Text="Unnamed collection"
                                                            IsVisible="{Binding !IsNamed}"
@@ -266,6 +268,21 @@
                                                         Foreground="{DynamicResource Cora.Accent.Store}"
                                                         ToolTip.Tip="Open this collection in Write"
                                                         Click="OpenCollection_Click" />
+                                                <Button Grid.Column="2"
+                                                        Classes="column-rename"
+                                                        Content="Rename"
+                                                        FontSize="11"
+                                                        Padding="8,1"
+                                                        Margin="6,0,0,0"
+                                                        MinHeight="0"
+                                                        Cursor="Hand"
+                                                        Background="Transparent"
+                                                        BorderBrush="{DynamicResource Cora.Border.Input}"
+                                                        BorderThickness="1"
+                                                        CornerRadius="8"
+                                                        Foreground="{DynamicResource Cora.Text.Secondary}"
+                                                        ToolTip.Tip="Rename this collection"
+                                                        Click="RenameCollection_Click" />
                                             </Grid>
                                             <StackPanel Orientation="Horizontal" Spacing="6">
                                                 <TextBlock Classes="planner-meta" Text="{Binding CountText}" />

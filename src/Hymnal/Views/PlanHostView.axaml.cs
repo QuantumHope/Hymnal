@@ -5,7 +5,7 @@ using Hymnal.ViewModels;
 
 namespace Hymnal.Views;
 
-/// <summary>Plan mode for story and anthology projects; all behaviour lives in <see cref="ViewModels.PlanHostViewModel"/>.</summary>
+/// <summary>Plan mode; all behaviour lives in <see cref="ViewModels.PlanHostViewModel"/>.</summary>
 public partial class PlanHostView : UserControl
 {
     public PlanHostView()
@@ -13,24 +13,31 @@ public partial class PlanHostView : UserControl
         InitializeComponent();
     }
 
-    // The switch's two buttons set the view rather than toggle it, so clicking the current one leaves it on.
+    // The switch's buttons set the view rather than toggle it, so clicking the current one leaves it on.
+    private void DetailsView_Click(object? sender, RoutedEventArgs e)
+    {
+        if (DataContext is PlanHostViewModel host)
+            host.ShowDetails();
+        KeepChecked(sender);
+    }
+
     private void PlannerView_Click(object? sender, RoutedEventArgs e)
     {
         if (DataContext is PlanHostViewModel host)
-        {
-            host.IsCardsView = false;
-            if (sender is ToggleButton button)
-                button.IsChecked = true;
-        }
+            host.ShowBoardTab();
+        KeepChecked(sender);
     }
 
     private void CardsView_Click(object? sender, RoutedEventArgs e)
     {
         if (DataContext is PlanHostViewModel host)
-        {
-            host.IsCardsView = true;
-            if (sender is ToggleButton button)
-                button.IsChecked = true;
-        }
+            host.ShowCardsTab();
+        KeepChecked(sender);
+    }
+
+    private static void KeepChecked(object? sender)
+    {
+        if (sender is ToggleButton button)
+            button.IsChecked = true;
     }
 }

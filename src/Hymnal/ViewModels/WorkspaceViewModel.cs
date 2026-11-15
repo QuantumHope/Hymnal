@@ -378,6 +378,14 @@ public class WorkspaceViewModel : ViewModelBase
     public ReactiveCommand<System.Reactive.Unit, System.Reactive.Unit> OpenWorkspaceCommand { get; }
     public ReactiveCommand<System.Reactive.Unit, System.Reactive.Unit> CloseWorkspaceCommand { get; }
     public ReactiveCommand<System.Reactive.Unit, System.Reactive.Unit> SelectBookCommand { get; }
+
+    private readonly Subject<System.Reactive.Unit> _collectionDetailsRequested = new();
+
+    /// <summary>The sidebar's collection row was clicked: the main window shows Plan's Details tab.</summary>
+    public IObservable<System.Reactive.Unit> CollectionDetailsRequested => _collectionDetailsRequested.AsObservable();
+
+    /// <summary>Asks for the open collection's details (Plan → Details).</summary>
+    public ReactiveCommand<System.Reactive.Unit, System.Reactive.Unit> ShowCollectionDetailsCommand { get; private set; } = null!;
     public ReactiveCommand<System.Reactive.Unit, System.Reactive.Unit> ToggleChaptersPaneCommand { get; }
     public ReactiveCommand<CreateChapterRequest, System.Reactive.Unit> CreateChapterCommand { get; }
     public ReactiveCommand<CreatePartRequest, System.Reactive.Unit> CreatePartCommand { get; }
@@ -482,6 +490,9 @@ public class WorkspaceViewModel : ViewModelBase
         OpenWorkspaceCommand = ReactiveCommand.CreateFromTask(OpenWorkspaceAsync);
         CloseWorkspaceCommand = ReactiveCommand.CreateFromTask(CloseWorkspaceAsync, this.WhenAnyValue(x => x.HasWorkspace));
         SelectBookCommand = ReactiveCommand.CreateFromTask(SelectBookAsync);
+        ShowCollectionDetailsCommand = ReactiveCommand.Create(
+            () => _collectionDetailsRequested.OnNext(System.Reactive.Unit.Default),
+            this.WhenAnyValue(x => x.HasWorkspace));
         FocusStoryCommand = ReactiveCommand.Create<ChapterViewModel>(FocusStory);
         ShowWholeCollectionCommand = ReactiveCommand.Create(ShowWholeCollection,
             this.WhenAnyValue(x => x.IsStoryFocused));

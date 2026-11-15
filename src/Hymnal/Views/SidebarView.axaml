@@ -110,9 +110,11 @@
                 </Grid>
             </Border>
 
-            <!-- Book root row (selectable — opens Book.txt in editor) -->
-            <Button DockPanel.Dock="Top"
-                    Command="{Binding SelectBookCommand}"
+            <!-- Collection root row: opens Plan's Details tab; its context menu opens Book.txt in the editor -->
+            <Button x:Name="CollectionRootRow"
+                    DockPanel.Dock="Top"
+                    Command="{Binding ShowCollectionDetailsCommand}"
+                    ToolTip.Tip="Details: title, progress and contents (right-click for Book.txt)"
                     Background="Transparent"
                     BorderThickness="0"
                     Padding="8,6"
@@ -121,6 +123,14 @@
                     HorizontalContentAlignment="Stretch"
                     VerticalContentAlignment="Center"
                     Cursor="Hand">
+                <Button.ContextMenu>
+                    <ContextMenu>
+                        <MenuItem Header="Details"
+                                  Command="{Binding ShowCollectionDetailsCommand}" />
+                        <MenuItem Header="Open Book.txt"
+                                  Command="{Binding SelectBookCommand}" />
+                    </ContextMenu>
+                </Button.ContextMenu>
                 <Button.Styles>
                     <Style Selector="Button:pointerover /template/ ContentPresenter">
                         <Setter Property="Background" Value="{DynamicResource Cora.Wash.Selected}" />

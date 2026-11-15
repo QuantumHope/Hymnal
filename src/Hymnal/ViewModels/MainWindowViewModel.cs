@@ -165,9 +165,14 @@ public partial class MainWindowViewModel : ViewModelBase
         }
     }
 
-    /// <summary>Plan mode content: the beat-board host for story and anthology projects, else the Corkboard.</summary>
+    /// <summary>
+    /// Plan mode content: the host (its Details tab beside the beat board, planner or Corkboard) for every
+    /// project kind when it has Details; without them, the host for story and anthology projects, else the Corkboard.
+    /// </summary>
     private object PlanContent =>
-        PlanHostViewModel != null && WorkspaceViewModel.Profile.UsesBeatBoard ? PlanHostViewModel : CorkboardViewModel;
+        PlanHostViewModel != null && (PlanHostViewModel.Details != null || WorkspaceViewModel.Profile.UsesBeatBoard)
+            ? PlanHostViewModel
+            : CorkboardViewModel;
 
     /// <summary>View-model for the active non-Write centre panel (lazy-loaded via ViewLocator).</summary>
     public object? SecondaryCentreContent => ActiveMode switch
@@ -487,8 +492,10 @@ public partial class MainWindowViewModel : ViewModelBase
         Hymnal.Audio.SoundPreferences? soundPreferences = null,
         WriteBeatsViewModel? writeBeatsViewModel = null,
         CollectionsViewModel? collectionsViewModel = null,
-        SubmissionExportViewModel? submissionExportViewModel = null)
+        SubmissionExportViewModel? submissionExportViewModel = null,
+        Hymnal.Theming.IThemeService? themes = null)
     {
+        _themes = themes;
         CollectionsViewModel = collectionsViewModel;
         SubmissionExportViewModel = submissionExportViewModel;
         _settingsStore = settingsStore;
@@ -781,6 +788,10 @@ public partial class MainWindowViewModel : ViewModelBase
         var openChapter = planHostViewModel?.Planner is { } planner
             ? CorkboardViewModel.OpenChapterRequested.Merge(planner.OpenChapterRequested)
             : CorkboardViewModel.OpenChapterRequested;
+        // Plan's Details tab opens a file in Write too; the sidebar's collection row opens Details.
+        if (planHostViewModel?.Details is { } details)
+            openChapter = openChapter.Merge(details.OpenRequested);
+        Disposables.Add(workspaceViewModel.CollectionDetailsRequested.Subscribe(_ => ShowCollectionDetails()));
         Disposables.Add(
             openChapter
                 .Subscribe(chapter =>

@@ -5,6 +5,7 @@ using System.Threading.Tasks;
 using System.Windows.Input;
 using Hymnal.Core.Markua.Editing;
 using Hymnal.Core.Models;
+using Hymnal.Theming;
 using ReactiveUI;
 
 namespace Hymnal.ViewModels;
@@ -21,6 +22,28 @@ public partial class MainWindowViewModel
 
     /// <summary>Ctrl+Shift+P: run a command.</summary>
     public ReactiveCommand<Unit, Unit> ShowCommandsCommand { get; }
+
+    private readonly IThemeService? _themes;
+
+    /// <summary>Plan → Details: the open collection at a glance (the sidebar's collection row, the palette).</summary>
+    public void ShowCollectionDetails()
+    {
+        if (!WorkspaceViewModel.HasWorkspace)
+            return;
+        LeaveSettings();
+        ActiveMode = ShellMode.Plan;
+        PlanHostViewModel?.ShowDetails();
+    }
+
+    /// <summary>Opens Book.txt, the raw list, in Write.</summary>
+    public void OpenBookTxt()
+    {
+        if (!WorkspaceViewModel.HasWorkspace)
+            return;
+        LeaveSettings();
+        ActiveMode = ShellMode.Write;
+        WorkspaceViewModel.SelectBookCommand.Execute().Subscribe(_ => { }, _ => { });
+    }
 
     private IReadOnlyList<PaletteEntry> BuildPaletteEntries()
     {
@@ -102,13 +125,74 @@ public partial class MainWindowViewModel
         if (IsIdeasModeAvailable)
             Add("capture-idea", "Ideas", "Capture an Idea…", QuickCaptureIdeaCommand, shortcut: "Ctrl+Shift+I");
 
+        if (hasWorkspace && PlanHostViewModel?.Details != null)
+            entries.Add(Run("collection-details", "Plan",
+                $"{WorkspaceViewModel.Profile.CollectionNoun} Details", ShowCollectionDetails));
+        if (hasWorkspace)
+            entries.Add(Run("open-book-txt", "File", "Open Book.txt", OpenBookTxt));
+
         Add("about", "Help", "About Hymnal", ShowAboutCommand, shortcut: "F1");
+
+        // Themes last: there are many, and the query ("theme", "mordor", "dark") finds them.
+        if (_themes != null)
+        {
+            var current = _themes.Current.Id;
+            foreach (var theme in _themes.Available)
+            {
+                var id = theme.Id;
+                entries.Add(new PaletteEntry($"command:theme:{id}", PaletteEntryKind.Command,
+                    $"Theme: {theme.DisplayName}", "Theme",
+                    id == current ? $"Current theme · {theme.Description}" : theme.Description, null,
+                    () => _themes.SelectAsync(id)));
+            }
+        }
     }
+
+    private static PaletteEntry Run(string id, string category, string title, Action action) =>
+        new($"command:{id}", PaletteEntryKind.Command, title, category, null, null,
+            () =>
+            {
+                action();
+                return Task.CompletedTask;
+            });
 
     private void AddDestinationEntries(List<PaletteEntry> entries)
     {
         if (!WorkspaceViewModel.HasWorkspace)
             return;
+
+        // Collections: the open one shows its details; another is opened first, then shown.
+        var collectionNoun = WorkspaceViewModel.Profile.CollectionNoun;
+        var collections = CollectionsViewModel;
+        if (collections is { Collections.Count: > 0 })
+        {
+            foreach (var collection in collections.Collections)
+            {
+                var slug = collection.Slug;
+                var isOpen = collection.IsActive;
+                entries.Add(new PaletteEntry($"collection:{slug}", PaletteEntryKind.Destination,
+                    collection.Title, collectionNoun,
+                    isOpen ? $"Open now · {collection.EntryCount} entries" : $"{collection.EntryCount} entries",
+                    null,
+                    async () =>
+                    {
+                        if (!isOpen && !await collections.OpenAsync(slug))
+                            return;
+                        ShowCollectionDetails();
+                    }));
+            }
+        }
+        else
+        {
+            // One unnamed (or never listed) collection: it is still a place to go.
+            entries.Add(new PaletteEntry("collection:open", PaletteEntryKind.Destination,
+                WorkspaceViewModel.CollectionDisplayName, collectionNoun, "Open now", null,
+                () =>
+                {
+                    ShowCollectionDetails();
+                    return Task.CompletedTask;
+                }));
+        }
 
         // The sidebar's own list, so story focus narrows the palette as it narrows the sidebar. Dividers
         // (parts, sections, multi-scene stories) can't be opened; the files inside them name them instead.
