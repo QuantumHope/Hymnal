@@ -101,6 +101,9 @@ public class EditorViewModel : ViewModelBase, IDisposable, IOpenStoryBuffer
         private set => this.RaiseAndSetIfChanged(ref _activeFilePath, value);
     }
 
+    /// <summary>Spell check for the buffer (View → Spelling).</summary>
+    public EditorSpellingViewModel Spelling { get; }
+
     // ── Buffer content ──────────────────────────────────────────────────────
 
     private string _text = "";
@@ -295,7 +298,8 @@ public class EditorViewModel : ViewModelBase, IDisposable, IOpenStoryBuffer
     /// <param name="storyFileWriter">Saves chapter files with their metadata block. Must be the app's shared
     /// writer (its per-file locks only work when shared); the composition root attaches this editor to it.</param>
     public EditorViewModel(IMetadataStore metadataStore, INotificationService notificationService,
-        WordCountService wordCountService, StoryFileWriter storyFileWriter)
+        WordCountService wordCountService, StoryFileWriter storyFileWriter,
+        Hymnal.Spelling.SpellingService? spelling = null)
     {
         _metadataStore = metadataStore;
         _notificationService = notificationService;
@@ -430,6 +434,10 @@ public class EditorViewModel : ViewModelBase, IDisposable, IOpenStoryBuffer
             .Select(path => path is null ? null : Path.GetDirectoryName(path))
             .ToProperty(this, x => x.PreviewBaseDirectory);
         Disposables.Add(_previewBaseDirectory);
+
+        // Spell check (off until asked for); built after the properties it follows.
+        Spelling = new EditorSpellingViewModel(this, spelling, notificationService);
+        Disposables.Add(Spelling);
 
         var editorSurfaceVisible = this.WhenAnyValue(x => x.IsEditorSurfaceVisible);
         SetViewModeCommand = ReactiveCommand.Create<EditorViewMode>(mode =>

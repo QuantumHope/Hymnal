@@ -37,6 +37,8 @@ public partial class EditorView : UserControl
     private MarkuaColorizingTransformer? _markuaColorizer;
     private ValidationMargin? _validationMargin;
     private TypingSoundHook? _typingSoundHook;
+    private SpellingHook? _spellingHook;
+    private IDisposable? _spellingVisibilitySub;
     private bool _isAttached;
 
     public static readonly StyledProperty<bool> HasWorkspaceProperty =
@@ -127,7 +129,10 @@ public partial class EditorView : UserControl
             UpdateTypingSoundHook();
 
         if (change.Property == IsDistractionFreeProperty)
+        {
             ApplyDistractionFree(change.GetNewValue<bool>());
+            UpdateSpellingMarksVisible();
+        }
 
         if (change.Property == HeaderContentProperty)
         {
@@ -207,11 +212,13 @@ public partial class EditorView : UserControl
 
         _isAttached = true;
         UpdateTypingSoundHook();
+        UpdateSpellingHook();
         _viewDisposables.Add(Disposable.Create(() =>
         {
             _isAttached = false;
             _typingSoundHook?.Dispose();
             _typingSoundHook = null;
+            DisposeSpellingHook();
         }));
 
         // VM → Editor: initial sync + react to DataContext changes.
@@ -266,6 +273,46 @@ public partial class EditorView : UserControl
         _vmTextSub?.Dispose();
         _vmTextSub = null;
         SubscribeToVmText();
+        UpdateSpellingHook();
+    }
+
+    // ── Spell check ──────────────────────────────────────────────────────────
+
+    /// <summary>Connects the editor to its view model's spell check (marks, fixes, F8 navigation).</summary>
+    private void UpdateSpellingHook()
+    {
+        DisposeSpellingHook();
+        if (!_isAttached || DataContext is not EditorViewModel { Spelling: { IsAvailable: true } spelling } vm)
+            return;
+
+        _spellingHook = new SpellingHook(PART_Editor, spelling, () => vm.Text, SpellingMarkBrush());
+        _spellingVisibilitySub = spelling.Service!.Preferences.WhenAnyValue(p => p.HideInFocusMode)
+            .Subscribe(_ => UpdateSpellingMarksVisible());
+    }
+
+    private void DisposeSpellingHook()
+    {
+        _spellingVisibilitySub?.Dispose();
+        _spellingVisibilitySub = null;
+        _spellingHook?.Dispose();
+        _spellingHook = null;
+    }
+
+    /// <summary>Focus Mode hides the marks unless the writer chose to keep them (Settings → Spelling).</summary>
+    private void UpdateSpellingMarksVisible()
+    {
+        if (_spellingHook is null || DataContext is not EditorViewModel vm)
+            return;
+        var hideInFocus = vm.Spelling.Service?.Preferences.HideInFocusMode ?? true;
+        _spellingHook.MarksVisible = !(IsDistractionFree && hideInFocus);
+    }
+
+    private static IBrush SpellingMarkBrush()
+    {
+        var theme = Application.Current?.ActualThemeVariant ?? ThemeVariant.Dark;
+        return TryGetResource("Cora.Accent.Error", theme, out var brush) && brush is IBrush b
+            ? b
+            : new SolidColorBrush(Color.Parse("#E5484D"));
     }
 
     // ── Write / Split / Preview layout ───────────────────────────────────────
@@ -362,6 +409,7 @@ public partial class EditorView : UserControl
     private void RefreshEditorTheme()
     {
         ApplyEditorTheme();
+        _spellingHook?.SetMarkBrush(SpellingMarkBrush());
         PART_Editor.TextArea.TextView.Redraw();
     }
 

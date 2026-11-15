@@ -1,6 +1,8 @@
 <UserControl xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:vm="using:Hymnal.ViewModels"
+             xmlns:spelling="using:Hymnal.Core.Spelling"
+             xmlns:sys="using:System"
              xmlns:aivm="using:Hymnal.ViewModels.Ai"
              xmlns:conv="using:Hymnal.Views.Converters"
              xmlns:controls="using:Hymnal.Views.Controls"
@@ -101,6 +103,13 @@
                              IsChecked="{Binding IsSoundSection, Mode=OneWay}"
                              Command="{Binding ShowSectionCommand}"
                              CommandParameter="{x:Static vm:SettingsSection.Sound}" />
+                <RadioButton x:Name="PART_SpellingNav"
+                             Classes="settingsNav" GroupName="settingsSection"
+                             Content="Spelling"
+                             IsVisible="{Binding HasSpelling}"
+                             IsChecked="{Binding IsSpellingSection, Mode=OneWay}"
+                             Command="{Binding ShowSectionCommand}"
+                             CommandParameter="{x:Static vm:SettingsSection.Spelling}" />
                 <RadioButton Classes="settingsNav" GroupName="settingsSection"
                              Content="AI Providers"
                              IsChecked="{Binding IsAiProvidersSection, Mode=OneWay}"
@@ -359,6 +368,165 @@
                                FontSize="12"
                                TextWrapping="Wrap"
                                Foreground="{DynamicResource Cora.Text.Secondary}" />
+                </StackPanel>
+
+                <!-- Spelling: when to check, which dictionary, and the project dictionary -->
+                <StackPanel x:Name="PART_SpellingSection" Spacing="14" IsVisible="{Binding IsSpellingSection}">
+                    <StackPanel Spacing="2">
+                        <TextBlock Classes="heading"
+                                   Text="Spelling"
+                                   FontSize="18"
+                                   FontWeight="SemiBold"
+                                   Foreground="{DynamicResource Cora.Text}" />
+                        <TextBlock Text="Spell check stays out of the way until you want it. Run a check with View &#x2192; Spelling &#x2192; Check Spelling (Shift+F7), step through issues with F8, and right-click a marked word to fix it."
+                                   FontSize="12"
+                                   TextWrapping="Wrap"
+                                   Foreground="{DynamicResource Cora.Text.Secondary}" />
+                    </StackPanel>
+
+                    <StackPanel Spacing="4">
+                        <CheckBox x:Name="PART_CheckAsYouTypeCheckBox"
+                                  Content="Check spelling as you type"
+                                  IsChecked="{Binding Spelling.Preferences.CheckAsYouType}"
+                                  Foreground="{DynamicResource Cora.Text}" />
+                        <TextBlock Text="Marks misspellings in every file while you write. The word you are still typing is left alone until you move on."
+                                   FontSize="12"
+                                   TextWrapping="Wrap"
+                                   Margin="28,0,0,0"
+                                   Foreground="{DynamicResource Cora.Text.Secondary}" />
+                    </StackPanel>
+                    <StackPanel Spacing="4">
+                        <CheckBox x:Name="PART_HideInFocusCheckBox"
+                                  Content="Hide spelling marks in Focus Mode"
+                                  IsChecked="{Binding Spelling.Preferences.HideInFocusMode}"
+                                  Foreground="{DynamicResource Cora.Text}" />
+                        <TextBlock Text="Keeps a drafting session free of red lines; they come back when you leave Focus Mode."
+                                   FontSize="12"
+                                   TextWrapping="Wrap"
+                                   Margin="28,0,0,0"
+                                   Foreground="{DynamicResource Cora.Text.Secondary}" />
+                    </StackPanel>
+
+                    <Grid ColumnDefinitions="110,Auto" HorizontalAlignment="Left" IsVisible="{Binding Spelling.HasLanguages}">
+                        <TextBlock Text="Dictionary"
+                                   VerticalAlignment="Center"
+                                   Foreground="{DynamicResource Cora.Text}" />
+                        <ComboBox x:Name="PART_SpellingLanguageComboBox"
+                                  Grid.Column="1"
+                                  MinWidth="300"
+                                  ItemsSource="{Binding Spelling.Languages}"
+                                  SelectedItem="{Binding Spelling.SelectedLanguage}">
+                            <ComboBox.ItemTemplate>
+                                <DataTemplate x:DataType="spelling:DictionaryInfo">
+                                    <TextBlock Text="{Binding DisplayName}" />
+                                </DataTemplate>
+                            </ComboBox.ItemTemplate>
+                        </ComboBox>
+                    </Grid>
+                    <TextBlock Text="{Binding Spelling.NoDictionaryMessage}"
+                               IsVisible="{Binding !Spelling.HasLanguages}"
+                               FontSize="12"
+                               TextWrapping="Wrap"
+                               Foreground="{DynamicResource Cora.Accent.Error}" />
+                    <TextBlock Text="{Binding Spelling.StatusMessage}"
+                               IsVisible="{Binding Spelling.StatusMessage, Converter={x:Static ObjectConverters.IsNotNull}}"
+                               FontSize="12"
+                               TextWrapping="Wrap"
+                               Foreground="{DynamicResource Cora.Accent.Error}" />
+                    <SelectableTextBlock Text="{Binding Spelling.UserDictionaryFolder, StringFormat='Other languages: add a Hunspell .dic and .aff pair to {0}'}"
+                                         IsVisible="{Binding Spelling.UserDictionaryFolder, Converter={x:Static ObjectConverters.IsNotNull}}"
+                                         FontSize="11.5"
+                                         TextWrapping="Wrap"
+                                         Foreground="{DynamicResource Cora.Text.Secondary}" />
+
+                    <Border Height="1" Background="{DynamicResource Cora.Border.Subtle}" Margin="0,4" />
+
+                    <StackPanel Spacing="8">
+                        <Grid ColumnDefinitions="*,Auto">
+                            <StackPanel Spacing="2">
+                                <TextBlock Text="Project dictionary"
+                                           FontSize="15"
+                                           FontWeight="SemiBold"
+                                           Foreground="{DynamicResource Cora.Text}" />
+                                <TextBlock Text="Names and invented words this manuscript accepts, kept in .hymnal-data/dictionary.txt so they travel with it. A word in lower case matches any capitalization; a capitalized name does not match in lower case."
+                                           FontSize="12"
+                                           TextWrapping="Wrap"
+                                           Foreground="{DynamicResource Cora.Text.Secondary}" />
+                            </StackPanel>
+                            <Button Grid.Column="1"
+                                    Content="Reload"
+                                    VerticalAlignment="Top"
+                                    Padding="10,4"
+                                    FontSize="12"
+                                    IsVisible="{Binding Spelling.HasWorkspace}"
+                                    Command="{Binding Spelling.ReloadProjectWordsCommand}"
+                                    ToolTip.Tip="Re-read dictionary.txt after editing it by hand or pulling" />
+                        </Grid>
+
+                        <TextBlock Text="Open a workspace to keep a project dictionary."
+                                   IsVisible="{Binding !Spelling.HasWorkspace}"
+                                   FontSize="12"
+                                   Foreground="{DynamicResource Cora.Text.Secondary}" />
+
+                        <StackPanel Orientation="Horizontal" Spacing="8" IsVisible="{Binding Spelling.HasWorkspace}">
+                            <TextBox x:Name="PART_NewWordBox"
+                                     Width="240"
+                                     Watermark="Add a word"
+                                     Text="{Binding Spelling.NewWord}">
+                                <TextBox.KeyBindings>
+                                    <KeyBinding Gesture="Enter" Command="{Binding Spelling.AddWordCommand}" />
+                                </TextBox.KeyBindings>
+                            </TextBox>
+                            <Button x:Name="PART_AddWordButton"
+                                    Content="Add"
+                                    Padding="12,5"
+                                    Command="{Binding Spelling.AddWordCommand}" />
+                        </StackPanel>
+                        <TextBlock Text="{Binding Spelling.WordError}"
+                                   IsVisible="{Binding Spelling.WordError, Converter={x:Static ObjectConverters.IsNotNull}}"
+                                   FontSize="12"
+                                   Foreground="{DynamicResource Cora.Accent.Error}" />
+
+                        <ItemsControl x:Name="PART_ProjectWordsList"
+                                      IsVisible="{Binding Spelling.HasProjectWords}"
+                                      ItemsSource="{Binding Spelling.ProjectWords}">
+                            <ItemsControl.ItemsPanel>
+                                <ItemsPanelTemplate>
+                                    <WrapPanel Orientation="Horizontal" />
+                                </ItemsPanelTemplate>
+                            </ItemsControl.ItemsPanel>
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate x:DataType="sys:String">
+                                    <Border Background="{DynamicResource Cora.Wash.Selected}"
+                                            CornerRadius="4"
+                                            Padding="8,2,2,2"
+                                            Margin="0,0,6,6">
+                                        <StackPanel Orientation="Horizontal" Spacing="2">
+                                            <TextBlock Text="{Binding}"
+                                                       VerticalAlignment="Center"
+                                                       FontSize="12.5"
+                                                       Foreground="{DynamicResource Cora.Text}" />
+                                            <Button Content="&#x00D7;"
+                                                    Background="Transparent"
+                                                    BorderThickness="0"
+                                                    Padding="5,0,5,1"
+                                                    MinHeight="0"
+                                                    FontSize="13"
+                                                    Foreground="{DynamicResource Cora.Text.Secondary}"
+                                                    ToolTip.Tip="Remove from the project dictionary"
+                                                    Command="{Binding $parent[ItemsControl].((vm:SettingsViewModel)DataContext).Spelling.RemoveWordCommand}"
+                                                    CommandParameter="{Binding}" />
+                                        </StackPanel>
+                                    </Border>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+                        <TextBlock x:Name="PART_NoProjectWords"
+                                   Text="No words yet. Right-click a marked word and choose Add to Project Dictionary, or add one here."
+                                   IsVisible="{Binding Spelling.ShowNoProjectWords}"
+                                   FontSize="12"
+                                   Foreground="{DynamicResource Cora.Text.Disabled}" />
+                    </StackPanel>
                 </StackPanel>
 
                 <!-- AI Providers section -->

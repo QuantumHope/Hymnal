@@ -7,6 +7,7 @@ using System.Reactive;
 using System.Reactive.Linq;
 using System.Threading.Tasks;
 using Hymnal.Audio;
+using Hymnal.Spelling;
 using Hymnal.Core.Common;
 using Hymnal.Core.Interfaces;
 using Hymnal.Core.Models;
@@ -70,6 +71,12 @@ public class SettingsViewModel : ViewModelBase
 
     /// <summary>True when the Sound section applies.</summary>
     public bool HasSound => Sound is not null;
+
+    /// <summary>The Spelling section; null when the host has no spell checker (the section is hidden).</summary>
+    public SpellingSettingsViewModel? Spelling { get; }
+
+    /// <summary>True when the Spelling section applies.</summary>
+    public bool HasSpelling => Spelling is not null;
 
     public ObservableCollection<ProviderProfileViewModel> Profiles { get; } = new();
 
@@ -142,6 +149,7 @@ public class SettingsViewModel : ViewModelBase
             this.RaisePropertyChanged(nameof(IsProjectSection));
             this.RaisePropertyChanged(nameof(IsAiProvidersSection));
             this.RaisePropertyChanged(nameof(IsSoundSection));
+            this.RaisePropertyChanged(nameof(IsSpellingSection));
         }
     }
 
@@ -149,6 +157,7 @@ public class SettingsViewModel : ViewModelBase
     public bool IsProjectSection => Section == SettingsSection.Project;
     public bool IsAiProvidersSection => Section == SettingsSection.AiProviders;
     public bool IsSoundSection => Section == SettingsSection.Sound;
+    public bool IsSpellingSection => Section == SettingsSection.Spelling;
 
     /// <summary>Shows one section (the nav items' command; the parameter is the section).</summary>
     public ReactiveCommand<SettingsSection, Unit> ShowSectionCommand { get; }
@@ -208,7 +217,8 @@ public class SettingsViewModel : ViewModelBase
         Func<Task<bool>>? flushStoryEdits = null,
         SoundPreferences? sound = null,
         TypingSoundPlayer? typingSounds = null,
-        IThemeService? themes = null)
+        IThemeService? themes = null,
+        SpellingService? spelling = null)
     {
         _themes = themes;
         ThemeSections = BuildThemeSections(themes);
@@ -233,6 +243,12 @@ public class SettingsViewModel : ViewModelBase
         {
             Sound = new SoundSettingsViewModel(sound, typingSounds);
             Disposables.Add(Sound);
+        }
+
+        if (spelling is not null)
+        {
+            Spelling = new SpellingSettingsViewModel(spelling);
+            Disposables.Add(Spelling);
         }
 
         AddProfileCommand = ReactiveCommand.CreateFromTask(AddProfileAsync);
@@ -652,5 +668,6 @@ public enum SettingsSection
     Appearance,
     Project,
     Sound,
+    Spelling,
     AiProviders,
 }

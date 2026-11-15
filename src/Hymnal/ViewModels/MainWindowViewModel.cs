@@ -93,6 +93,9 @@ public class MainWindowViewModel : ViewModelBase
     }
 
     public ReactiveCommand<Unit, Unit> OpenSettingsCommand { get; }
+
+    /// <summary>View → Spelling → Spelling Settings: Settings, opened at the Spelling section.</summary>
+    public ReactiveCommand<Unit, Unit> OpenSpellingSettingsCommand { get; }
     public ReactiveCommand<Unit, Unit> CloseSettingsCommand { get; }
     public ReactiveCommand<Unit, Unit> ToggleAiChatCommand { get; }
 
@@ -517,6 +520,15 @@ public class MainWindowViewModel : ViewModelBase
             ActiveSettingsViewModel = _settingsVmFactory();
             IsSettingsOpen = true;
         });
+        OpenSpellingSettingsCommand = ReactiveCommand.Create(() =>
+        {
+            ActiveSettingsViewModel = _settingsVmFactory();
+            if (ActiveSettingsViewModel.HasSpelling)
+                ActiveSettingsViewModel.Section = SettingsSection.Spelling;
+            IsSettingsOpen = true;
+        });
+        Disposables.Add(OpenSpellingSettingsCommand.ThrownExceptions
+            .Subscribe(ex => notificationService.ShowError($"Failed to open settings: {ex.Message}")));
         CloseSettingsCommand = ReactiveCommand.Create(LeaveSettings);
         ToggleAiChatCommand = ReactiveCommand.Create(() =>
         {

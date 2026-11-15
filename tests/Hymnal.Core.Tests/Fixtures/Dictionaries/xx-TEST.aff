@@ -1,0 +1,9 @@
+SET UTF-8
+TRY esianrtolcdugmphbyfvkwzESIANRTOLCDUGMPHBYFVKWZ'
+
+# A tiny hand-written dictionary for tests: plural -s and possessive 's.
+SFX S Y 1
+SFX S 0 s .
+
+SFX P Y 1
+SFX P 0 's .
