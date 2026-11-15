@@ -16,6 +16,7 @@ public class FuzzyMatcherTests
     [InlineData("fm", "Focus Mode")]
     [InlineData("tls", "Toggle Left Sidebar")]
     [InlineData("sidebar left", "Toggle Left Sidebar")]
+    [InlineData("fst", "First Song")] // the word-start S strands the t; the nearest s doesn't
     public void Characters_in_order_match_ignoring_case_and_word_order(string query, string label) =>
         Assert.NotNull(FuzzyMatcher.Score(query, label));
 

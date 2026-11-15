@@ -204,7 +204,8 @@ public partial class MainWindowViewModel
                 partTitle = node.Node.Title;
                 continue;
             }
-            if (node.Node.Kind != NodeKind.Chapter || node.Node.IsMissing)
+            // Missing and excluded files can't be opened (TrySwitchChapterAsync refuses excluded ones).
+            if (node.Node.Kind != NodeKind.Chapter || node.Node.IsMissing || node.Node.IsExcluded)
                 continue;
 
             var noun = WorkspaceViewModel.NounFor(node);

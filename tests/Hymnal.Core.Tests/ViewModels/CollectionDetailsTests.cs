@@ -38,6 +38,27 @@ public sealed class CollectionDetailsTests
     // ── Contents ──────────────────────────────────────────────────────────────
 
     [Fact]
+    public async Task Status_counts_use_the_status_each_row_shows()
+    {
+        var root = CreateWorkspace(AnthologyJson, AnthologyFiles);
+        try
+        {
+            await Ui(root, 4, context =>
+            {
+                // Polishing is a novel status; an anthology shows it as Revising and must count it there.
+                context.Node("lighthouse.md").ApplyPhaseData(new PhaseData { Status = ChapterStatus.Polishing });
+                var details = context.CreateDetails();
+                details.Rebuild();
+
+                Assert.Equal(["Idea 1", "Revising 1"], details.StatusCounts.Select(c => c.Text).Order());
+                Assert.Equal(2, details.StatusCounts.Sum(c => c.Count));
+                return Task.CompletedTask;
+            });
+        }
+        finally { DeleteFolder(root); }
+    }
+
+    [Fact]
     public async Task An_anthology_lists_its_stories_in_order_with_their_scenes()
     {
         var root = CreateWorkspace(AnthologyJson, AnthologyFiles);

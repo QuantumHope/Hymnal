@@ -1,3 +1,5 @@
+using System.Collections.Generic;
+
 namespace Hymnal.Core.Search;
 
 /// <summary>
@@ -76,19 +78,33 @@ public static class FuzzyMatcher
         return best;
     }
 
-    private static int? ScoreFrom(string word, string label, int start)
+    private static int? ScoreFrom(string word, string label, int start) =>
+        ScoreRest(word, label, 0, previous: -1, new Dictionary<(int, int), int?>(), firstAt: start);
+
+    /// <summary>
+    /// Best score for <paramref name="word"/> from character <paramref name="wi"/> on, after a match at
+    /// <paramref name="previous"/>. Each character tries the next word start holding it (so initials, "tls" →
+    /// Toggle Left Sidebar, score as such) and the nearest match, keeping the better path that completes: a word
+    /// start that strands the rest ("fst" → the S of "First Song") falls back to the nearest one.
+    /// </summary>
+    private static int? ScoreRest(string word, string label, int wi, int previous,
+        Dictionary<(int, int), int?> memo, int firstAt = -1)
     {
-        var score = 0;
-        var previous = -1;
-        var li = start;
-        foreach (var qc in word)
+        if (wi == word.Length)
+            return 0;
+        if (firstAt < 0 && memo.TryGetValue((wi, previous), out var cached))
+            return cached;
+
+        int nearest, preferred;
+        if (firstAt >= 0)
         {
-            var target = char.ToLowerInvariant(qc);
-            var found = -1;
-            // Prefer the next word start holding this character over the nearest plain match, so
-            // initials ("tls" → Toggle Left Sidebar) score as such.
-            var nearest = -1;
-            for (var i = li; i < label.Length; i++)
+            nearest = preferred = firstAt;
+        }
+        else
+        {
+            var target = char.ToLowerInvariant(word[wi]);
+            nearest = preferred = -1;
+            for (var i = previous + 1; i < label.Length; i++)
             {
                 if (char.ToLowerInvariant(label[i]) != target)
                     continue;
@@ -96,28 +112,40 @@ public static class FuzzyMatcher
                     nearest = i;
                 if (i == previous + 1 || IsWordStart(label, i))
                 {
-                    found = i;
+                    preferred = i;
                     break;
                 }
             }
-            if (found < 0)
-                found = nearest;
-            if (found < 0)
-                return null;
-
-            score += MatchScore;
-            if (found == 0)
-                score += LabelStartBonus;
-            else if (IsWordStart(label, found))
-                score += WordStartBonus;
-            if (previous >= 0 && found == previous + 1)
-                score += ConsecutiveBonus;
-            else if (previous >= 0)
-                score -= Math.Min(found - previous - 1, 5) * GapPenalty;
-
-            previous = found;
-            li = found + 1;
         }
+
+        int? best = null;
+        foreach (var found in preferred == nearest ? [nearest] : new[] { preferred, nearest })
+        {
+            if (found < 0)
+                continue;
+            if (ScoreRest(word, label, wi + 1, found, memo) is not { } rest)
+                continue;
+            var score = rest + PointsFor(label, found, previous);
+            if (best == null || score > best)
+                best = score;
+        }
+
+        if (firstAt < 0)
+            memo[(wi, previous)] = best;
+        return best;
+    }
+
+    private static int PointsFor(string label, int found, int previous)
+    {
+        var score = MatchScore;
+        if (found == 0)
+            score += LabelStartBonus;
+        else if (IsWordStart(label, found))
+            score += WordStartBonus;
+        if (previous >= 0 && found == previous + 1)
+            score += ConsecutiveBonus;
+        else if (previous >= 0)
+            score -= Math.Min(found - previous - 1, 5) * GapPenalty;
         return score;
     }
 

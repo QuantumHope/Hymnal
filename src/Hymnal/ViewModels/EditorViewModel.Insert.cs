@@ -18,7 +18,7 @@ public partial class EditorViewModel
 
     /// <summary>
     /// True when an Insert command can run: a chapter or doc (not Book.txt) is open, its source is showing (not
-    /// Preview only), and Write or Research is on screen.
+    /// Preview only), Write or Research is on screen, and nothing (Settings) covers it.
     /// </summary>
     public bool CanInsertMarkua => _canInsertMarkua.Value;
 
@@ -28,6 +28,14 @@ public partial class EditorViewModel
     {
         get => _isSourceFocused;
         set => this.RaiseAndSetIfChanged(ref _isSourceFocused, value);
+    }
+
+    private bool _isSourceCovered;
+    /// <summary>True while something covers the editor without hiding it (the Settings overlay).</summary>
+    public bool IsSourceCovered
+    {
+        get => _isSourceCovered;
+        set => this.RaiseAndSetIfChanged(ref _isSourceCovered, value);
     }
 
     private ObservableAsPropertyHelper<bool> _takesInsertShortcuts = null!;
@@ -44,7 +52,8 @@ public partial class EditorViewModel
     private void InitializeInsertCommands()
     {
         _canInsertMarkua = this.WhenAnyValue(x => x.IsPreviewAvailable, x => x.ShowSourcePane,
-                x => x.IsEditorSurfaceVisible, (previewable, source, surface) => previewable && source && surface)
+                x => x.IsEditorSurfaceVisible, x => x.IsSourceCovered,
+                (previewable, source, surface, covered) => previewable && source && surface && !covered)
             .ToProperty(this, x => x.CanInsertMarkua);
         Disposables.Add(_canInsertMarkua);
 

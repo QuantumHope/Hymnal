@@ -66,6 +66,8 @@ public partial class MainWindowViewModel : ViewModelBase
         {
             this.RaiseAndSetIfChanged(ref _isSettingsOpen, value);
             this.RaisePropertyChanged(nameof(HighlightedMode));
+            // Settings overlays the editor rather than hiding it; Insert must not edit the chapter behind it.
+            EditorViewModel.IsSourceCovered = value;
         }
     }
 

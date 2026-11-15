@@ -1,6 +1,9 @@
 using System.Reactive.Threading.Tasks;
 using System.Threading.Tasks;
+using Hymnal.Core.Infrastructure;
 using Hymnal.Core.Markua.Editing;
+using Hymnal.Core.Models;
+using Hymnal.Core.Services;
 using Hymnal.Core.Tests.Infrastructure;
 using static Hymnal.Core.Tests.Infrastructure.PlanTestHarness;
 
@@ -87,6 +90,33 @@ public sealed class MainWindowCommandPaletteTests
     }
 
     [Fact]
+    public async Task Go_to_leaves_out_files_that_cannot_be_opened()
+    {
+        var root = CreateWorkspace(StoryJson,
+            ("scene-one.md", "# Scene One\n\nDusk.\n"),
+            ("scene-two.md", "# Scene Two\n\nDark.\n"));
+        try
+        {
+            await File.WriteAllTextAsync(Path.Combine(root, "Book.txt"), "scene-one.md\n");
+            var excluded = await new ExclusionManifestService(new MetadataStore())
+                .SaveAsync(root, new ExclusionManifest { ExcludedPaths = ["scene-two.md"] });
+            Assert.True(excluded.IsSuccess, excluded.Error);
+
+            await Ui(root, 2, async context =>
+            {
+                var window = context.CreateMainWindow(context.CreateHost());
+                Assert.Contains(context.Workspace.Nodes, n => n.Node.RelativePath == "scene-two.md" && n.Node.IsExcluded);
+
+                await Within(window.ShowGoToCommand.Execute().ToTask());
+                Assert.DoesNotContain(window.CommandPalette.Results, r => r.Title == "Scene Two");
+                Assert.Contains(window.CommandPalette.Results, r => r.Title == "Scene One");
+                window.CommandPalette.Close();
+            });
+        }
+        finally { DeleteFolder(root); }
+    }
+
+    [Fact]
     public async Task A_novel_offers_no_beats_and_names_its_chapters()
     {
         var root = CreateWorkspace(NovelJson,
@@ -160,6 +190,13 @@ public sealed class MainWindowCommandPaletteTests
                 palette.Close();
 
                 await Within(editor.SetViewModeCommand.Execute(EditorViewMode.Split).ToTask());
+                Assert.True(editor.CanInsertMarkua);
+
+                // Settings covers the editor without hiding it: no inserts into the chapter behind it.
+                await Within(window.OpenSettingsCommand.Execute().ToTask());
+                Assert.False(editor.CanInsertMarkua);
+                Assert.False(editor.InsertSnippet(MarkuaSnippets.Get("bold")));
+                await Within(window.CloseSettingsCommand.Execute().ToTask());
                 Assert.True(editor.CanInsertMarkua);
                 await Within(window.SelectPlanCommand.Execute().ToTask());
                 Assert.False(editor.CanInsertMarkua);

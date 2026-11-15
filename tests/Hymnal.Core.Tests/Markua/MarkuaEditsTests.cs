@@ -59,6 +59,8 @@ public class MarkuaEditsTests
     [InlineData("a **«word»**", "a ***«word»***")] // bold isn't italic, so it gains italic
     [InlineData("a ***«word»***", "a **«word»**")] // bold italic loses only the italic
     [InlineData("a «**word**»", "a *«**word**»*")]
+    [InlineData("**‸**", "***‸***")] // italic in an empty bold pair adds to it
+    [InlineData("***‸***", "**‸**")]
     public void Italic_tells_its_star_from_bold(string before, string after) =>
         Assert.Equal(after, Snippet("italic", before));
 
@@ -68,6 +70,8 @@ public class MarkuaEditsTests
     [InlineData("superscript", "x«2»", "x^«2»^")]
     [InlineData("subscript", "H«2»O", "H~«2»~O")]
     [InlineData("subscript", "~~«gone»~~", "~~~«gone»~~~")] // strikethrough isn't subscript
+    [InlineData("subscript", "~~‸~~", "~~~‸~~~")]
+    [InlineData("bold", "***‸***", "*‸*")]
     public void Other_inline_styles(string id, string before, string after) =>
         Assert.Equal(after, Snippet(id, before));
 
@@ -77,6 +81,11 @@ public class MarkuaEditsTests
         Assert.Equal("«- **one**\n\n- **two**»", Snippet("bold", "«- one\n\n- two»"));
         Assert.Equal("«- one\n\n- two»", Snippet("bold", "«- **one**\n\n- **two**»"));
         Assert.Equal("«**one**\r\n**two**»", Snippet("bold", "«one\r\ntwo»"));
+
+        // Markers just outside the selection count, so this unwraps rather than doubling them.
+        Assert.Equal("«one\ntwo»", Snippet("bold", "**«one**\n**two»**"));
+        // A line already styled stays as it is while the others gain the style.
+        Assert.Equal("«**one**\n**two**»", Snippet("bold", "«**one**\ntwo»"));
     }
 
     [Fact]
@@ -91,6 +100,8 @@ public class MarkuaEditsTests
     [InlineData("see «the docs» here", "see [the docs](«https://») here")]
     [InlineData("see «https://leanpub.com» here", "see [«link text»](https://leanpub.com) here")]
     [InlineData("see ‸", "see [«link text»](https://)")]
+    [InlineData("read «this »today", "read [this](«https://») today")] // spaces stay outside
+    [InlineData("read« https://leanpub.com »now", "read [«link text»](https://leanpub.com) now")]
     public void Link_uses_the_selection_as_text_or_as_the_url(string before, string after) =>
         Assert.Equal(after, Snippet("link", before));
 
@@ -150,6 +161,9 @@ public class MarkuaEditsTests
     [Fact]
     public void Line_styles_keep_CRLF()
     {
+        // A selection ending at the next line's start ends before the whole CRLF, not between its halves.
+        Assert.Equal("One.\r\n\r\n* * *‸\r\n\r\nTwo.", Snippet("scene-break", "«One.\r\n»Two."));
+        Assert.Equal("```\r\n«One.»\r\n```\r\n\r\nTwo.", Snippet("code-block", "«One.\r\n»Two."));
         Assert.Equal("«- one\r\n- two»\r\nthree", Snippet("bulleted-list", "«one\r\ntwo»\r\nthree"));
     }
 

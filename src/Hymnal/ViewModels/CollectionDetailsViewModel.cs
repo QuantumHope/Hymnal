@@ -338,7 +338,7 @@ public sealed class CollectionDetailsViewModel : ViewModelBase, IDisposable
             : "Open a workspace to see its details.";
 
         StatusCounts = profile.VisibleStatuses
-            .Select(option => new CollectionStatusCount(option.Value, option.Label, units.Count(u => u.Status == option.Value)))
+            .Select(option => new CollectionStatusCount(option.Value, option.Label, units.Count(u => profile.DisplayStatus(u.Status) == option.Value)))
             .Where(c => c.Count > 0)
             .ToList();
 

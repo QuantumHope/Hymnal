@@ -42,7 +42,7 @@ public static class MarkuaEdits
         if (sel.IsEmpty)
         {
             var at = sel.Start;
-            if (HasAt(text, at - marker.Length, marker) && HasAt(text, at, marker))
+            if (IsEmptyPair(text, at, marker))
                 return new TextEdit(at - marker.Length, marker.Length * 2, "", TextSpan.Caret(at - marker.Length));
             if (at > 0 && at < text.Length && IsWordChar(text[at - 1]) && IsWordChar(text[at]))
                 sel = WordAt(text, at);
@@ -79,33 +79,97 @@ public static class MarkuaEdits
             new TextSpan(start + marker.Length, inner.Length));
     }
 
+    /// <summary>
+    /// A selection over several lines styles the words on each line. A line counts as styled when its words have
+    /// the marker on both sides, inside the selection or just outside it; if every line is, all are unwrapped.
+    /// </summary>
     private static TextEdit ToggleInlinePerLine(string text, TextSpan sel, string marker)
     {
-        var lines = text.Substring(sel.Start, sel.Length).Split('\n');
-        var parts = lines.Select(SplitStyledLine).ToList();
-        var styled = parts.Where(p => p.Core.Length > 0).ToList();
-        var unwrap = styled.Count > 0 && styled.All(p => IsWrapped(p.Core, marker));
-
-        var result = string.Join("\n", parts.Select(p =>
+        var n = marker.Length;
+        var lines = new List<(int Start, int End, int Left, int Right)>();
+        for (var segment = sel.Start; ;)
         {
-            if (p.Core.Length == 0)
-                return p.Lead + p.Trail;
-            var core = unwrap
-                ? p.Core[marker.Length..^marker.Length]
-                : IsWrapped(p.Core, marker) ? p.Core : marker + p.Core + marker;
-            return p.Lead + core + p.Trail;
-        }));
-        return new TextEdit(sel.Start, sel.Length, result, new TextSpan(sel.Start, result.Length));
+            var newline = text.IndexOf('\n', segment, sel.End - segment);
+            var segmentEnd = newline < 0 ? sel.End : newline;
+            var start = segment;
+            var end = segmentEnd;
+            if (start == LineStart(text, start))
+                start += StructuralPrefixRegex.Match(text[start..end]).Length;
+            while (start < end && char.IsWhiteSpace(text[start])) start++;
+            while (end > start && char.IsWhiteSpace(text[end - 1])) end--;
+            if (end > start)
+            {
+                var left = LeftMarker(text, start, end, marker);
+                var right = RightMarker(text, start, end, marker);
+                if (left >= 0 && right >= 0 && right < left + n)
+                    right = -1;
+                lines.Add((start, end, left, right));
+            }
+            if (newline < 0)
+                break;
+            segment = newline + 1;
+        }
+
+        var unwrap = lines.Count > 0 && lines.All(l => l.Left >= 0 && l.Right >= 0);
+        var ops = new List<(int At, int Remove, string Insert)>();
+        foreach (var line in lines)
+        {
+            if (unwrap)
+            {
+                ops.Add((line.Left, n, ""));
+                ops.Add((line.Right, n, ""));
+            }
+            else if (line.Left < 0 || line.Right < 0)
+            {
+                ops.Add((line.Start, 0, marker));
+                ops.Add((line.End, 0, marker));
+            }
+        }
+        if (ops.Count == 0)
+            return new TextEdit(sel.Start, 0, "", sel);
+
+        var from = Math.Min(sel.Start, ops.Min(o => o.At));
+        var to = Math.Max(sel.End, ops.Max(o => o.At + o.Remove));
+        var builder = new StringBuilder();
+        var cursor = from;
+        foreach (var op in ops.OrderBy(o => o.At))
+        {
+            builder.Append(text, cursor, op.At - cursor).Append(op.Insert);
+            cursor = op.At + op.Remove;
+        }
+        builder.Append(text, cursor, to - cursor);
+        var result = builder.ToString();
+        return new TextEdit(from, to - from, result, new TextSpan(from, result.Length));
     }
 
-    /// <summary>A line as (prefix and leading space, styled words, trailing space and any '\r').</summary>
-    private static (string Lead, string Core, string Trail) SplitStyledLine(string line)
+    /// <summary>Where the marker opening [start, end) sits: at its start, just before it, or -1 for none.</summary>
+    private static int LeftMarker(string text, int start, int end, string marker)
     {
-        var lead = StructuralPrefixRegex.Match(line).Length;
-        while (lead < line.Length && char.IsWhiteSpace(line[lead])) lead++;
-        var end = line.Length;
-        while (end > lead && char.IsWhiteSpace(line[end - 1])) end--;
-        return (line[..lead], line[lead..end], line[end..]);
+        var n = marker.Length;
+        var repeated = IsRepeatedChar(marker);
+        var c = marker[0];
+        if (end - start > n && HasAt(text, start, marker)
+            && (!repeated || RunMatches(RunLength(text, start, 1, c), n)))
+            return start;
+        if (HasAt(text, start - n, marker)
+            && (!repeated || (RunMatches(RunLength(text, start - 1, -1, c), n) && text[start] != c)))
+            return start - n;
+        return -1;
+    }
+
+    /// <summary>Where the marker closing [start, end) sits: at its end, just after it, or -1 for none.</summary>
+    private static int RightMarker(string text, int start, int end, string marker)
+    {
+        var n = marker.Length;
+        var repeated = IsRepeatedChar(marker);
+        var c = marker[0];
+        if (end - start > n && HasAt(text, end - n, marker)
+            && (!repeated || RunMatches(RunLength(text, end - 1, -1, c), n)))
+            return end - n;
+        if (HasAt(text, end, marker)
+            && (!repeated || (RunMatches(RunLength(text, end, 1, c), n) && text[end - 1] != c)))
+            return end;
+        return -1;
     }
 
     /// <summary>
@@ -136,6 +200,21 @@ public static class MarkuaEdits
         return RunMatches(RunLength(text, start - 1, -1, c), marker.Length)
             && RunMatches(RunLength(text, end, 1, c), marker.Length)
             && text[start] != c && text[end - 1] != c;
+    }
+
+    /// <summary>
+    /// True when the caret sits in an empty pair of <paramref name="marker"/>; a longer run is another style's
+    /// pair (italic in an empty bold <c>**‸**</c>), which gains this one instead of losing it.
+    /// </summary>
+    private static bool IsEmptyPair(string text, int at, string marker)
+    {
+        if (!HasAt(text, at - marker.Length, marker) || !HasAt(text, at, marker))
+            return false;
+        if (!IsRepeatedChar(marker))
+            return true;
+        var c = marker[0];
+        return RunMatches(RunLength(text, at - 1, -1, c), marker.Length)
+            && RunMatches(RunLength(text, at, 1, c), marker.Length);
     }
 
     private static bool RunMatches(int run, int markerLength) => run == markerLength || (markerLength < 3 && run == 3);
@@ -175,7 +254,14 @@ public static class MarkuaEdits
         const string textPlaceholder = "link text";
         const string urlPlaceholder = "https://";
         var sel = Clamp(text, selection);
-        var selected = text.Substring(sel.Start, sel.Length).Trim();
+        // Spaces at the selection's edges stay outside the link, so it doesn't swallow the gap to the next word.
+        var trimmedStart = sel.Start;
+        var trimmedEnd = sel.End;
+        while (trimmedStart < trimmedEnd && char.IsWhiteSpace(text[trimmedStart])) trimmedStart++;
+        while (trimmedEnd > trimmedStart && char.IsWhiteSpace(text[trimmedEnd - 1])) trimmedEnd--;
+        if (trimmedEnd > trimmedStart)
+            sel = new TextSpan(trimmedStart, trimmedEnd - trimmedStart);
+        var selected = text.Substring(sel.Start, sel.Length);
 
         if (selected.Length == 0)
         {
@@ -435,7 +521,11 @@ public static class MarkuaEdits
         var start = LineStart(text, sel.Start);
         var last = sel.End;
         if (!sel.IsEmpty && last > start && LineStart(text, last) == last)
-            last--;
+        {
+            last--; // onto the previous line's LF, and back over the CR too when the text uses CRLF
+            if (last > start && text[last - 1] == '\r')
+                last--;
+        }
         return (start, LineEnd(text, last));
     }
 
