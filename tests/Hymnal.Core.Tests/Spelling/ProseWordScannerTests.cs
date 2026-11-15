@@ -100,6 +100,12 @@ public sealed class ProseWordScannerTests
     }
 
     [Fact]
+    public void Skips_file_names_but_not_sentences_run_together()
+    {
+        Assert.Equal(["Edit", "and", "end", "Next"], Words("Edit Book.txt and chapter-01.md end.Next"));
+    }
+
+    [Fact]
     public void Empty_or_null_text_has_no_words()
     {
         Assert.Empty(ProseWordScanner.Scan(null));

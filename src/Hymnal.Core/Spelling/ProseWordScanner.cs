@@ -17,7 +17,8 @@ public readonly record struct ProseWord(int Start, int Length, string Text)
 /// <summary>
 /// Picks the words worth spell-checking out of a Markua chapter. Only prose is returned: code (fenced and
 /// inline), <c>%%</c> and <c>&lt;!-- --&gt;</c> comments, attribute and directive blocks (<c>{…}</c>), URLs,
-/// e-mail addresses, link targets, HTML tags, footnote markers and callout prefixes (<c>A&gt;</c>) are skipped.
+/// e-mail addresses, file names (<c>Book.txt</c>), link targets, HTML tags, footnote markers and callout prefixes
+/// (<c>A&gt;</c>) are skipped.
 /// <para>
 /// Words that are rarely misspellings in a manuscript are skipped too: one letter, ALL CAPS (acronyms and
 /// shouting), containing a digit (<c>3rd</c>, <c>B2B</c>) and lower-then-upper identifiers (<c>iPhone</c>).
@@ -46,6 +47,8 @@ public static class ProseWordScanner
         new(@"\]\([^)\r\n]*\)", RegexOptions.Compiled | RegexOptions.CultureInvariant),                   // ](link target)
         new(@"</?[A-Za-z][^<>\r\n]*>", RegexOptions.Compiled | RegexOptions.CultureInvariant),           // <tags>
         new(@"\[\^[^\]\r\n]*\]", RegexOptions.Compiled | RegexOptions.CultureInvariant),                  // [^footnote]
+        new(@"\b[\w-]+\.(?:txt|md|markua|json|xml|ya?ml|png|jpe?g|gif|svg|webp|pdf|html?|css|js|ts|cs|py|docx?|epub|zip)\b",
+            RegexOptions.Compiled | RegexOptions.IgnoreCase | RegexOptions.CultureInvariant),                 // file.ext
         new(@"^[ \t]*[A-Z]>", RegexOptions.Compiled | RegexOptions.Multiline | RegexOptions.CultureInvariant), // A> callout
     ];
 

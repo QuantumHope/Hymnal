@@ -59,6 +59,9 @@ internal sealed class SpellingHook : IDisposable
     /// <summary>The number of marks currently held (tests).</summary>
     internal int MarkCount => _renderer.Count;
 
+    /// <summary>The fixes menu while it is open (tests).</summary>
+    internal ContextMenu? Menu => _menu;
+
     /// <summary>Hides or shows the marks (Focus Mode) without forgetting them.</summary>
     public bool MarksVisible
     {
