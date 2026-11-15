@@ -20,6 +20,7 @@ namespace Hymnal.Views;
 public partial class MainWindow : Window
 {
     private readonly CompositeDisposable _layoutDisposables = new();
+    private readonly EditMenu _editMenu;
 
     // Suppresses LayoutUpdated capture while we are programmatically applying stored/reset sizes.
     private bool _suppressLayoutCapture;
@@ -28,11 +29,13 @@ public partial class MainWindow : Window
     public MainWindow()
     {
         InitializeComponent();
+        _editMenu = EditMenu.Attach(PART_EditMenu, this);
 
         Closing += OnClosingFlushPendingEdits;
 
         Closed += (_, _) =>
         {
+            _editMenu.Dispose();
             _layoutDisposables.Dispose();
             _layoutChangedSubject.Dispose();
         };

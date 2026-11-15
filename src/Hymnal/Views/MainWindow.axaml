@@ -218,6 +218,8 @@
                         <MenuItem Header="E_xit"
                                   Command="{Binding ExitCommand}" />
                     </MenuItem>
+                    <!-- Undo, clipboard and selection for the text the author was last typing in; EditMenu fills it. -->
+                    <MenuItem x:Name="PART_EditMenu" Header="_Edit" Foreground="{DynamicResource Cora.Text}" />
                     <MenuItem Header="_View" Foreground="{DynamicResource Cora.Text}">
                         <MenuItem Header="Toggle _Left Sidebar"
                                   Command="{Binding ToggleSidebarCommand}"
