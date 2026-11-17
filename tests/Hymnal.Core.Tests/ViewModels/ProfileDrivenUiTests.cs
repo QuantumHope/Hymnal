@@ -353,7 +353,14 @@ public sealed class ProfileDrivenUiTests : IDisposable
             await WaitUntilAsync(
                 () =>
                 {
-                    saved = phaseService.LoadAsync(root).GetAwaiter().GetResult()["uuid-1"];
+                    try
+                    {
+                        saved = phaseService.LoadAsync(root).GetAwaiter().GetResult()["uuid-1"];
+                    }
+                    catch (IOException)
+                    {
+                        return false; // Windows: the read can meet the save's rename over phases.json; poll again.
+                    }
                     return saved.Schedule?.GetValueOrDefault("Drafting")?.StartDate == "2026-02-01";
                 },
                 () => "Drafting row edit was not saved.");
