@@ -82,7 +82,7 @@ public sealed class RunAmbienceBank
         const int rate = SoundVoice.SampleRate;
         var samples = new double[(int)(0.55 * rate)];
         Thump(samples, 0.0, 62, 0.11, 1.0);
-        Thump(samples, 0.16, 52, 0.15, 0.7);
+        Thump(samples, Services.Runs.RunIntensity.DubDelaySeconds, 52, 0.15, 0.7);
         return Normalize(samples, 0.9);
 
         static void Thump(double[] buffer, double startSeconds, double hz, double decaySeconds, double gain)

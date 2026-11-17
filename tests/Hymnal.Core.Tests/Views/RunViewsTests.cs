@@ -83,6 +83,13 @@ public sealed class RunViewsTests
                 Assert.False(hud.IsVisible);
                 Assert.True(overlay.FindControl<StackPanel>("RecapCard")!.IsVisible);
                 Assert.True(overlay.FindControl<Button>("FutureYouButton")!.IsFocused);
+                var chart = overlay.FindControl<RunMinuteChart>("MinuteChart")!;
+                Assert.True(chart.IsEffectivelyVisible);
+                Assert.Single(chart.Items!);
+                Assert.False(chart.Cumulative);
+                overlay.FindControl<RadioButton>("CumulativeToggle")!.IsChecked = true;
+                Assert.True(run.ShowCumulative);
+                Assert.True(chart.Cumulative);
 
                 await Within(run.ToFutureYouCommand.Execute().ToTask());
                 await context.SettleAsync();

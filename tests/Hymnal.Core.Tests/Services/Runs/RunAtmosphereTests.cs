@@ -39,11 +39,25 @@ public class RunIntensityTests
     }
 
     [Fact]
-    public void The_heartbeat_quickens_with_intensity()
+    public void The_heartbeat_beats_all_run_climbing_slowly_then_racing_at_the_end()
     {
-        Assert.Equal(60, RunIntensity.PulseBpm(RunIntensity.Idle));
-        Assert.Equal(132, RunIntensity.PulseBpm(1));
-        Assert.InRange(RunIntensity.PulseBpm(0.6), 61, 131);
+        Assert.Equal(RunIntensity.RestingBpm, RunIntensity.PulseBpm(0, RunIntensity.Idle));
+        var halfway = RunIntensity.PulseBpm(0.5, RunIntensity.Idle);
+        Assert.InRange(halfway, RunIntensity.RestingBpm + 1, RunIntensity.StretchStartBpm - 1);
+        Assert.Equal(RunIntensity.StretchStartBpm, RunIntensity.PulseBpm(1, RunIntensity.Idle));
+        Assert.Equal(RunIntensity.FinalBpm, RunIntensity.PulseBpm(1, 1));
+        Assert.True(RunIntensity.PulseBpm(0.95, 0.6) > RunIntensity.PulseBpm(0.9, RunIntensity.Idle));
+    }
+
+    [Fact]
+    public void A_beat_is_a_lub_then_a_softer_dub_then_quiet()
+    {
+        var lub = RunIntensity.BeatEnvelope(0.03);
+        var dub = RunIntensity.BeatEnvelope(0.03 + RunIntensity.DubDelaySeconds);
+        var between = RunIntensity.BeatEnvelope(0.03 + RunIntensity.DubDelaySeconds / 2);
+        var after = RunIntensity.BeatEnvelope(0.6);
+        Assert.True(lub > dub && dub > between && between > after);
+        Assert.True(after < 0.01);
     }
 }
 

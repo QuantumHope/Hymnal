@@ -83,6 +83,12 @@
             <Setter Property="BorderBrush" Value="{DynamicResource Cora.Border.Subtle}" />
             <Setter Property="BorderThickness" Value="1" />
         </Style>
+        <Style Selector="RadioButton.run-chart-mode">
+            <Setter Property="FontSize" Value="11" />
+            <Setter Property="Padding" Value="4,0" />
+            <Setter Property="MinHeight" Value="20" />
+            <Setter Property="Foreground" Value="{DynamicResource Cora.Text.Secondary}" />
+        </Style>
         <Style Selector="ToggleButton.run-duration">
             <Setter Property="MinWidth" Value="64" />
             <Setter Property="Padding" Value="8,6" />
@@ -266,6 +272,37 @@
                                         </DataTemplate>
                                     </ItemsControl.ItemTemplate>
                                 </ItemsControl>
+                            </StackPanel>
+                        </Border>
+
+                        <!-- Minute by minute: per-minute bars, or running totals -->
+                        <Border Classes="run-section" IsVisible="{Binding Recap.HasTimeline, FallbackValue=False}">
+                            <StackPanel Spacing="6">
+                                <DockPanel>
+                                    <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" Spacing="4">
+                                        <RadioButton x:Name="PerMinuteToggle" Classes="run-chart-mode" GroupName="runChart"
+                                                     Content="Per minute"
+                                                     IsChecked="{Binding ShowPerMinute}" />
+                                        <RadioButton x:Name="CumulativeToggle" Classes="run-chart-mode" GroupName="runChart"
+                                                     Content="Running total"
+                                                     IsChecked="{Binding ShowCumulative}" />
+                                    </StackPanel>
+                                    <TextBlock Classes="run-caps" Text="MINUTE BY MINUTE" VerticalAlignment="Center" />
+                                </DockPanel>
+                                <controls:RunMinuteChart x:Name="MinuteChart"
+                                                         Height="150"
+                                                         Items="{Binding Recap.Timeline, FallbackValue={x:Null}}"
+                                                         Cumulative="{Binding ShowCumulative}" />
+                                <DockPanel>
+                                    <TextBlock DockPanel.Dock="Right" FontSize="11"
+                                               Text="{Binding Recap.BestMinute, FallbackValue=''}"
+                                               Foreground="{DynamicResource Cora.Accent.Store}" />
+                                    <StackPanel Orientation="Horizontal" Spacing="12">
+                                        <TextBlock FontSize="11" Text="■ added" Foreground="{DynamicResource Cora.Accent.Success}" />
+                                        <TextBlock FontSize="11" Text="■ cut" Foreground="{DynamicResource Cora.Accent.Error}" />
+                                        <TextBlock FontSize="11" Text="■ net" Foreground="{DynamicResource Cora.Accent.Store}" />
+                                    </StackPanel>
+                                </DockPanel>
                             </StackPanel>
                         </Border>
 

@@ -23,6 +23,9 @@ public sealed class RunTracker
         public required int BaselineCount { get; init; }
         public required string Latest { get; set; }
         public required int LatestCount { get; set; }
+
+        /// <summary>The text at the last <see cref="TakeInterval"/>; the baseline before the first.</summary>
+        public required string Checkpoint { get; set; }
     }
 
     private readonly Dictionary<string, Entry> _entries = new(StringComparer.Ordinal);
@@ -56,6 +59,7 @@ public sealed class RunTracker
                 BaselineCount = count,
                 Latest = text,
                 LatestCount = count,
+                Checkpoint = text,
             };
             _order.Add(key);
             return;
@@ -89,6 +93,25 @@ public sealed class RunTracker
             total += delta;
         }
         return new RunSummary(chapters, total);
+    }
+
+    /// <summary>
+    /// The words added and cut since the previous call (or since the run began): each chapter that changed is diffed
+    /// against its text at that moment. Used for the recap's minute-by-minute chart, so a word typed and deleted
+    /// within one interval leaves no trace, but one typed in one minute and cut in the next shows in both.
+    /// </summary>
+    public WordDelta TakeInterval()
+    {
+        WordDelta total = default;
+        foreach (var key in _order)
+        {
+            var e = _entries[key];
+            if (string.Equals(e.Checkpoint, e.Latest, StringComparison.Ordinal))
+                continue;
+            total += WordDiff.Compute(e.Checkpoint, e.Latest);
+            e.Checkpoint = e.Latest;
+        }
+        return total;
     }
 
     /// <summary>The last non-blank line of a text, trimmed and shortened for display.</summary>

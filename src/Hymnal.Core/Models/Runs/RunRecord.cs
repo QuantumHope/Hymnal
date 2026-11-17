@@ -35,4 +35,13 @@ public sealed record RunRecord
 
     /// <summary>How many chapters had edits in the run.</summary>
     public int Chapters { get; init; }
+
+    /// <summary>
+    /// Words added in each minute of the run, in order (the last entry may cover a part minute). Null in runs
+    /// recorded before it was kept.
+    /// </summary>
+    public int[]? MinuteAdded { get; init; }
+
+    /// <summary>Words cut in each minute, matching <see cref="MinuteAdded"/>.</summary>
+    public int[]? MinuteCut { get; init; }
 }

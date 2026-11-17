@@ -1098,6 +1098,7 @@
                                      DataContext="{Binding $parent[Window].((vm:MainWindowViewModel)DataContext).WritingRun}"
                                      IsActive="{Binding IsRunning, FallbackValue=False}"
                                      Intensity="{Binding Intensity, FallbackValue=0}"
+                                     Progress="{Binding HeartbeatProgress, FallbackValue=0}"
                                      Sparks="{Binding Sparks, FallbackValue=0}"
                                      Celebrations="{Binding Celebrations, FallbackValue=0}"
                                      ShowFlames="{Binding Atmosphere.Flames, FallbackValue=False}"

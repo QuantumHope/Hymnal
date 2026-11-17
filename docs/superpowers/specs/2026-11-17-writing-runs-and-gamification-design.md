@@ -30,6 +30,23 @@ workspace.
 | Revision currency | A mix: words added, words cut, focused time, and (later) checklist items, weighted by phase |
 | Unlocks | Themes and palettes, titles and cosmetics, sounds and effects, and decorative editor companions ("zen garden") |
 
+### North star: the story is the dungeon (2026-11-17)
+
+In the author's words: *"a roguelike writing app where your story is the dungeon that you excavate and renovate over
+time."* Later phases should be judged against this frame:
+
+- **The dungeon is the manuscript.** Book.txt order is the map; each chapter (or scene, story, post) is a chamber.
+  Its target is how much rock there is to dig, and its word count is how much has been dug.
+- **Runs are delves.** Each run goes into the dungeon and comes back with loot: XP, streak days, combos. The Logbook is
+  the delve log. The note to Future You is the chalk mark at the face you were digging.
+- **Drafting excavates; revision renovates.** New words open chambers out; cutting and reshaping turns rough-hewn
+  rooms into finished ones (status and revision passes as the renovation tiers). That is why churn counts, not just net
+  words.
+- **Roguelike texture to explore later:** a dungeon-map view of the book (chambers sized by target, filled by
+  progress, lit by status); run modifiers chosen at the start (boons and curses such as no-backspace, a prompt card or
+  a double-length final stretch); relics from achievements; the streak as the torch you keep lit; and the unlock web
+  as what the loot is spent on.
+
 ## 2. Phases
 
 | Phase | Contents | Status |
@@ -160,6 +177,14 @@ The run duration preference uses `IAppSettingsStore` key `run.lastMinutes`.
 - `RunViewModel`: start enters focus mode, edits are attributed to the right chapter across a chapter switch, the
   timer completes the run, the session is recorded with the right streak outcome, the note is saved, an empty short
   run is discarded.
+
+### 3.9 Second feedback round (2026-11-17)
+
+| Feedback | Decision |
+|---|---|
+| A constant heartbeat, "bump-bump… bump-bump", that ramps up | The heartbeat now beats from the first second of every run: a lub, then a softer dub 0.16 s later, then quiet. It climbs from 54 bpm to 72 bpm across the run, then races to 144 bpm through the final stretch, getting louder as it goes. The edge glow and the flames thump in time with it. |
+| Flames at the bottom of the frame | A row of swaying flame tongues along the whole bottom edge (two staggered rows), taller toward the corners, taller as intensity rises and jumping on each beat; embers rise from all along it. |
+| Words per minute, added and removed by minute, or cumulative | The recap's **Minute by minute** chart has two modes. **Per minute** shows words added rising above the line, words cut hanging below it, and a net marker. **Running total** shows lines for total added, total cut and net, with net filled. Hovering a minute shows its numbers, and a "Best minute" call-out sits under the chart. Each minute is the word diff since the previous minute (`RunTracker.TakeInterval`); the runs also store `minuteAdded` and `minuteCut` arrays for later views. |
 
 ### 3.8 First feedback round (2026-11-17)
 

@@ -8,9 +8,9 @@ using Hymnal.Core.Services.Runs;
 namespace Hymnal.Views.Controls;
 
 /// <summary>
-/// The look of a running writing run, drawn over the editor without taking input: flames and embers from the
-/// bottom corners, a glow round the window edge with a vignette, sparks off the HUD's word count, and a burst
-/// when the timer runs out. Everything scales with <see cref="Intensity"/>, which climbs through the final stretch.
+/// The look of a running writing run, drawn over the editor without taking input: a row of flames along the bottom
+/// of the window with embers rising from it (tallest in the corners), a glow round the window edge that pulses with
+/// the run's heartbeat, a vignette, sparks off the HUD's word count, and a burst when the timer runs out. Everything scales with <see cref="Intensity"/>, which climbs through the final stretch.
 /// Layout only; the run's view model decides what happens and when.
 /// </summary>
 public sealed class RunAtmosphereLayer : Control
@@ -20,6 +20,10 @@ public sealed class RunAtmosphereLayer : Control
 
     public static readonly StyledProperty<double> IntensityProperty =
         AvaloniaProperty.Register<RunAtmosphereLayer, double>(nameof(Intensity), RunIntensity.Idle);
+
+    /// <summary>How far through the run it is, 0–1: with <see cref="Intensity"/>, it sets the heartbeat's pace.</summary>
+    public static readonly StyledProperty<double> ProgressProperty =
+        AvaloniaProperty.Register<RunAtmosphereLayer, double>(nameof(Progress));
 
     public static readonly StyledProperty<bool> ShowFlamesProperty =
         AvaloniaProperty.Register<RunAtmosphereLayer, bool>(nameof(ShowFlames), true);
@@ -50,6 +54,7 @@ public sealed class RunAtmosphereLayer : Control
     private double _flash;
     private double _clock;
     private double _spawnDebt;
+    private double _beatClock; // seconds into the current heartbeat
 
     public RunAtmosphereLayer()
     {
@@ -58,6 +63,7 @@ public sealed class RunAtmosphereLayer : Control
 
     public bool IsActive { get => GetValue(IsActiveProperty); set => SetValue(IsActiveProperty, value); }
     public double Intensity { get => GetValue(IntensityProperty); set => SetValue(IntensityProperty, value); }
+    public double Progress { get => GetValue(ProgressProperty); set => SetValue(ProgressProperty, value); }
     public bool ShowFlames { get => GetValue(ShowFlamesProperty); set => SetValue(ShowFlamesProperty, value); }
     public bool ShowGlow { get => GetValue(ShowGlowProperty); set => SetValue(ShowGlowProperty, value); }
     public bool ShowSparks { get => GetValue(ShowSparksProperty); set => SetValue(ShowSparksProperty, value); }
@@ -89,6 +95,9 @@ public sealed class RunAtmosphereLayer : Control
         {
             Celebrate();
         }
+
+        if (change.Property == IsActiveProperty && change.GetNewValue<bool>())
+            _beatClock = 0; // the first beat lands as the run starts, with the sound's
 
         if (change.Property == IsActiveProperty || change.Property == SparksProperty
             || change.Property == CelebrationsProperty)
@@ -129,6 +138,10 @@ public sealed class RunAtmosphereLayer : Control
     internal void Step(double dt)
     {
         _clock += dt;
+        _beatClock += dt;
+        var beatLength = 60 / RunIntensity.PulseBpm(Progress, _shownIntensity);
+        if (_beatClock >= beatLength)
+            _beatClock %= beatLength;
         // Ease towards the bound intensity (it only changes once a second).
         _shownIntensity += (Intensity - _shownIntensity) * Math.Min(1, dt * 1.5);
         _flash = Math.Max(0, _flash - dt * 1.2);
@@ -168,8 +181,18 @@ public sealed class RunAtmosphereLayer : Control
 
     private void SpawnEmber(double w, double h, bool left)
     {
+        // Two in three embers rise from the corners; the rest from anywhere along the bottom.
         var spread = Math.Min(w * 0.22, 260) * (0.6 + 0.6 * _shownIntensity);
-        var offset = Math.Pow(_random.NextDouble(), 1.8) * spread; // bunched into the corner
+        double offset;
+        if (_random.Next(3) == 0)
+        {
+            spread = w / 2;
+            offset = _random.NextDouble() * spread;
+        }
+        else
+        {
+            offset = Math.Pow(_random.NextDouble(), 1.8) * spread; // bunched into the corner
+        }
         var x = left ? offset : w - offset;
         var lift = 70 + 170 * _shownIntensity;
         _particles.Add(new Particle
@@ -253,6 +276,9 @@ public sealed class RunAtmosphereLayer : Control
             DrawGlow(ctx, w, h, accent, intensity);
 
         if (IsActive && ShowFlames)
+            DrawFlameRow(ctx, w, h, accent, intensity);
+
+        if (IsActive && ShowFlames)
         {
             // A warm bed of light in each corner the embers rise from.
             var size = (140 + 260 * intensity) * Math.Min(1, w / 900);
@@ -319,11 +345,10 @@ public sealed class RunAtmosphereLayer : Control
             },
         }, new Rect(0, 0, w, h));
 
-        // Edge glow, pulsing with the heartbeat in the final stretch.
-        var finalStretch = intensity > RunIntensity.Idle + 0.01;
-        var bpm = RunIntensity.PulseBpm(intensity);
-        var pulse = finalStretch ? 0.75 + 0.25 * Math.Pow(Math.Max(0, Math.Sin(_clock * Math.PI * bpm / 60)), 4) : 0.85;
-        var alpha = (byte)Math.Clamp((25 + 170 * intensity) * pulse, 0, 255);
+        // Edge glow, thumping with the heartbeat (lub-dub) all run long, harder as the run nears its end.
+        var beat = RunIntensity.BeatEnvelope(_beatClock);
+        var pulse = 0.7 + (0.3 + 0.5 * intensity) * beat;
+        var alpha = (byte)Math.Clamp((25 + 150 * intensity) * pulse, 0, 255);
         var depth = 10 + 50 * intensity;
         var edge = Color.FromArgb(alpha, accent.R, accent.G, accent.B);
         var clear = Color.FromArgb(0, accent.R, accent.G, accent.B);
@@ -342,6 +367,64 @@ public sealed class RunAtmosphereLayer : Control
                 GradientStops = { new GradientStop(edge, 0), new GradientStop(clear, 1) },
             }, rect);
     }
+
+    /// <summary>
+    /// A row of flame tongues along the bottom edge: each sways and flickers on its own, they stand taller as the
+    /// run heats up and toward the corners, and they jump a little on each heartbeat.
+    /// </summary>
+    private void DrawFlameRow(DrawingContext ctx, double w, double h, Color accent, double intensity)
+    {
+        const double spacing = 26;
+        var count = (int)Math.Ceiling(w / spacing) + 2;
+        var beat = RunIntensity.BeatEnvelope(_beatClock);
+        var outer = Mix(accent, 235, 70, 30);
+        var mid = Mix(accent, 255, 150, 40);
+        var baseHeight = 14 + 70 * intensity;
+
+        for (var pass = 0; pass < 2; pass++)
+        {
+            // The back row is taller and redder; the front row shorter, brighter and offset half a tongue.
+            var back = pass == 0;
+            for (var i = 0; i < count; i++)
+            {
+                var x = (i - 0.5 + (back ? 0 : 0.5)) * spacing;
+                var seed = i * 1.618 + (back ? 0 : 7.3);
+                var corner = Math.Pow(Math.Abs(x / w - 0.5) * 2, 3); // 0 in the middle, 1 at the corners
+                var flicker = 0.65 + 0.2 * Math.Sin(_clock * 7.1 + seed * 3) + 0.15 * Math.Sin(_clock * 13.7 + seed * 5);
+                var height = baseHeight * flicker * (1 + 1.6 * corner) * (1 + 0.18 * beat) * (back ? 1.25 : 0.8);
+                var width = spacing * (back ? 1.5 : 1.15);
+                var sway = Math.Sin(_clock * 2.3 + seed) * width * 0.35;
+
+                var geometry = new StreamGeometry();
+                using (var g = geometry.Open())
+                {
+                    var left = new Point(x - width / 2, h + 2);
+                    var right = new Point(x + width / 2, h + 2);
+                    var tip = new Point(x + sway, h - height);
+                    g.BeginFigure(left, true);
+                    g.CubicBezierTo(new Point(x - width / 2, h - height * 0.45), new Point(x + sway * 0.3, h - height * 0.6), tip);
+                    g.CubicBezierTo(new Point(x + sway * 0.3 + width * 0.15, h - height * 0.55), new Point(x + width / 2, h - height * 0.4), right);
+                    g.EndFigure(true);
+                }
+
+                var alpha = back ? 0.55 + 0.35 * intensity : 0.7 + 0.3 * intensity;
+                ctx.DrawGeometry(new LinearGradientBrush
+                {
+                    StartPoint = new RelativePoint(0.5, 1, RelativeUnit.Relative),
+                    EndPoint = new RelativePoint(0.5, 0, RelativeUnit.Relative),
+                    GradientStops =
+                    {
+                        new GradientStop(back ? WithAlpha(mid, alpha) : WithAlpha(Color.FromRgb(255, 240, 190), alpha), 0),
+                        new GradientStop(WithAlpha(back ? outer : mid, alpha * 0.85), 0.45),
+                        new GradientStop(WithAlpha(outer, 0), 1),
+                    },
+                }, null, geometry);
+            }
+        }
+    }
+
+    private static Color WithAlpha(Color c, double alpha) =>
+        Color.FromArgb((byte)Math.Clamp(alpha * 255, 0, 255), c.R, c.G, c.B);
 
     /// <summary>White-hot to yellow to the theme-tinted orange to deep red as an ember ages.</summary>
     private static Color FlameColor(double t, Color accent) => t switch

@@ -11,11 +11,14 @@ namespace Hymnal.Audio;
 /// <summary>What a writing run sounds like. The run drives it; implementations decide whether anything plays.</summary>
 public interface IRunSoundscape
 {
-    /// <summary>A run began: start the background loop.</summary>
+    /// <summary>A run began: start the background loop and the heartbeat.</summary>
     void Start();
 
-    /// <summary>The run's intensity (<see cref="RunIntensity"/>), about once a second.</summary>
-    void SetIntensity(double intensity);
+    /// <summary>
+    /// About once a second: how far through the run it is (0–1) and its intensity (<see cref="RunIntensity"/>).
+    /// Together they set the heartbeat's pace (<see cref="RunIntensity.PulseBpm"/>) and the loop's volume.
+    /// </summary>
+    void Update(double progress, double intensity);
 
     /// <summary>The run is over. When the timer ran out, <paramref name="completed"/> plays the finish chime.</summary>
     void Finish(bool completed);
@@ -25,13 +28,14 @@ public interface IRunSoundscape
 public sealed class SilentRunSoundscape : IRunSoundscape
 {
     public void Start() { }
-    public void SetIntensity(double intensity) { }
+    public void Update(double progress, double intensity) { }
     public void Finish(bool completed) { }
 }
 
 /// <summary>
 /// Plays a run's ambience on <see cref="AudioBus.Ambience"/>: the background loop (louder as the run nears its
-/// end), a heartbeat that quickens through the final stretch, and the finish chime. Plays only while Settings →
+/// end), a heartbeat that beats from the start, climbs slowly through the run and races through the final stretch,
+/// and the finish chime. Plays only while Settings →
 /// Sound and Settings → Runs → Ambience are both on. The engine is shared with typing sounds: if they restart it,
 /// the loop is picked up again on the next intensity update, and the engine is closed afterwards only when typing
 /// sounds aren't using it.
@@ -50,6 +54,7 @@ public sealed class RunAmbiencePlayer : IRunSoundscape, IDisposable
     private IAudioVoice? _bed;
     private bool _active;
     private double _intensity = RunIntensity.Idle;
+    private double _progress;
     private Timer? _heartbeat;
     private bool _disposed;
 
@@ -70,17 +75,19 @@ public sealed class RunAmbiencePlayer : IRunSoundscape, IDisposable
         {
             _active = true;
             _intensity = RunIntensity.Idle;
+            _progress = 0;
         }
         Enqueue(EnsurePlaying);
     }
 
-    public void SetIntensity(double intensity)
+    public void Update(double progress, double intensity)
     {
         lock (_gate)
         {
             if (!_active)
                 return;
             _intensity = intensity;
+            _progress = progress;
         }
         Enqueue(EnsurePlaying);
     }
@@ -150,28 +157,28 @@ public sealed class RunAmbiencePlayer : IRunSoundscape, IDisposable
         var volume = TypingSoundPlayer.PerceivedGain(_atmosphere.AmbienceVolume);
         _engine.SetBusGain(AudioBus.Ambience, volume * (float)(0.35 + 0.65 * intensity));
 
-        var finalStretch = intensity > RunIntensity.Idle + 1e-6;
         lock (_gate)
         {
-            if (finalStretch && _heartbeat == null)
-                _heartbeat = new Timer(_ => Beat(), null, TimeSpan.Zero, Timeout.InfiniteTimeSpan);
+            _heartbeat ??= new Timer(_ => Beat(), null, TimeSpan.Zero, Timeout.InfiniteTimeSpan);
         }
     }
 
     private void Beat()
     {
-        double intensity;
+        double intensity, progress;
         lock (_gate)
         {
             if (!_active || _heartbeat == null)
                 return;
             intensity = _intensity;
+            progress = _progress;
         }
 
+        // A quiet, steady beat under the whole run that grows louder as it races at the end.
         if (Wanted && _heartClip != null)
-            _engine.Play(_heartClip, new PlaybackOptions(AudioBus.Ambience, (float)(0.5 + 0.5 * intensity)));
+            _engine.Play(_heartClip, new PlaybackOptions(AudioBus.Ambience, (float)(0.45 + 0.55 * intensity)));
 
-        var interval = TimeSpan.FromSeconds(60 / RunIntensity.PulseBpm(intensity));
+        var interval = TimeSpan.FromSeconds(60 / RunIntensity.PulseBpm(progress, intensity));
         lock (_gate)
             _heartbeat?.Change(interval, Timeout.InfiniteTimeSpan);
     }

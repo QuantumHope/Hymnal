@@ -38,11 +38,39 @@ public static class RunIntensity
         return Idle + (1 - Idle) * t * t;
     }
 
+    /// <summary>The resting heartbeat a run starts at.</summary>
+    public const double RestingBpm = 54;
+
+    /// <summary>Where the slow climb through the run has reached when the final stretch begins.</summary>
+    public const double StretchStartBpm = 72;
+
+    /// <summary>The racing heartbeat the run ends on.</summary>
+    public const double FinalBpm = 144;
+
     /// <summary>
-    /// Heartbeats per minute for the final-stretch pulse: 60 as it begins, rising to 132 at the end.
+    /// The run's heartbeat, which beats from the first second: it climbs slowly from <see cref="RestingBpm"/> to
+    /// <see cref="StretchStartBpm"/> as <paramref name="progress"/> (0–1 of the run) passes, then races to
+    /// <see cref="FinalBpm"/> through the final stretch as <paramref name="intensity"/> rises.
     /// </summary>
-    public static double PulseBpm(double intensity) =>
-        60 + 72 * Math.Clamp((intensity - Idle) / (1 - Idle), 0, 1);
+    public static double PulseBpm(double progress, double intensity)
+    {
+        var resting = RestingBpm + (StretchStartBpm - RestingBpm) * Math.Clamp(progress, 0, 1);
+        var stretch = Math.Clamp((intensity - Idle) / (1 - Idle), 0, 1);
+        return resting + (FinalBpm - resting) * stretch;
+    }
+
+    /// <summary>
+    /// How loud and bright a beat lands, 0–1 at a moment <paramref name="secondsIntoBeat"/> after it starts: a "lub",
+    /// then a softer "dub" <see cref="DubDelaySeconds"/> later, then quiet until the next beat.
+    /// </summary>
+    public static double BeatEnvelope(double secondsIntoBeat)
+    {
+        static double Bump(double t, double at, double width) => Math.Exp(-Math.Pow((t - at) / width, 2));
+        return Math.Clamp(Bump(secondsIntoBeat, 0.03, 0.045) + 0.65 * Bump(secondsIntoBeat, 0.03 + DubDelaySeconds, 0.055), 0, 1);
+    }
+
+    /// <summary>The gap between the two halves of a heartbeat.</summary>
+    public const double DubDelaySeconds = 0.16;
 }
 
 /// <summary>Net-word combos called out on the HUD as a run's count climbs.</summary>

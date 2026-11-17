@@ -43,6 +43,18 @@ public sealed class RunDurationOption : ReactiveObject
     }
 }
 
+/// <summary>
+/// One minute of a run in the recap chart: the words added and cut in that minute, and the running totals at its
+/// end. <see cref="Seconds"/> is 60 except, perhaps, for the last minute.
+/// </summary>
+public sealed record RunRecapMinute(int Minute, int Seconds, int Added, int Cut, int TotalAdded, int TotalCut, int TotalNet)
+{
+    public int Net => Added - Cut;
+
+    /// <summary>Net words a minute, scaled up for a part minute so it compares with the full ones.</summary>
+    public double NetPerMinute => Seconds <= 0 ? 0 : Net * 60.0 / Seconds;
+}
+
 /// <summary>One chapter's line in the recap.</summary>
 public sealed record RunRecapChapter(string Title, string NetDisplay, string DetailDisplay);
 
@@ -63,6 +75,13 @@ public sealed record RunRecap
     public required double AddedPercent { get; init; }
     public required bool HasChanges { get; init; }
     public required IReadOnlyList<RunRecapChapter> Chapters { get; init; }
+
+    /// <summary>The run minute by minute, for the recap chart.</summary>
+    public IReadOnlyList<RunRecapMinute> Timeline { get; init; } = [];
+    public bool HasTimeline => Timeline.Count > 0;
+
+    /// <summary>The busiest minute, e.g. "Best minute: +48 (minute 7)".</summary>
+    public string? BestMinute { get; init; }
     public required string ProjectWords { get; init; }
     public string? TargetProgress { get; init; }
     public double TargetPercentAfter { get; init; }
@@ -112,6 +131,7 @@ public sealed class RunViewModel : ViewModelBase, IDisposable
     private string _workspaceName = "";
     private bool _finishing;
     private int _lastNet;
+    private readonly List<RunRecapMinute> _timeline = [];
     private DateTimeOffset _comboUntil;
     private string? _lastRunId;
 
@@ -281,7 +301,11 @@ public sealed class RunViewModel : ViewModelBase, IDisposable
     public double Progress
     {
         get => _progress;
-        private set => this.RaiseAndSetIfChanged(ref _progress, value);
+        private set
+        {
+            this.RaiseAndSetIfChanged(ref _progress, value);
+            this.RaisePropertyChanged(nameof(HeartbeatProgress));
+        }
     }
 
     private string _liveNetDisplay = "";
@@ -290,6 +314,9 @@ public sealed class RunViewModel : ViewModelBase, IDisposable
         get => _liveNetDisplay;
         private set => this.RaiseAndSetIfChanged(ref _liveNetDisplay, value);
     }
+
+    /// <summary>How far through the run it is, 0–1 (for the heartbeat's pace).</summary>
+    public double HeartbeatProgress => Progress / 100;
 
     private double _intensity;
     /// <summary>How hard the atmosphere burns, <see cref="RunIntensity.Idle"/> to 1 (see <see cref="RunIntensity"/>).</summary>
@@ -328,6 +355,25 @@ public sealed class RunViewModel : ViewModelBase, IDisposable
     }
 
     public bool HasCombo => ComboText != null;
+
+    private bool _showCumulative;
+    /// <summary>The recap chart shows running totals rather than each minute.</summary>
+    public bool ShowCumulative
+    {
+        get => _showCumulative;
+        set
+        {
+            this.RaiseAndSetIfChanged(ref _showCumulative, value);
+            this.RaisePropertyChanged(nameof(ShowPerMinute));
+        }
+    }
+
+    /// <summary>The recap chart shows each minute (the opposite of <see cref="ShowCumulative"/>).</summary>
+    public bool ShowPerMinute
+    {
+        get => !ShowCumulative;
+        set => ShowCumulative = !value;
+    }
 
     private int _celebrations;
     /// <summary>Goes up each time a run's timer runs out; the atmosphere layer bursts.</summary>
@@ -426,6 +472,7 @@ public sealed class RunViewModel : ViewModelBase, IDisposable
         _workspaceName = _workspace.WorkspaceName ?? "";
         _finishing = false;
         _lastNet = 0;
+        _timeline.Clear();
         _comboUntil = DateTimeOffset.MinValue;
         ComboText = null;
         Intensity = RunIntensity.Idle;
@@ -456,7 +503,9 @@ public sealed class RunViewModel : ViewModelBase, IDisposable
         LiveNetDisplay = $"{Signed(_tracker.LiveNet)} {Words(_tracker.LiveNet)}";
         Intensity = RunIntensity.At(remaining, _planned);
         IsFinalStretch = RunIntensity.IsFinalStretch(remaining, _planned);
-        _soundscape.SetIntensity(Intensity);
+        _soundscape.Update(Progress / 100, Intensity);
+        while (elapsed >= TimeSpan.FromMinutes(_timeline.Count + 1) && _timeline.Count * 60 < _planned.TotalSeconds)
+            CloseMinute(60);
         if (ComboText != null && _scheduler.Now >= _comboUntil)
             ComboText = null;
 
@@ -506,6 +555,9 @@ public sealed class RunViewModel : ViewModelBase, IDisposable
             elapsed = _planned;
         var seconds = (int)Math.Round(elapsed.TotalSeconds);
         var summary = tracker.Summarize();
+        var tail = seconds - _timeline.Count * 60;
+        if (tail > 0 || _timeline.Count == 0)
+            CloseMinute(Math.Max(0, tail));
 
         if (summary.Total.Touched == 0 && seconds < 60)
         {
@@ -530,6 +582,8 @@ public sealed class RunViewModel : ViewModelBase, IDisposable
             WordsCut = summary.Total.Cut,
             WordsNet = summary.Total.Net,
             Chapters = summary.Chapters.Count,
+            MinuteAdded = _timeline.Select(m => m.Added).ToArray(),
+            MinuteCut = _timeline.Select(m => m.Cut).ToArray(),
         };
 
         _lastRunId = session.Id;
@@ -559,6 +613,19 @@ public sealed class RunViewModel : ViewModelBase, IDisposable
             if (completed)
                 Celebrations++;
         });
+    }
+
+    /// <summary>Ends the current minute of the timeline, <paramref name="seconds"/> long.</summary>
+    private void CloseMinute(int seconds)
+    {
+        if (_tracker == null)
+            return;
+        var delta = _tracker.TakeInterval();
+        var previous = _timeline.Count > 0 ? _timeline[^1] : null;
+        var totalAdded = (previous?.TotalAdded ?? 0) + delta.Added;
+        var totalCut = (previous?.TotalCut ?? 0) + delta.Cut;
+        _timeline.Add(new RunRecapMinute(_timeline.Count + 1, seconds, delta.Added, delta.Cut, totalAdded, totalCut,
+            totalAdded - totalCut));
     }
 
     private RunRecap BuildRecap(RunSummary summary, int seconds, bool completed, StreakOutcome? streak,
@@ -606,6 +673,10 @@ public sealed class RunViewModel : ViewModelBase, IDisposable
                     $"+{c.Delta.Added:N0} / −{c.Delta.Cut:N0}"))
                 .ToList(),
             ProjectWords = $"{before:N0} → {after:N0} words",
+            Timeline = _timeline.ToList(),
+            BestMinute = _timeline.Count > 1 && _timeline.MaxBy(m => m.Net) is { Net: > 0 } best
+                ? $"Best minute: {Signed(best.Net)} (minute {best.Minute})"
+                : null,
             TargetProgress = targetProgress,
             TargetPercentAfter = Math.Min(100, percentAfter),
             Milestone = milestone,

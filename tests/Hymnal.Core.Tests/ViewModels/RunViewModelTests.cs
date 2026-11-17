@@ -249,10 +249,15 @@ public sealed class RunViewModelTests
     {
         public int Starts;
         public readonly List<double> Intensities = new();
+        public readonly List<double> Progresses = new();
         public bool? FinishedCompleted;
 
         public void Start() => Starts++;
-        public void SetIntensity(double intensity) => Intensities.Add(intensity);
+        public void Update(double progress, double intensity)
+        {
+            Progresses.Add(progress);
+            Intensities.Add(intensity);
+        }
         public void Finish(bool completed) => FinishedCompleted = completed;
     }
 
@@ -309,6 +314,7 @@ public sealed class RunViewModelTests
                 context.Scheduler.AdvanceBy(TimeSpan.FromMinutes(8));
                 Assert.False(run.IsFinalStretch);
                 Assert.Equal(RunIntensity.Idle, run.Intensity);
+                Assert.Equal(0.8, sound.Progresses[^1], precision: 3); // the heartbeat climbs all run long
 
                 context.Scheduler.AdvanceBy(TimeSpan.FromSeconds(90)); // 30 s left
                 Assert.True(run.IsFinalStretch);
@@ -322,6 +328,49 @@ public sealed class RunViewModelTests
                 Assert.True(sound.FinishedCompleted);
                 Assert.Equal(1, run.Celebrations);
                 Assert.False(run.IsFinalStretch);
+            });
+        }
+        finally { DeleteFolder(root); }
+    }
+
+    [Fact]
+    public async Task The_recap_charts_the_run_minute_by_minute()
+    {
+        var root = CreateWorkspace(NovelJson, ("a.md", "# A\n\nOne two three four.\n"));
+        try
+        {
+            await Ui(root, 1, async context =>
+            {
+                var run = context.CreateRun();
+                context.CreateMainWindow(context.CreateHost(), run: run);
+                await OpenChapterAsync(context, "a.md");
+                await StartAsync(context, run, 10);
+
+                // Minute 1: five words in. Minute 2: two cut, one added. Minute 3: nothing. Then 30 s more.
+                context.Editor.Text = "# A\n\nOne two three four.\nAlpha beta gamma delta epsilon.\n";
+                context.Scheduler.AdvanceBy(TimeSpan.FromMinutes(1));
+                context.Editor.Text = "# A\n\nOne two three four.\nAlpha beta gamma zeta.\n";
+                context.Scheduler.AdvanceBy(TimeSpan.FromMinutes(1));
+                context.Scheduler.AdvanceBy(TimeSpan.FromMinutes(1));
+                context.Editor.Text += "Eta.\n";
+                context.Scheduler.AdvanceBy(TimeSpan.FromSeconds(30));
+                await Within(run.EndCommand.Execute().ToTask());
+
+                var timeline = run.Recap!.Timeline;
+                Assert.Equal(
+                    [
+                        new RunRecapMinute(1, 60, 5, 0, 5, 0, 5),
+                        new RunRecapMinute(2, 60, 1, 2, 6, 2, 4),
+                        new RunRecapMinute(3, 60, 0, 0, 6, 2, 4),
+                        new RunRecapMinute(4, 30, 1, 0, 7, 2, 5),
+                    ],
+                    timeline);
+                Assert.Equal(2, timeline[^1].NetPerMinute); // a half minute counts double
+                Assert.Equal("Best minute: +5 (minute 1)", run.Recap.BestMinute);
+
+                var recorded = Assert.Single((await new WriterProfileStore(new MetadataStore(), ProfilePath(root)).LoadRunsAsync()).Value!);
+                Assert.Equal([5, 1, 0, 1], recorded.MinuteAdded);
+                Assert.Equal([0, 2, 0, 0], recorded.MinuteCut);
             });
         }
         finally { DeleteFolder(root); }

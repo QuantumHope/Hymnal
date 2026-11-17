@@ -3,6 +3,32 @@ using Hymnal.Core.Services.Runs;
 
 namespace Hymnal.Core.Tests.Services.Runs;
 
+public class RunTrackerIntervalTests
+{
+    [Fact]
+    public void Each_interval_counts_what_changed_since_the_last()
+    {
+        var tracker = new RunTracker(new WordCountService());
+        tracker.Observe("a.md", "A", "one two");
+        tracker.Observe("a.md", "A", "one two three four");
+        Assert.Equal(new WordDelta(2, 0), tracker.TakeInterval());
+
+        tracker.Observe("b.md", "B", "alpha beta");
+        tracker.Observe("b.md", "B", "alpha");
+        tracker.Observe("a.md", "A", "one two three four five");
+        Assert.Equal(new WordDelta(1, 1), tracker.TakeInterval());
+
+        Assert.Equal(new WordDelta(0, 0), tracker.TakeInterval()); // nothing since
+
+        tracker.Observe("a.md", "A", "one two three four five six");
+        tracker.Observe("a.md", "A", "one two three four five"); // typed and deleted inside one interval
+        Assert.Equal(new WordDelta(0, 0), tracker.TakeInterval());
+
+        // The run's overall diff is unaffected by taking intervals.
+        Assert.Equal(new WordDelta(3, 1), tracker.Summarize().Total);
+    }
+}
+
 public class WordDiffTests
 {
     [Fact]
