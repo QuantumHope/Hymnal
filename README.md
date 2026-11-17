@@ -110,6 +110,18 @@ If a file contains the marker {class: part} in its first non-blank lines, Hymnal
 - Ctrl+S: save active chapter
 - Ctrl+P: go to any chapter, scene, story, idea or collection by typing part of its name
 - Ctrl+Shift+P: command palette, every command with its shortcut (or type `>` after Ctrl+P); themes too (`>theme`)
+- Ctrl+Alt+S: start a writing sprint (see below)
+
+### Writing sprints
+
+**View → Start Writing Sprint…** (Ctrl+Alt+S) picks a length (10, 15, 25 or 45 minutes) and drops you into focus
+mode with a small timer. Write anywhere in the book. When time is up, or you press **End**, the recap shows what you
+did: words added, cut and net, words per minute, XP, how much was fresh drafting versus revision, the chapters you
+touched, the project's progress toward its targets (with milestones at 10/25/50/75/100%), and your daily streak.
+Then leave a **note for Future You**, a line about what to write next, and the next sprint opens with it.
+
+Sprints from every project feed one streak, kept in `writer-profile.json` beside `settings.json`. Notes stay with the
+project in `.hymnal-data/future-you.json`.
 
 ### Insert menu (Markua)
 
