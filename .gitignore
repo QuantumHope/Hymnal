@@ -123,3 +123,6 @@ SpecScribeOutput/spa/pages-planning-artifacts.json
 SpecScribeOutput/spa/pages-root-2.json
 SpecScribeOutput/spa/pages-root-3.json
 SpecScribeOutput/spa/pages-root.json
+
+# Claude Code session worktrees (each is a separate checkout of this repo)
+.claude/worktrees/

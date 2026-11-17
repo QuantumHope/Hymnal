@@ -80,8 +80,8 @@ public partial class MainWindow : Window
     private bool _closeAllowed;
 
     /// <summary>
-    /// Holds the close until debounced edits (story ideas) are written; if they can't be written in
-    /// time, asks whether to close anyway. Cancelling keeps the window open.
+    /// Holds the close until unsaved text and debounced edits are written; if they can't be written in
+    /// time (or the open file changed on disk), asks whether to close anyway. Cancelling keeps the window open.
     /// </summary>
     private async void OnClosingFlushPendingEdits(object? sender, WindowClosingEventArgs e)
     {
@@ -94,7 +94,7 @@ public partial class MainWindow : Window
 
         e.Cancel = true;
         if (!await flush
-            && !await ConfirmDialog.ShowAsync(this, "Unsaved Edits", "Idea or beat edits couldn't be saved. Close anyway?", "Close"))
+            && !await ConfirmDialog.ShowAsync(this, "Unsaved Edits", vm.UnsavedOnCloseMessage, "Close anyway"))
             return;
 
         _closeAllowed = true;
