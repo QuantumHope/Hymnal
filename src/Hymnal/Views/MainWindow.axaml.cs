@@ -30,6 +30,7 @@ public partial class MainWindow : Window
     {
         InitializeComponent();
         _editMenu = EditMenu.Attach(PART_EditMenu, this);
+        InsertMenu.Populate(PART_InsertMenu);
 
         Closing += OnClosingFlushPendingEdits;
 

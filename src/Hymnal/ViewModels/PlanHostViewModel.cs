@@ -58,9 +58,11 @@ public sealed class PlanHostViewModel : ViewModelBase, IDisposable
         BeatBoardViewModel beatBoard,
         INotificationService? notifications = null,
         IBeatBoardService? boards = null,
-        CollectionPlannerViewModel? planner = null)
+        CollectionPlannerViewModel? planner = null,
+        CollectionDetailsViewModel? details = null)
     {
         Planner = planner;
+        Details = details;
         _workspace = workspace;
         _notifications = notifications;
         _boards = boards;
@@ -90,6 +92,67 @@ public sealed class PlanHostViewModel : ViewModelBase, IDisposable
 
     public CorkboardViewModel Corkboard { get; }
 
+    /// <summary>The Details tab: the open collection at a glance; null when the app runs without it.</summary>
+    public CollectionDetailsViewModel? Details { get; }
+
+    private bool _isDetailsView;
+    /// <summary>Show the Details tab rather than the project's board, planner or cards (on the collection level).</summary>
+    public bool IsDetailsView
+    {
+        get => _isDetailsView;
+        set
+        {
+            if (value && Details == null)
+                return;
+            this.RaiseAndSetIfChanged(ref _isDetailsView, value);
+            this.RaisePropertyChanged(nameof(IsBoardTabSelected));
+            this.RaisePropertyChanged(nameof(IsCardsTabSelected));
+            Refresh();
+        }
+    }
+
+    /// <summary>Opens Plan's Details tab on the collection, leaving any story board that was shown.</summary>
+    public void ShowDetails()
+    {
+        _drilledStoryUuid = null;
+        if (Details == null)
+            return;
+        if (_isDetailsView)
+            Refresh();
+        else
+            IsDetailsView = true;
+    }
+
+    /// <summary>Shows the project's own board: the beats, the planner, or the cards.</summary>
+    public void ShowBoardTab()
+    {
+        _isCardsView = false;
+        this.RaisePropertyChanged(nameof(IsCardsView));
+        IsDetailsView = false;
+    }
+
+    /// <summary>Anthology: shows the open collection's cards.</summary>
+    public void ShowCardsTab()
+    {
+        _isCardsView = true;
+        this.RaisePropertyChanged(nameof(IsCardsView));
+        IsDetailsView = false;
+    }
+
+    /// <summary>The second tab's name: Beats (short story), Planner (anthology) or Cards (novel).</summary>
+    public string BoardTabLabel => _shownKind switch
+    {
+        ProjectKind.Story => "Beats",
+        ProjectKind.Anthology when Planner != null => "Planner",
+        _ => "Cards",
+    };
+
+    /// <summary>True when the anthology's planner and cards are separate tabs.</summary>
+    public bool ShowsCardsTab => _shownKind == ProjectKind.Anthology && Planner != null;
+
+    public bool IsBoardTabSelected => !IsDetailsView && !(ShowsCardsTab && IsCardsView);
+    public bool IsCardsTabSelected => !IsDetailsView && ShowsCardsTab && IsCardsView;
+
     /// <summary>An anthology's story planner (every collection side by side); null when the app runs without it.</summary>
     public CollectionPlannerViewModel? Planner { get; }
 
@@ -101,12 +164,17 @@ public sealed class PlanHostViewModel : ViewModelBase, IDisposable
         set
         {
             this.RaiseAndSetIfChanged(ref _isCardsView, value);
+            this.RaisePropertyChanged(nameof(IsBoardTabSelected));
+            this.RaisePropertyChanged(nameof(IsCardsTabSelected));
             Refresh();
         }
     }
 
     private bool _showsViewSwitch;
-    /// <summary>True on an anthology's collection level (not inside a story's board) when the planner exists.</summary>
+    /// <summary>
+    /// True on the collection level (not inside an anthology story's board) when there is more than one tab:
+    /// Details, and the beats, planner and cards or Corkboard.
+    /// </summary>
     public bool ShowsViewSwitch
     {
         get => _showsViewSwitch;
@@ -220,6 +288,10 @@ public sealed class PlanHostViewModel : ViewModelBase, IDisposable
             _drilledStoryUuid = null;
         _shownKind = kind;
         _shownRoot = root;
+        this.RaisePropertyChanged(nameof(BoardTabLabel));
+        this.RaisePropertyChanged(nameof(ShowsCardsTab));
+        this.RaisePropertyChanged(nameof(IsBoardTabSelected));
+        this.RaisePropertyChanged(nameof(IsCardsTabSelected));
 
         switch (kind)
         {
@@ -239,10 +311,29 @@ public sealed class PlanHostViewModel : ViewModelBase, IDisposable
     {
         var story = StoryStructure.ShortStory(_workspace.Nodes);
         RequestBoard(new BoardRequest(_shownRoot ?? "", story.Key, story.Title, story.Scope));
-        Content = BeatBoard;
         ShowBreadcrumb = false;
-        ShowsViewSwitch = false;
+        ShowsViewSwitch = Details != null;
+        if (ShowDetailsContent())
+        {
+            ShowFilesStrip = false;
+            return;
+        }
+        Content = BeatBoard;
         ShowFilesStrip = story.Scenes.Count >= 2;
+    }
+
+    /// <summary>Shows the Details tab when it is chosen; false (and Details idle) otherwise.</summary>
+    private bool ShowDetailsContent()
+    {
+        if (Details == null)
+            return false;
+        var show = IsDetailsView;
+        Details.IsActive = show;
+        if (!show)
+            return false;
+        Details.Rebuild();
+        Content = Details;
+        return true;
     }
 
     private void ShowAnthology()
@@ -259,6 +350,8 @@ public sealed class PlanHostViewModel : ViewModelBase, IDisposable
             {
                 var scope = planned.Story.IsMultiScene ? planned.Story.Lines.Skip(1).ToList() : planned.Story.Lines.ToList();
                 RequestBoard(new BoardRequest(_shownRoot ?? "", _drilledStoryUuid, planned.Title, scope));
+                if (Details != null)
+                    Details.IsActive = false;
                 Content = BeatBoard;
                 ShowBreadcrumb = true;
                 ShowsViewSwitch = false;
@@ -272,6 +365,8 @@ public sealed class PlanHostViewModel : ViewModelBase, IDisposable
         var request = new BoardRequest(_shownRoot ?? "", story.Uuid, story.Node.Title,
             scenes.Select(s => s.Node.RelativePath).ToList());
         RequestBoard(request, story.Node.Kind == NodeKind.Part ? FindAdoption(request, scenes) : null);
+        if (Details != null)
+            Details.IsActive = false;
         Content = BeatBoard;
         ShowBreadcrumb = true;
         ShowsViewSwitch = false;
@@ -281,10 +376,13 @@ public sealed class PlanHostViewModel : ViewModelBase, IDisposable
     {
         _drilledStoryUuid = null;
         var planner = anthology && Planner != null;
-        Content = planner && !IsCardsView ? Planner! : Corkboard;
-        ShowsViewSwitch = planner;
-        if (planner && !IsCardsView)
-            _ = Planner!.RefreshAsync();
+        ShowsViewSwitch = planner || Details != null;
+        if (!ShowDetailsContent())
+        {
+            Content = planner && !IsCardsView ? Planner! : Corkboard;
+            if (planner && !IsCardsView)
+                _ = Planner!.RefreshAsync();
+        }
         ShowBreadcrumb = false;
         ShowFilesStrip = false;
         if (_requested != null)

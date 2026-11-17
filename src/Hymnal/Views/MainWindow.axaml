@@ -173,7 +173,8 @@
     </Window.Styles>
 
     <Window.KeyBindings>
-        <KeyBinding Gesture="Ctrl+B" Command="{Binding ToggleSidebarCommand}" />
+        <!-- Ctrl+B is bold while the editor has focus: this command stands down then, so the key reaches it. -->
+        <KeyBinding Gesture="Ctrl+B" Command="{Binding ToggleSidebarShortcutCommand}" />
         <KeyBinding Gesture="Ctrl+Alt+B" Command="{Binding ToggleRightRailCommand}" />
         <KeyBinding Gesture="Ctrl+OemComma" Command="{Binding OpenSettingsCommand}" />
         <KeyBinding Gesture="Ctrl+Shift+A" Command="{Binding ToggleRightPaneCommand}" CommandParameter="chat" />
@@ -183,9 +184,16 @@
         <KeyBinding Gesture="F5" Command="{Binding ToggleGanttCommand}" />
         <KeyBinding Gesture="F6" Command="{Binding EditorViewModel.CycleViewModeCommand}" />
         <KeyBinding Gesture="F7" Command="{Binding ToggleRightPaneCommand}" CommandParameter="beats" />
+        <KeyBinding Gesture="Shift+F7" Command="{Binding EditorViewModel.Spelling.CheckSpellingCommand}" />
+        <KeyBinding Gesture="F8" Command="{Binding EditorViewModel.Spelling.NextIssueCommand}" />
+        <KeyBinding Gesture="Shift+F8" Command="{Binding EditorViewModel.Spelling.PreviousIssueCommand}" />
         <KeyBinding Gesture="F11" Command="{Binding ToggleFocusModeCommand}" />
+        <!-- Esc closes the command palette first; ExitFocusModeCommand can't run while it is open. -->
+        <KeyBinding Gesture="Escape" Command="{Binding CommandPalette.CloseCommand}" />
         <KeyBinding Gesture="Escape" Command="{Binding ExitFocusModeCommand}" />
         <KeyBinding Gesture="Ctrl+Shift+I" Command="{Binding QuickCaptureIdeaCommand}" />
+        <KeyBinding Gesture="Ctrl+P" Command="{Binding ShowGoToCommand}" />
+        <KeyBinding Gesture="Ctrl+Shift+P" Command="{Binding ShowCommandsCommand}" />
     </Window.KeyBindings>
 
     <!-- Row 0 is Auto (its bar is 48 high) so focus mode, which hides the bar, gives the text the whole window. -->
@@ -221,6 +229,13 @@
                     <!-- Undo, clipboard and selection for the text the author was last typing in; EditMenu fills it. -->
                     <MenuItem x:Name="PART_EditMenu" Header="_Edit" Foreground="{DynamicResource Cora.Text}" />
                     <MenuItem Header="_View" Foreground="{DynamicResource Cora.Text}">
+                        <MenuItem Header="_Go To…"
+                                  Command="{Binding ShowGoToCommand}"
+                                  InputGesture="Ctrl+P" />
+                        <MenuItem Header="_Command Palette…"
+                                  Command="{Binding ShowCommandsCommand}"
+                                  InputGesture="Ctrl+Shift+P" />
+                        <Separator />
                         <MenuItem Header="Toggle _Left Sidebar"
                                   Command="{Binding ToggleSidebarCommand}"
                                   InputGesture="Ctrl+B" />
@@ -259,6 +274,30 @@
                                       Command="{Binding EditorViewModel.CycleViewModeCommand}"
                                       InputGesture="F6" />
                         </MenuItem>
+                        <MenuItem x:Name="PART_SpellingMenu"
+                                  Header="S_pelling"
+                                  IsVisible="{Binding EditorViewModel.Spelling.IsAvailable}">
+                            <MenuItem Header="_Check Spelling"
+                                      Command="{Binding EditorViewModel.Spelling.CheckSpellingCommand}"
+                                      InputGesture="Shift+F7" />
+                            <MenuItem x:Name="PART_CheckAsYouTypeMenuItem"
+                                      Header="Check As You _Type"
+                                      ToggleType="CheckBox"
+                                      Command="{Binding EditorViewModel.Spelling.ToggleCheckAsYouTypeCommand}"
+                                      IsChecked="{Binding EditorViewModel.Spelling.Service.Preferences.CheckAsYouType, Mode=OneWay, FallbackValue=False}" />
+                            <Separator />
+                            <MenuItem Header="_Next Issue"
+                                      Command="{Binding EditorViewModel.Spelling.NextIssueCommand}"
+                                      InputGesture="F8" />
+                            <MenuItem Header="_Previous Issue"
+                                      Command="{Binding EditorViewModel.Spelling.PreviousIssueCommand}"
+                                      InputGesture="Shift+F8" />
+                            <MenuItem Header="C_lear Spelling Marks"
+                                      Command="{Binding EditorViewModel.Spelling.ClearCommand}" />
+                            <Separator />
+                            <MenuItem Header="Spelling _Settings and Project Dictionary…"
+                                      Command="{Binding OpenSpellingSettingsCommand}" />
+                        </MenuItem>
                         <Separator />
                         <MenuItem x:Name="PART_SoundMenuItem"
                                   Header="S_ound"
@@ -270,6 +309,8 @@
                         <MenuItem Header="_Reset Write Layout"
                                   Command="{Binding ResetWriteLayoutCommand}" />
                     </MenuItem>
+                    <!-- Markua snippets; InsertMenu.Populate fills it from MarkuaSnippets. -->
+                    <MenuItem x:Name="PART_InsertMenu" Header="_Insert" Foreground="{DynamicResource Cora.Text}" />
                     <MenuItem Header="_Help" Foreground="{DynamicResource Cora.Text}">
                         <MenuItem Header="_About Hymnal"
                                   Command="{Binding ShowAboutCommand}"
@@ -948,6 +989,11 @@
                 </StackPanel>
             </Grid>
         </Border>
+
+        <!-- Command palette (Ctrl+P / Ctrl+Shift+P), over everything including the banner. -->
+        <views:CommandPaletteView Grid.Row="0"
+                                  Grid.RowSpan="4"
+                                  DataContext="{Binding CommandPalette}" />
 
     </Grid>
 

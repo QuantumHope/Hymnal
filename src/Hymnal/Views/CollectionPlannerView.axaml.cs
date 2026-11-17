@@ -287,6 +287,25 @@ public partial class CollectionPlannerView : UserControl
         }
     }
 
+    private void RenameCollection_Click(object? sender, RoutedEventArgs e) => RenameColumn(sender);
+
+    private void ColumnTitle_DoubleTapped(object? sender, TappedEventArgs e) => RenameColumn(sender);
+
+    /// <summary>Renames the column's collection, open or not (its folder stays; only the title changes).</summary>
+    private async void RenameColumn(object? sender)
+    {
+        if (sender is not Control { DataContext: PlannerColumnViewModel column }
+            || Owner is not { DataContext: MainWindowViewModel { CollectionsViewModel: { } collections } } owner)
+            return;
+        var title = await FileNameDialog.ShowAsync(owner, "Rename collection",
+            "Its title, shown in Plan, the sidebar and the Schedule. Its folder keeps its name.",
+            column.IsNamed ? column.Title : collections.DefaultTitleForOpen);
+        if (title == null)
+            return;
+        if (await collections.RenameAsync(column.IsOpen ? null : column.Ref.Slug, title) && Planner is { } planner)
+            await planner.RefreshAsync();
+    }
+
     private async void NewCollection_Click(object? sender, RoutedEventArgs e)
     {
         if (Owner is { DataContext: MainWindowViewModel main } owner)

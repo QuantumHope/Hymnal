@@ -78,10 +78,36 @@ If a file contains the marker {class: part} in its first non-blank lines, Hymnal
 
 ## Keyboard Shortcuts
 
-- Ctrl+B: toggle chapter sidebar
+- Ctrl+B: toggle chapter sidebar (bold while you are typing in the editor)
 - F4: toggle notes panel
 - F7: toggle the Beats panel (Short Story and Anthology projects): the story's beats beside the draft
 - Ctrl+S: save active chapter
+- Ctrl+P: go to any chapter, scene, story, idea or collection by typing part of its name
+- Ctrl+Shift+P: command palette, every command with its shortcut (or type `>` after Ctrl+P); themes too (`>theme`)
+
+### Insert menu (Markua)
+
+The **Insert** menu, and the command palette's INSERT commands, write Leanpub's Markua into the open chapter or doc.
+Styles apply to the selection: inline styles wrap it (or the word at the caret) and unwrap it when it already has
+them; paragraph styles apply to every selected line and toggle off when they all have them already. Blocks go on
+lines of their own with a blank line either side.
+
+| Command | Markua | Shortcut (in the editor) |
+|---|---|---|
+| Bold / Italic | `**text**` / `*text*` | Ctrl+B / Ctrl+I |
+| Strikethrough | `~~text~~` | Ctrl+Shift+X |
+| Inline code | `` `code` `` | Ctrl+E |
+| Superscript / Subscript | `^2^` / `~2~` | Ctrl+Shift+= / Ctrl+= |
+| Link | `[text](url)` | Ctrl+K |
+| Footnote | `[^1]` and `[^1]: note` under the paragraph | Ctrl+Alt+F |
+| Heading: chapter, section, subsection, sub-subsection / normal text | `#` … `####` | Ctrl+1 … Ctrl+4 / Ctrl+0 |
+| Bulleted / Numbered list | `- item` / `1. item` | Ctrl+Shift+8 / Ctrl+Shift+7 |
+| Block quote | `> quote` | Ctrl+Shift+. |
+| Comment (left out of the book) | `%% note` | Ctrl+/ |
+| Scene break / Page break | `* * *` / `{pagebreak}` | Ctrl+Shift+Enter / Ctrl+Enter |
+| Image, Table, Code block | `![Caption](image.png)`, a 2×2 table, ```` ``` ```` fence | — |
+| Callout: Aside, Blurb, Centered Blurb, Tip, Information, Warning, Error, Question, Discussion, Exercise | `A>` `B>` `C>` `T>` `I>` `W>` `E>` `Q>` `D>` `X>` | — |
+| Book Structure: Part heading, Front / Main / Back Matter | `{class: part}`, `{frontmatter}`, `{mainmatter}`, `{backmatter}` | — |
 
 ## Architecture Overview
 

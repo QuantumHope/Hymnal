@@ -47,6 +47,32 @@ public sealed class CollectionServiceTests : IDisposable
     }
 
     [Fact]
+    public async Task Any_collection_can_be_retitled_and_keeps_its_folder()
+    {
+        var open = (await _service.SetActiveTitleAsync(_root, "Open One")).Value!;
+        var other = (await _service.CreateAsync(_root, "Other One")).Value!;
+
+        Assert.True((await _service.SetTitleAsync(_root, other, "  Winter Pieces ")).IsSuccess);
+        Assert.True((await _service.SetTitleAsync(_root, open, "Storms & Salt")).IsSuccess);
+
+        var list = (await _service.ListAsync(_root)).Value!;
+        Assert.Equal(["Storms & Salt", "Winter Pieces"], list.Select(c => c.Title));
+        Assert.Equal([open, other], list.Select(c => c.Slug));
+        Assert.Equal(open, await _service.GetActiveSlugAsync(_root));
+    }
+
+    [Fact]
+    public async Task Retitling_refuses_a_blank_title_or_a_missing_collection()
+    {
+        var slug = (await _service.SetActiveTitleAsync(_root, "Open One")).Value!;
+
+        Assert.False((await _service.SetTitleAsync(_root, slug, "   ")).IsSuccess);
+        Assert.False((await _service.SetTitleAsync(_root, "no-such-collection", "Title")).IsSuccess);
+        Assert.False((await _service.SetTitleAsync(_root, "../escape", "Title")).IsSuccess);
+        Assert.Equal("Open One", await _service.GetActiveTitleAsync(_root));
+    }
+
+    [Fact]
     public async Task Switching_swaps_book_txt_and_keeps_both_lists()
     {
         var first = (await _service.SetActiveTitleAsync(_root, "First")).Value!;
