@@ -139,9 +139,7 @@ public sealed class EditMenu : IDisposable
             // Focus moved to a button, list or card: there is no text to edit until the author types somewhere.
             SetTarget(null);
         }
-
-        foreach (var command in _commands)
-            command.RaiseCanExecuteChanged();
+        // The items' enabled state is re-read when the menu opens (Refresh), so nothing to raise here.
     }
 
     private void SetTarget(EditTarget? target)
@@ -187,14 +185,15 @@ public sealed class EditMenu : IDisposable
         }
     }
 
-    private static bool IsInMenu(Visual? element)
+    /// <summary>True when <paramref name="element"/> is a menu or one of its items (where focus sits while a menu is open).</summary>
+    internal static bool IsInMenu(Visual? element)
     {
         for (var v = element; v != null; v = v.GetVisualParent())
         {
             if (v is MenuItem or MenuBase)
                 return true;
         }
-        return element is MenuItem;
+        return false;
     }
 
     private void Run(Action<EditTarget> execute)
@@ -272,13 +271,12 @@ public sealed class EditMenu : IDisposable
         public override Control Control => box;
 
         private bool HasSelection => box.SelectionStart != box.SelectionEnd;
-        private bool IsPassword => box.PasswordChar != default && !box.RevealPassword;
 
         public override bool CanUndo => box.IsUndoEnabled && box.CanUndo;
         public override bool CanRedo => box.IsUndoEnabled && box.CanRedo;
-        public override bool CanCut => !box.IsReadOnly && !IsPassword && HasSelection;
-        public override bool CanCopy => !IsPassword && HasSelection;
-        public override bool CanPaste => !box.IsReadOnly;
+        public override bool CanCut => box.CanCut;
+        public override bool CanCopy => box.CanCopy;
+        public override bool CanPaste => box.CanPaste;
         public override bool CanDelete => !box.IsReadOnly && HasSelection;
         public override bool CanSelectAll => !string.IsNullOrEmpty(box.Text);
 
