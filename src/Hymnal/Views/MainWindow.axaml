@@ -184,6 +184,9 @@
         <KeyBinding Gesture="F5" Command="{Binding ToggleGanttCommand}" />
         <KeyBinding Gesture="F6" Command="{Binding EditorViewModel.CycleViewModeCommand}" />
         <KeyBinding Gesture="F7" Command="{Binding ToggleRightPaneCommand}" CommandParameter="beats" />
+        <KeyBinding Gesture="Shift+F7" Command="{Binding EditorViewModel.Spelling.CheckSpellingCommand}" />
+        <KeyBinding Gesture="F8" Command="{Binding EditorViewModel.Spelling.NextIssueCommand}" />
+        <KeyBinding Gesture="Shift+F8" Command="{Binding EditorViewModel.Spelling.PreviousIssueCommand}" />
         <KeyBinding Gesture="F11" Command="{Binding ToggleFocusModeCommand}" />
         <!-- Esc closes the command palette first; ExitFocusModeCommand can't run while it is open. -->
         <KeyBinding Gesture="Escape" Command="{Binding CommandPalette.CloseCommand}" />
@@ -268,6 +271,30 @@
                             <MenuItem Header="_Cycle Mode"
                                       Command="{Binding EditorViewModel.CycleViewModeCommand}"
                                       InputGesture="F6" />
+                        </MenuItem>
+                        <MenuItem x:Name="PART_SpellingMenu"
+                                  Header="S_pelling"
+                                  IsVisible="{Binding EditorViewModel.Spelling.IsAvailable}">
+                            <MenuItem Header="_Check Spelling"
+                                      Command="{Binding EditorViewModel.Spelling.CheckSpellingCommand}"
+                                      InputGesture="Shift+F7" />
+                            <MenuItem x:Name="PART_CheckAsYouTypeMenuItem"
+                                      Header="Check As You _Type"
+                                      ToggleType="CheckBox"
+                                      Command="{Binding EditorViewModel.Spelling.ToggleCheckAsYouTypeCommand}"
+                                      IsChecked="{Binding EditorViewModel.Spelling.Service.Preferences.CheckAsYouType, Mode=OneWay, FallbackValue=False}" />
+                            <Separator />
+                            <MenuItem Header="_Next Issue"
+                                      Command="{Binding EditorViewModel.Spelling.NextIssueCommand}"
+                                      InputGesture="F8" />
+                            <MenuItem Header="_Previous Issue"
+                                      Command="{Binding EditorViewModel.Spelling.PreviousIssueCommand}"
+                                      InputGesture="Shift+F8" />
+                            <MenuItem Header="C_lear Spelling Marks"
+                                      Command="{Binding EditorViewModel.Spelling.ClearCommand}" />
+                            <Separator />
+                            <MenuItem Header="Spelling _Settings and Project Dictionary…"
+                                      Command="{Binding OpenSpellingSettingsCommand}" />
                         </MenuItem>
                         <Separator />
                         <MenuItem x:Name="PART_SoundMenuItem"

@@ -3,6 +3,9 @@ using Avalonia.Controls;
 using Avalonia.Controls.ApplicationLifetimes;
 using Avalonia.Markup.Xaml;
 using Hymnal.Audio;
+using Hymnal.Core.Spelling;
+using Hymnal.Spelling;
+using ReactiveUI;
 using Hymnal.Core.Audio;
 using Hymnal.Core.Infrastructure;
 using Hymnal.Core.Infrastructure.Ai;
@@ -57,6 +60,14 @@ public partial class App : Application
             sp.GetRequiredService<IAudioEngine>(),
             sp.GetRequiredService<SoundPreferences>(),
             ThemeSoundSchemes.SynthwaveThemeId));
+
+        // Spell check: preferences, the dictionaries, each workspace's project dictionary, and the checker that
+        // combines them (the dictionary is read only once something asks for a check).
+        services.AddSingleton<SpellCheckSettingsService>();
+        services.AddSingleton<SpellCheckPreferences>();
+        services.AddSingleton(_ => new DictionaryCatalog());
+        services.AddSingleton<ProjectDictionaryService>();
+        services.AddSingleton<SpellingService>();
 
         // S03 services
         services.AddSingleton<IProcessRunner, GitProcessRunner>();
@@ -130,7 +141,8 @@ public partial class App : Application
                 sp.GetRequiredService<IMetadataStore>(),
                 sp.GetRequiredService<INotificationService>(),
                 sp.GetRequiredService<WordCountService>(),
-                storyFileWriter);
+                storyFileWriter,
+                sp.GetRequiredService<SpellingService>());
             // Metadata changes for the chapter open in the editor are saved through it, keeping unsaved prose.
             storyFileWriter.AttachBuffer(editor);
             return editor;
@@ -373,7 +385,8 @@ public partial class App : Application
                 },
                 sp.GetRequiredService<SoundPreferences>(),
                 sp.GetRequiredService<TypingSoundPlayer>(),
-                sp.GetRequiredService<IThemeService>()));
+                sp.GetRequiredService<IThemeService>(),
+                sp.GetRequiredService<SpellingService>()));
 
         services.AddTransient<MainWindowViewModel>(sp =>
             new MainWindowViewModel(
@@ -404,6 +417,12 @@ public partial class App : Application
 
         // Start the typewriter now, so sounds turned on last session are ready by the first keystroke.
         Services.GetRequiredService<TypingSoundPlayer>();
+
+        // Spell check follows the open workspace's project dictionary.
+        var spelling = Services.GetRequiredService<SpellingService>();
+        Services.GetRequiredService<WorkspaceViewModel>()
+            .WhenAnyValue(w => w.WorkspaceRoot)
+            .Subscribe(root => _ = spelling.SetWorkspaceAsync(root));
 
         if (ApplicationLifetime is IClassicDesktopStyleApplicationLifetime desktop)
         {
