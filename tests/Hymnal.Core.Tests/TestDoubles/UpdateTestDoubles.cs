@@ -83,3 +83,26 @@ internal sealed class InMemoryUpdateHost : IUpdateHost
         return Task.CompletedTask;
     }
 }
+
+/// <summary>App settings in memory; counts reads, and can fail or never answer.</summary>
+internal sealed class InMemorySettingsStore : IAppSettingsStore
+{
+    private readonly Dictionary<string, object?> _values = new();
+    public int Reads { get; private set; }
+    public bool Fail { get; set; }
+    public bool Hang { get; set; }
+
+    public Task<T?> GetAsync<T>(string key)
+    {
+        Reads++;
+        if (Hang) return new TaskCompletionSource<T?>().Task;
+        if (Fail) throw new IOException("unreadable");
+        return Task.FromResult(_values.TryGetValue(key, out var v) && v is T t ? t : default);
+    }
+
+    public Task SetAsync<T>(string key, T value)
+    {
+        _values[key] = value;
+        return Task.CompletedTask;
+    }
+}

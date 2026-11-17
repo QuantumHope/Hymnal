@@ -46,8 +46,29 @@ public partial class MainWindowViewModel : ViewModelBase
     /// <summary>App-wide sound preferences (View → Sound); null when the host has no sound.</summary>
     public Hymnal.Audio.SoundPreferences? SoundPreferences { get; }
 
-    /// <summary>Release updates: the banner and Help → Check for Updates bind here; null when the app runs without them.</summary>
-    public UpdatesViewModel? Updates { get; }
+    private UpdatesViewModel? _updates;
+    private readonly SerialDisposable _updatesWarning = new();
+
+    /// <summary>
+    /// Release updates: the banner and Help → Check for Updates bind here; null when the app runs without them, or until
+    /// the app has loaded the update preferences and set it. The banner's "unsaved changes" warning follows the editor:
+    /// as it becomes dirty, is saved, or opens another file.
+    /// </summary>
+    public UpdatesViewModel? Updates
+    {
+        get => _updates;
+        set
+        {
+            if (ReferenceEquals(_updates, value))
+                return;
+            this.RaiseAndSetIfChanged(ref _updates, value);
+            _updatesWarning.Disposable = value is null
+                ? null
+                : EditorViewModel
+                    .WhenAnyValue(x => x.IsDirty, x => x.ActiveFilePath)
+                    .Subscribe(_ => value.RestartWarningChanged());
+        }
+    }
 
     private bool _isRestarting;
     /// <summary>
@@ -548,12 +569,8 @@ public partial class MainWindowViewModel : ViewModelBase
         IdeasViewModel = ideasViewModel;
         PlanHostViewModel = planHostViewModel;
         SoundPreferences = soundPreferences;
+        Disposables.Add(_updatesWarning);
         Updates = updates;
-        // The banner's "unsaved changes" warning follows the editor: as it becomes dirty, is saved, or opens another file.
-        if (updates is not null)
-            Disposables.Add(editorViewModel
-                .WhenAnyValue(x => x.IsDirty, x => x.ActiveFilePath)
-                .Subscribe(_ => updates.RestartWarningChanged()));
         ToggleSoundCommand = ReactiveCommand.Create(() => soundPreferences?.ToggleSound());
         WriteBeatsViewModel = writeBeatsViewModel;
         _settingsVmFactory = settingsVmFactory;

@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Threading.Tasks;
 using Hymnal.Core.Interfaces;
 using MattEland.HopeLab.Updates.ReactiveUI;
@@ -7,19 +8,47 @@ namespace Hymnal.Infrastructure.Updates;
 
 /// <summary>
 /// What the shared update view model needs from Hymnal: its notification toasts, a browser, and the app settings
-/// store (<c>settings.json</c>) for the two update preferences. A missing or unreadable setting reads as no preference.
+/// store (<c>settings.json</c>) for the two update preferences. The view model reads its preferences synchronously in
+/// its constructor, so <see cref="CreateAsync"/> loads them from the async store first; nothing ever waits on the store.
+/// A missing or unreadable setting reads as no preference.
 /// </summary>
 public sealed class HymnalUpdateHost : IUpdateHost
 {
     private readonly INotificationService _notifications;
     private readonly IAppSettingsStore _settings;
     private readonly Func<string, Task> _openUrl;
+    private readonly Dictionary<string, object?> _preferences;
 
-    public HymnalUpdateHost(INotificationService notifications, IAppSettingsStore settings, Func<string, Task> openUrl)
+    private HymnalUpdateHost(INotificationService notifications, IAppSettingsStore settings, Func<string, Task> openUrl,
+        Dictionary<string, object?> preferences)
     {
         _notifications = notifications;
         _settings = settings;
         _openUrl = openUrl;
+        _preferences = preferences;
+    }
+
+    /// <summary>A host with the update preferences loaded from <paramref name="settings"/>, without blocking any thread.</summary>
+    public static async Task<HymnalUpdateHost> CreateAsync(INotificationService notifications, IAppSettingsStore settings,
+        Func<string, Task> openUrl)
+    {
+        var preferences = new Dictionary<string, object?>(StringComparer.Ordinal);
+        await Load<bool?>(UpdatesViewModel.AutoCheckKey);
+        await Load<string>(UpdatesViewModel.DismissedKey);
+        return new HymnalUpdateHost(notifications, settings, openUrl, preferences);
+
+        async Task Load<T>(string key)
+        {
+            try
+            {
+                if (await settings.GetAsync<T>(key) is { } value)
+                    preferences[key] = value;
+            }
+            catch (Exception)
+            {
+                // Unreadable: no preference, so the view model's default applies.
+            }
+        }
     }
 
     /// <summary>
@@ -56,24 +85,17 @@ public sealed class HymnalUpdateHost : IUpdateHost
         }
     }
 
-    /// <summary>
-    /// Read once, when the view model is created. The store is async (and reads with ConfigureAwait(false)), so it is
-    /// awaited on the thread pool rather than on the caller's thread.
-    /// </summary>
+    /// <summary>The value loaded by <see cref="CreateAsync"/> or set since; never reads the store.</summary>
     public T? GetPreference<T>(string key)
     {
-        try
-        {
-            return Task.Run(() => _settings.GetAsync<T>(key)).GetAwaiter().GetResult();
-        }
-        catch (Exception)
-        {
-            return default;
-        }
+        lock (_preferences)
+            return _preferences.TryGetValue(key, out var value) && value is T typed ? typed : default;
     }
 
     public async Task SetPreferenceAsync<T>(string key, T value)
     {
+        lock (_preferences)
+            _preferences[key] = value;
         try
         {
             await _settings.SetAsync(key, value);

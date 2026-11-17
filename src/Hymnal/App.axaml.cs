@@ -370,15 +370,9 @@ public partial class App : Application
                 sp.GetRequiredService<ManageContextBuilder>(),
                 sp.GetRequiredService<ConversationListViewModel>()));
 
-        // Releases and in-app updates (hopelab-app.json; the shared MattEland.HopeLab.Updates libraries).
+        // Releases and in-app updates (hopelab-app.json; the shared MattEland.HopeLab.Updates libraries). The view
+        // model itself is made once its preferences have loaded (SetUpUpdatesAsync); Settings gets it from there.
         services.AddSingleton<IUpdateService>(sp => HymnalUpdates.CreateService(sp.GetRequiredService<ICredentialStore>()));
-        services.AddSingleton<UpdatesViewModel>(sp => HymnalUpdates.CreateViewModel(
-            sp.GetRequiredService<IUpdateService>(),
-            new HymnalUpdateHost(
-                sp.GetRequiredService<INotificationService>(),
-                sp.GetRequiredService<IAppSettingsStore>(),
-                OpenUrlAsync),
-            () => sp.GetRequiredService<EditorViewModel>().IsDirty));
 
         services.AddTransient<SettingsViewModel>(sp =>
             new SettingsViewModel(
@@ -402,7 +396,7 @@ public partial class App : Application
                 sp.GetRequiredService<TypingSoundPlayer>(),
                 sp.GetRequiredService<IThemeService>(),
                 sp.GetRequiredService<SpellingService>(),
-                sp.GetRequiredService<UpdatesViewModel>()));
+                _updates));
 
         services.AddTransient<MainWindowViewModel>(sp =>
             new MainWindowViewModel(
@@ -426,8 +420,7 @@ public partial class App : Application
                 sp.GetRequiredService<WriteBeatsViewModel>(),
                 sp.GetRequiredService<CollectionsViewModel>(),
                 sp.GetRequiredService<SubmissionExportViewModel>(),
-                sp.GetRequiredService<IThemeService>(),
-                sp.GetRequiredService<UpdatesViewModel>()));
+                sp.GetRequiredService<IThemeService>()));
 
         _serviceProvider = services.BuildServiceProvider();
         Services = _serviceProvider;
@@ -449,37 +442,62 @@ public partial class App : Application
             var vm = Services.GetRequiredService<MainWindowViewModel>();
             var window = new MainWindow { DataContext = vm };
             desktop.MainWindow = window;
-            SetUpUpdates(Services, desktop, window, vm);
+            _ = SetUpUpdatesAsync(Services, desktop, window, vm);
         }
 
         base.OnFrameworkInitializationCompleted();
     }
 
+    /// <summary>The app's update view model, once <see cref="SetUpUpdatesAsync"/> has made it (Settings → Updates).</summary>
+    private UpdatesViewModel? _updates;
+
     /// <summary>
-    /// Checks for updates once the window shows. An installed update saves everything, starts the new copy and exits
-    /// the way File → Exit does; if anything can't be saved, Hymnal keeps running and says so.
+    /// Loads the update preferences without blocking the UI thread, then gives the main window its update view model
+    /// and checks for updates once the window shows. An installed update saves everything, starts the new copy and
+    /// exits the way File → Exit does; if anything can't be saved, Hymnal keeps running and says so.
     /// </summary>
-    private static void SetUpUpdates(
+    private async Task SetUpUpdatesAsync(
         IServiceProvider services,
         IClassicDesktopStyleApplicationLifetime desktop,
         MainWindow window,
         MainWindowViewModel vm)
     {
-        var updates = services.GetRequiredService<UpdatesViewModel>();
-        var restart = new UpdateRestart(
-            services.GetRequiredService<IUpdateService>(),
-            () => vm.SaveAllBeforeRestartAsync(RestartSaveTimeout),
-            () => desktop.TryShutdown(),
-            services.GetRequiredService<INotificationService>(),
-            vm.CancelRestart);
-        updates.RestartRequested += async (_, executable) => await restart.RestartAsync(executable);
-
-        void StartChecks(object? sender, EventArgs e)
+        var notifications = services.GetRequiredService<INotificationService>();
+        try
         {
-            window.Opened -= StartChecks;
-            updates.Start();
+            var host = await HymnalUpdateHost.CreateAsync(notifications, services.GetRequiredService<IAppSettingsStore>(), OpenUrlAsync);
+            var service = services.GetRequiredService<IUpdateService>();
+            var editor = services.GetRequiredService<EditorViewModel>();
+            var updates = HymnalUpdates.CreateViewModel(service, host, () => editor.IsDirty);
+            desktop.Exit += (_, _) => updates.Dispose();
+
+            var restart = new UpdateRestart(
+                service,
+                () => vm.SaveAllBeforeRestartAsync(RestartSaveTimeout),
+                () => desktop.TryShutdown(),
+                notifications,
+                vm.CancelRestart);
+            updates.RestartRequested += async (_, executable) => await restart.RestartAsync(executable);
+
+            _updates = updates;
+            vm.Updates = updates;
+
+            if (window.IsVisible)
+                updates.Start();
+            else
+            {
+                void StartChecks(object? sender, EventArgs e)
+                {
+                    window.Opened -= StartChecks;
+                    updates.Start();
+                }
+                window.Opened += StartChecks;
+            }
         }
-        window.Opened += StartChecks;
+        catch (Exception ex)
+        {
+            notifications.ShowError($"Updates are unavailable: {ex.Message}");
+        }
     }
 
     private static readonly TimeSpan RestartSaveTimeout = TimeSpan.FromSeconds(5);

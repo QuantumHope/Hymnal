@@ -117,7 +117,7 @@ public sealed class HymnalUpdatesTests
         {
             using (var store = new AppSettingsStore(path))
             {
-                var host = new HymnalUpdateHost(new RecordingNotificationService(), store, _ => Task.CompletedTask);
+                var host = await HymnalUpdateHost.CreateAsync(new RecordingNotificationService(), store, _ => Task.CompletedTask);
                 Assert.Null(host.GetPreference<bool?>(UpdatesViewModel.AutoCheckKey));
                 Assert.Null(host.GetPreference<string>(UpdatesViewModel.DismissedKey));
 
@@ -127,7 +127,7 @@ public sealed class HymnalUpdatesTests
             }
 
             using var reopened = new AppSettingsStore(path);
-            var again = new HymnalUpdateHost(new RecordingNotificationService(), reopened, _ => Task.CompletedTask);
+            var again = await HymnalUpdateHost.CreateAsync(new RecordingNotificationService(), reopened, _ => Task.CompletedTask);
             Assert.False(again.GetPreference<bool?>(UpdatesViewModel.AutoCheckKey));
             Assert.Equal("0.1.42", again.GetPreference<string>(UpdatesViewModel.DismissedKey));
 
@@ -142,15 +142,45 @@ public sealed class HymnalUpdatesTests
         }
     }
 
+    [Fact]
+    public async Task Host_reads_preferences_once_up_front_and_never_waits_on_the_store_afterwards()
+    {
+        var store = new InMemorySettingsStore();
+        await store.SetAsync(UpdatesViewModel.AutoCheckKey, false);
+        await store.SetAsync(UpdatesViewModel.DismissedKey, "0.1.42");
+        var host = await HymnalUpdateHost.CreateAsync(new RecordingNotificationService(), store, _ => Task.CompletedTask);
+        var readsAtCreation = store.Reads;
+
+        // A store that would now never answer: reading a preference must not touch it, so nothing can block.
+        store.Hang = true;
+        using var vm = HymnalUpdates.CreateViewModel(new FakeUpdateService(), host, () => false);
+
+        Assert.False(vm.AutoCheck);
+        Assert.Equal("0.1.42", host.GetPreference<string>(UpdatesViewModel.DismissedKey));
+        Assert.Equal(readsAtCreation, store.Reads);
+        Assert.Equal(2, readsAtCreation);
+    }
+
+    [Fact]
+    public async Task Host_treats_an_unreadable_preference_as_none()
+    {
+        var host = await HymnalUpdateHost.CreateAsync(new RecordingNotificationService(), new InMemorySettingsStore { Fail = true },
+            _ => Task.CompletedTask);
+
+        Assert.Null(host.GetPreference<bool?>(UpdatesViewModel.AutoCheckKey));
+        using var vm = HymnalUpdates.CreateViewModel(new FakeUpdateService(), host, () => false);
+        Assert.True(vm.AutoCheck); // the shared default
+    }
+
     [Theory]
     [InlineData(UpdateToastKind.Information, "info")]
     [InlineData(UpdateToastKind.Success, "success")]
     [InlineData(UpdateToastKind.Warning, "error")]
     [InlineData(UpdateToastKind.Error, "error")]
-    public void Host_toasts_become_Hymnal_notifications(UpdateToastKind kind, string expected)
+    public async Task Host_toasts_become_Hymnal_notifications(UpdateToastKind kind, string expected)
     {
         var notifications = new RecordingNotificationService();
-        var host = new HymnalUpdateHost(notifications, new AppSettingsStore(Path.Combine(Path.GetTempPath(), "unused.json")), _ => Task.CompletedTask);
+        var host = await HymnalUpdateHost.CreateAsync(notifications, new InMemorySettingsStore(), _ => Task.CompletedTask);
 
         host.Toast("Hymnal 0.1.42 is available", "Install it from the banner.", kind);
         host.Toast("Token removed", "", kind);
@@ -162,7 +192,7 @@ public sealed class HymnalUpdatesTests
     public async Task Host_reports_a_browser_that_would_not_open()
     {
         var notifications = new RecordingNotificationService();
-        var host = new HymnalUpdateHost(notifications, new AppSettingsStore(Path.Combine(Path.GetTempPath(), "unused.json")),
+        var host = await HymnalUpdateHost.CreateAsync(notifications, new InMemorySettingsStore(),
             _ => throw new InvalidOperationException("no browser"));
 
         await host.OpenUrlAsync("https://github.com/QuantumHope/Hymnal/releases");
