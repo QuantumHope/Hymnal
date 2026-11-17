@@ -156,6 +156,7 @@ public class SettingsViewModel : ViewModelBase
             this.RaisePropertyChanged(nameof(IsProjectSection));
             this.RaisePropertyChanged(nameof(IsAiProvidersSection));
             this.RaisePropertyChanged(nameof(IsSoundSection));
+            this.RaisePropertyChanged(nameof(IsRunsSection));
             this.RaisePropertyChanged(nameof(IsSpellingSection));
             this.RaisePropertyChanged(nameof(IsUpdatesSection));
         }
@@ -165,6 +166,12 @@ public class SettingsViewModel : ViewModelBase
     public bool IsProjectSection => Section == SettingsSection.Project;
     public bool IsAiProvidersSection => Section == SettingsSection.AiProviders;
     public bool IsSoundSection => Section == SettingsSection.Sound;
+    public bool IsRunsSection => Section == SettingsSection.Runs;
+
+    /// <summary>The Runs section's choices (flames, glow, sparks, ambience); null hides the section.</summary>
+    public RunAtmospherePreferences? RunAtmosphere { get; }
+
+    public bool HasRuns => RunAtmosphere is not null;
     public bool IsSpellingSection => Section == SettingsSection.Spelling;
     public bool IsUpdatesSection => Section == SettingsSection.Updates;
 
@@ -228,8 +235,10 @@ public class SettingsViewModel : ViewModelBase
         TypingSoundPlayer? typingSounds = null,
         IThemeService? themes = null,
         SpellingService? spelling = null,
-        UpdatesViewModel? updates = null)
+        UpdatesViewModel? updates = null,
+        RunAtmospherePreferences? runAtmosphere = null)
     {
+        RunAtmosphere = runAtmosphere;
         _themes = themes;
         ThemeSections = BuildThemeSections(themes);
         ShowSectionCommand = ReactiveCommand.Create<SettingsSection>(section => Section = section);
@@ -679,6 +688,7 @@ public enum SettingsSection
     Appearance,
     Project,
     Sound,
+    Runs,
     Spelling,
     Updates,
     AiProviders,

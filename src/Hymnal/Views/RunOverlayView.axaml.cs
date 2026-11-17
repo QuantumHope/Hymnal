@@ -9,21 +9,21 @@ using Hymnal.ViewModels;
 namespace Hymnal.Views;
 
 /// <summary>
-/// The writing sprint's screens (start card, recap, note to Future You). Only focus and Esc live here: each screen's
-/// main control takes focus when it appears, and Esc cancels the start card or closes the recap and note screens.
+/// The writing run's screens (start card, recap, note to Future You). Only focus and Esc live here: each screen's
+/// main control takes focus when it appears (the dial, so arrows and typed minutes work at once), and Esc cancels the start card or closes the recap and note screens.
 /// </summary>
-public partial class SprintOverlayView : UserControl
+public partial class RunOverlayView : UserControl
 {
-    public SprintOverlayView()
+    public RunOverlayView()
     {
         InitializeComponent();
         AddHandler(KeyDownEvent, OnPreviewKeyDown, RoutingStrategies.Tunnel);
-        StartCard.PropertyChanged += (_, args) => FocusWhenShown(args, BeginButton);
+        StartCard.PropertyChanged += (_, args) => FocusWhenShown(args, Dial);
         RecapCard.PropertyChanged += (_, args) => FocusWhenShown(args, FutureYouButton);
         FutureYouCard.PropertyChanged += (_, args) => FocusWhenShown(args, FutureYouInput);
     }
 
-    private SprintViewModel? ViewModel => DataContext as SprintViewModel;
+    private RunViewModel? ViewModel => DataContext as RunViewModel;
 
     private static void FocusWhenShown(AvaloniaPropertyChangedEventArgs args, InputElement target)
     {

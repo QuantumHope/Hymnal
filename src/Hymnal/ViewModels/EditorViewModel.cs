@@ -300,7 +300,7 @@ public partial class EditorViewModel : ViewModelBase, IDisposable, IOpenStoryBuf
     /// Fires for every change the author makes to the buffer (typing, paste, insert, spelling fix), with the node it
     /// was made in, and never for loading a file, a reload or a revert. While a chapter loads, <see cref="Text"/>
     /// changes before <see cref="ActiveNode"/>, so a <see cref="Text"/> observer can't tell which chapter a change
-    /// belongs to; writing sprints use this instead.
+    /// belongs to; writing runs use this instead.
     /// </summary>
     public IObservable<ProseEdit> ProseEdited => _proseEdited.AsObservable();
 

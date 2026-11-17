@@ -6,18 +6,19 @@ using System.Reactive.Concurrency;
 using System.Reactive.Disposables;
 using System.Reactive.Linq;
 using System.Threading.Tasks;
+using Hymnal.Audio;
 using Hymnal.Core.Interfaces;
 using Hymnal.Core.Models;
-using Hymnal.Core.Models.Sprints;
+using Hymnal.Core.Models.Runs;
 using Hymnal.Core.Services;
-using Hymnal.Core.Services.Sprints;
+using Hymnal.Core.Services.Runs;
 using ReactiveUI;
 using ReactiveUI.Avalonia;
 using Avalonia.Threading;
 
 namespace Hymnal.ViewModels;
 
-public enum SprintStage
+public enum RunStage
 {
     Idle,
     Choosing,
@@ -26,10 +27,10 @@ public enum SprintStage
     FutureYou,
 }
 
-/// <summary>A sprint length on the start card.</summary>
-public sealed class SprintDurationOption : ReactiveObject
+/// <summary>A run length on the start card.</summary>
+public sealed class RunDurationOption : ReactiveObject
 {
-    public SprintDurationOption(int minutes) => Minutes = minutes;
+    public RunDurationOption(int minutes) => Minutes = minutes;
 
     public int Minutes { get; }
     public string Label => $"{Minutes} min";
@@ -43,10 +44,10 @@ public sealed class SprintDurationOption : ReactiveObject
 }
 
 /// <summary>One chapter's line in the recap.</summary>
-public sealed record SprintRecapChapter(string Title, string NetDisplay, string DetailDisplay);
+public sealed record RunRecapChapter(string Title, string NetDisplay, string DetailDisplay);
 
 /// <summary>Everything the recap screen shows, already formatted.</summary>
-public sealed record SprintRecap
+public sealed record RunRecap
 {
     public required string Headline { get; init; }
     public required string Summary { get; init; }
@@ -61,7 +62,7 @@ public sealed record SprintRecap
     /// <summary>Share of touched words that were added, 0–100, for the impact bar.</summary>
     public required double AddedPercent { get; init; }
     public required bool HasChanges { get; init; }
-    public required IReadOnlyList<SprintRecapChapter> Chapters { get; init; }
+    public required IReadOnlyList<RunRecapChapter> Chapters { get; init; }
     public required string ProjectWords { get; init; }
     public string? TargetProgress { get; init; }
     public double TargetPercentAfter { get; init; }
@@ -76,15 +77,20 @@ public sealed record SprintRecap
 }
 
 /// <summary>
-/// One-click writing sprints: the start card, the running timer (shown as a HUD over focus mode), the recap and the
+/// One-click writing runs: the start card, the running timer (shown as a HUD over focus mode), the recap and the
 /// "note to Future You" screen. Edits are attributed to chapters through <see cref="EditorViewModel.ProseEdited"/>;
-/// finished sprints go to the global writer profile and notes to the workspace.
+/// finished runs go to the global writer profile and notes to the workspace.
 /// </summary>
-public sealed class SprintViewModel : ViewModelBase, IDisposable
+public sealed class RunViewModel : ViewModelBase, IDisposable
 {
-    public static readonly IReadOnlyList<int> Presets = [10, 15, 25, 45];
+    public static readonly IReadOnlyList<int> Presets = [10, 15, 25, 45, 60];
     public const int DefaultMinutes = 15;
-    public const string LastMinutesKey = "sprint.lastMinutes";
+    public const int MinMinutes = 1;
+    public const int MaxMinutes = 180;
+
+    /// <summary>How long a combo callout stays on the HUD.</summary>
+    private static readonly TimeSpan ComboShown = TimeSpan.FromSeconds(3);
+    public const string LastMinutesKey = "run.lastMinutes";
 
     private readonly EditorViewModel _editor;
     private readonly WorkspaceViewModel _workspace;
@@ -94,9 +100,10 @@ public sealed class SprintViewModel : ViewModelBase, IDisposable
     private readonly IAppSettingsStore _settings;
     private readonly INotificationService _notifications;
     private readonly IScheduler _scheduler;
+    private readonly IRunSoundscape _soundscape;
 
     private readonly SerialDisposable _running = new();
-    private SprintTracker? _tracker;
+    private RunTracker? _tracker;
     private DateTimeOffset _startedAt;
     private TimeSpan _planned;
     private int _projectWordsAtStart;
@@ -104,8 +111,11 @@ public sealed class SprintViewModel : ViewModelBase, IDisposable
     private string _workspaceRoot = "";
     private string _workspaceName = "";
     private bool _finishing;
+    private int _lastNet;
+    private DateTimeOffset _comboUntil;
+    private string? _lastRunId;
 
-    public SprintViewModel(
+    public RunViewModel(
         EditorViewModel editor,
         WorkspaceViewModel workspace,
         IWriterProfileStore profile,
@@ -113,7 +123,9 @@ public sealed class SprintViewModel : ViewModelBase, IDisposable
         WordCountService counter,
         IAppSettingsStore settings,
         INotificationService notifications,
-        IScheduler? scheduler = null)
+        IScheduler? scheduler = null,
+        RunAtmospherePreferences? atmosphere = null,
+        IRunSoundscape? soundscape = null)
     {
         _editor = editor;
         _workspace = workspace;
@@ -123,76 +135,84 @@ public sealed class SprintViewModel : ViewModelBase, IDisposable
         _settings = settings;
         _notifications = notifications;
         _scheduler = scheduler ?? AvaloniaScheduler.Instance;
+        Atmosphere = atmosphere ?? new RunAtmospherePreferences();
+        _soundscape = soundscape ?? new SilentRunSoundscape();
 
-        DurationOptions = Presets.Select(m => new SprintDurationOption(m)).ToList();
+        DurationOptions = Presets.Select(m => new RunDurationOption(m)).ToList();
         SelectMinutes(DefaultMinutes);
         Disposables.Add(_running);
 
         var stage = this.WhenAnyValue(x => x.Stage);
-        Disposables.Add(_isRunning = stage.Select(s => s == SprintStage.Running).ToProperty(this, x => x.IsRunning));
-        Disposables.Add(_isChoosing = stage.Select(s => s == SprintStage.Choosing).ToProperty(this, x => x.IsChoosing));
-        Disposables.Add(_isRecap = stage.Select(s => s == SprintStage.Recap).ToProperty(this, x => x.IsRecap));
-        Disposables.Add(_isFutureYou = stage.Select(s => s == SprintStage.FutureYou).ToProperty(this, x => x.IsFutureYou));
+        Disposables.Add(_isRunning = stage.Select(s => s == RunStage.Running).ToProperty(this, x => x.IsRunning));
+        Disposables.Add(_isChoosing = stage.Select(s => s == RunStage.Choosing).ToProperty(this, x => x.IsChoosing));
+        Disposables.Add(_isRecap = stage.Select(s => s == RunStage.Recap).ToProperty(this, x => x.IsRecap));
+        Disposables.Add(_isFutureYou = stage.Select(s => s == RunStage.FutureYou).ToProperty(this, x => x.IsFutureYou));
         Disposables.Add(_isOverlayOpen = stage
-            .Select(s => s is SprintStage.Choosing or SprintStage.Recap or SprintStage.FutureYou)
+            .Select(s => s is RunStage.Choosing or RunStage.Recap or RunStage.FutureYou)
             .ToProperty(this, x => x.IsOverlayOpen));
 
         var canOpen = Observable.CombineLatest(
             stage, workspace.WhenAnyValue(x => x.HasWorkspace),
-            (s, has) => s == SprintStage.Idle && has);
+            (s, has) => s == RunStage.Idle && has);
         // Command results and can-execute changes go to the UI thread (as RxApp.MainThreadScheduler does in the
         // app), so buttons bound to them are never touched from a background thread.
         var ui = AvaloniaScheduler.Instance;
         OpenCommand = ReactiveCommand.CreateFromTask(OpenAsync, canOpen, ui);
         SelectDurationCommand = ReactiveCommand.Create<int>(SelectMinutes, outputScheduler: ui);
-        BeginCommand = ReactiveCommand.Create(Begin, stage.Select(s => s == SprintStage.Choosing), ui);
-        CancelCommand = ReactiveCommand.Create(() => { Stage = SprintStage.Idle; },
-            stage.Select(s => s == SprintStage.Choosing), ui);
+        BeginCommand = ReactiveCommand.Create(Begin, stage.Select(s => s == RunStage.Choosing), ui);
+        CancelCommand = ReactiveCommand.Create(() => { Stage = RunStage.Idle; },
+            stage.Select(s => s == RunStage.Choosing), ui);
         EndCommand = ReactiveCommand.CreateFromTask(() => FinishAsync(completed: false),
-            stage.Select(s => s == SprintStage.Running), ui);
-        ToFutureYouCommand = ReactiveCommand.Create(ShowFutureYou, stage.Select(s => s == SprintStage.Recap), ui);
-        DoneCommand = ReactiveCommand.Create(() => { Stage = SprintStage.Idle; },
-            stage.Select(s => s is SprintStage.Recap or SprintStage.FutureYou), ui);
+            stage.Select(s => s == RunStage.Running), ui);
+        ToFutureYouCommand = ReactiveCommand.Create(ShowFutureYou, stage.Select(s => s == RunStage.Recap), ui);
+        DoneCommand = ReactiveCommand.Create(() => { Stage = RunStage.Idle; },
+            stage.Select(s => s is RunStage.Recap or RunStage.FutureYou), ui);
         SaveNoteCommand = ReactiveCommand.CreateFromTask(SaveNoteAsync,
             Observable.CombineLatest(stage, this.WhenAnyValue(x => x.FutureYouText),
-                (s, text) => s == SprintStage.FutureYou && !string.IsNullOrWhiteSpace(text)), ui);
+                (s, text) => s == RunStage.FutureYou && !string.IsNullOrWhiteSpace(text)), ui);
+        NudgeMinutesCommand = ReactiveCommand.Create<int>(delta => SelectedMinutes += delta, outputScheduler: ui);
+        ShowLogbookCommand = ReactiveCommand.CreateFromTask(
+            () => RunLogbookViewModel.LoadAsync(_profile, _notes, DateOnly.FromDateTime(_scheduler.Now.ToLocalTime().DateTime)),
+            outputScheduler: ui);
 
-        foreach (var command in new IHandleObservableErrors[] { OpenCommand, EndCommand, SaveNoteCommand })
-            Disposables.Add(command.ThrownExceptions.Subscribe(ex => _notifications.ShowError($"Sprint: {ex.Message}")));
+        foreach (var command in new IHandleObservableErrors[] { OpenCommand, EndCommand, SaveNoteCommand, ShowLogbookCommand })
+            Disposables.Add(command.ThrownExceptions.Subscribe(ex => _notifications.ShowError($"Run: {ex.Message}")));
 
         // Attribute every edit to the chapter it was made in.
         Disposables.Add(editor.ProseEdited
-            .Where(_ => Stage == SprintStage.Running)
+            .Where(_ => Stage == RunStage.Running)
             .Subscribe(e =>
             {
                 if (e.Node is { Kind: NodeKind.Chapter } node && !e.IsBookTxt)
                     Observe(node, e.Text);
             }));
 
-        // A chapter opened mid-sprint: its loaded text is its baseline (or, after a save, matches its latest).
+        // A chapter opened mid-run: its loaded text is its baseline (or, after a save, matches its latest).
         Disposables.Add(editor.WhenAnyValue(x => x.ActiveNode)
-            .Where(_ => Stage == SprintStage.Running)
+            .Where(_ => Stage == RunStage.Running)
             .Subscribe(_ => ObserveActive()));
 
         // A save can follow an undo back to the saved text, which is not a ProseEdit; catch it here.
         Disposables.Add(editor.Saved
-            .Where(_ => Stage == SprintStage.Running)
+            .Where(_ => Stage == RunStage.Running)
             .Subscribe(_ => ObserveActive()));
 
-        // Closing the workspace abandons a running sprint and closes the screens.
+        // Closing the workspace abandons a running run and closes the screens.
         Disposables.Add(workspace.WhenAnyValue(x => x.HasWorkspace)
-            .Where(has => !has && Stage != SprintStage.Idle)
+            .Where(has => !has && Stage != RunStage.Idle)
             .Subscribe(_ =>
             {
+                if (Stage == RunStage.Running)
+                    _soundscape.Finish(completed: false);
                 _running.Disposable = null;
-                Stage = SprintStage.Idle;
+                Stage = RunStage.Idle;
             }));
     }
 
     // ── State ──────────────────────────────────────────────────────────────
 
-    private SprintStage _stage;
-    public SprintStage Stage
+    private RunStage _stage;
+    public RunStage Stage
     {
         get => _stage;
         private set => this.RaiseAndSetIfChanged(ref _stage, value);
@@ -215,14 +235,18 @@ public sealed class SprintViewModel : ViewModelBase, IDisposable
 
     // ── Start card ─────────────────────────────────────────────────────────
 
-    public IReadOnlyList<SprintDurationOption> DurationOptions { get; }
+    public IReadOnlyList<RunDurationOption> DurationOptions { get; }
 
     private int _selectedMinutes;
+    /// <summary>The run length on the dial, <see cref="MinMinutes"/> to <see cref="MaxMinutes"/>.</summary>
     public int SelectedMinutes
     {
         get => _selectedMinutes;
-        private set => this.RaiseAndSetIfChanged(ref _selectedMinutes, value);
+        set => SelectMinutes(value);
     }
+
+    /// <summary>The run atmosphere choices (flames, glow, sparks, ambience).</summary>
+    public RunAtmospherePreferences Atmosphere { get; }
 
     private FutureYouNote? _pastYouNote;
     /// <summary>The latest note the author left for this session, shown on the start card.</summary>
@@ -253,7 +277,7 @@ public sealed class SprintViewModel : ViewModelBase, IDisposable
     }
 
     private double _progress;
-    /// <summary>Elapsed share of the sprint, 0–100.</summary>
+    /// <summary>Elapsed share of the run, 0–100.</summary>
     public double Progress
     {
         get => _progress;
@@ -267,10 +291,56 @@ public sealed class SprintViewModel : ViewModelBase, IDisposable
         private set => this.RaiseAndSetIfChanged(ref _liveNetDisplay, value);
     }
 
+    private double _intensity;
+    /// <summary>How hard the atmosphere burns, <see cref="RunIntensity.Idle"/> to 1 (see <see cref="RunIntensity"/>).</summary>
+    public double Intensity
+    {
+        get => _intensity;
+        private set => this.RaiseAndSetIfChanged(ref _intensity, value);
+    }
+
+    private bool _isFinalStretch;
+    /// <summary>True through the last minute (or last quarter of a short run): the HUD runs hot.</summary>
+    public bool IsFinalStretch
+    {
+        get => _isFinalStretch;
+        private set => this.RaiseAndSetIfChanged(ref _isFinalStretch, value);
+    }
+
+    private int _sparks;
+    /// <summary>Counts words added during runs; each rise throws sparks off the HUD.</summary>
+    public int Sparks
+    {
+        get => _sparks;
+        private set => this.RaiseAndSetIfChanged(ref _sparks, value);
+    }
+
+    private string? _comboText;
+    /// <summary>A combo callout ("COMBO · 100 WORDS") for a few seconds after the net count crosses a threshold.</summary>
+    public string? ComboText
+    {
+        get => _comboText;
+        private set
+        {
+            this.RaiseAndSetIfChanged(ref _comboText, value);
+            this.RaisePropertyChanged(nameof(HasCombo));
+        }
+    }
+
+    public bool HasCombo => ComboText != null;
+
+    private int _celebrations;
+    /// <summary>Goes up each time a run's timer runs out; the atmosphere layer bursts.</summary>
+    public int Celebrations
+    {
+        get => _celebrations;
+        private set => this.RaiseAndSetIfChanged(ref _celebrations, value);
+    }
+
     // ── Recap and Future You ───────────────────────────────────────────────
 
-    private SprintRecap? _recap;
-    public SprintRecap? Recap
+    private RunRecap? _recap;
+    public RunRecap? Recap
     {
         get => _recap;
         private set => this.RaiseAndSetIfChanged(ref _recap, value);
@@ -316,6 +386,12 @@ public sealed class SprintViewModel : ViewModelBase, IDisposable
     public ReactiveCommand<Unit, Unit> DoneCommand { get; }
     public ReactiveCommand<Unit, Unit> SaveNoteCommand { get; }
 
+    /// <summary>Moves the dial by a number of minutes (the − and + buttons).</summary>
+    public ReactiveCommand<int, Unit> NudgeMinutesCommand { get; }
+
+    /// <summary>Loads the Logbook; the window shows the result.</summary>
+    public ReactiveCommand<Unit, RunLogbookViewModel> ShowLogbookCommand { get; }
+
     // ── Flow ───────────────────────────────────────────────────────────────
 
     private async Task OpenAsync()
@@ -325,22 +401,23 @@ public sealed class SprintViewModel : ViewModelBase, IDisposable
         var note = string.IsNullOrEmpty(root) ? null : await _notes.LatestAsync(root);
         await OnUiAsync(() =>
         {
-            SelectMinutes(last is > 0 and <= 240 ? last.Value : DefaultMinutes);
+            SelectMinutes(last is >= MinMinutes and <= MaxMinutes ? last.Value : DefaultMinutes);
             PastYouNote = note;
-            Stage = SprintStage.Choosing;
+            Stage = RunStage.Choosing;
         });
     }
 
     private void SelectMinutes(int minutes)
     {
-        SelectedMinutes = minutes;
+        minutes = Math.Clamp(minutes, MinMinutes, MaxMinutes);
+        this.RaiseAndSetIfChanged(ref _selectedMinutes, minutes, nameof(SelectedMinutes));
         foreach (var option in DurationOptions)
             option.IsSelected = option.Minutes == minutes;
     }
 
     private void Begin()
     {
-        _tracker = new SprintTracker(_counter);
+        _tracker = new RunTracker(_counter);
         _startedAt = _scheduler.Now;
         _planned = TimeSpan.FromMinutes(SelectedMinutes);
         _projectWordsAtStart = _workspace.TotalWordCount;
@@ -348,19 +425,25 @@ public sealed class SprintViewModel : ViewModelBase, IDisposable
         _workspaceRoot = _workspace.WorkspaceRoot;
         _workspaceName = _workspace.WorkspaceName ?? "";
         _finishing = false;
+        _lastNet = 0;
+        _comboUntil = DateTimeOffset.MinValue;
+        ComboText = null;
+        Intensity = RunIntensity.Idle;
+        IsFinalStretch = false;
         _ = _settings.SetAsync(LastMinutesKey, SelectedMinutes);
 
-        Stage = SprintStage.Running;
+        Stage = RunStage.Running;
+        _soundscape.Start();
         ObserveActive();
         Tick();
         _running.Disposable = Observable.Interval(TimeSpan.FromSeconds(1), _scheduler)
             .Subscribe(_ => Tick());
     }
 
-    /// <summary>Updates the HUD; when the time is up, finishes the sprint. Runs every second while running.</summary>
+    /// <summary>Updates the HUD; when the time is up, finishes the run. Runs every second while running.</summary>
     public void Tick()
     {
-        if (Stage != SprintStage.Running || _tracker == null)
+        if (Stage != RunStage.Running || _tracker == null)
             return;
 
         var elapsed = _scheduler.Now - _startedAt;
@@ -371,6 +454,11 @@ public sealed class SprintViewModel : ViewModelBase, IDisposable
         RemainingDisplay = $"{(int)remaining.TotalMinutes:00}:{remaining.Seconds:00}";
         Progress = Math.Clamp(elapsed.TotalSeconds / _planned.TotalSeconds * 100, 0, 100);
         LiveNetDisplay = $"{Signed(_tracker.LiveNet)} {Words(_tracker.LiveNet)}";
+        Intensity = RunIntensity.At(remaining, _planned);
+        IsFinalStretch = RunIntensity.IsFinalStretch(remaining, _planned);
+        _soundscape.SetIntensity(Intensity);
+        if (ComboText != null && _scheduler.Now >= _comboUntil)
+            ComboText = null;
 
         if (remaining == TimeSpan.Zero)
             _ = FinishAsync(completed: true);
@@ -381,7 +469,19 @@ public sealed class SprintViewModel : ViewModelBase, IDisposable
         if (_tracker == null)
             return;
         _tracker.Observe(node.RelativePath, node.Title, text);
-        LiveNetDisplay = $"{Signed(_tracker.LiveNet)} {Words(_tracker.LiveNet)}";
+        var net = _tracker.LiveNet;
+        LiveNetDisplay = $"{Signed(net)} {Words(net)}";
+
+        if (net > _lastNet)
+        {
+            Sparks += net - _lastNet;
+            if (RunCombos.Crossed(_lastNet, net) is { } combo)
+            {
+                ComboText = RunCombos.Callout(combo);
+                _comboUntil = _scheduler.Now + ComboShown;
+            }
+        }
+        _lastNet = net;
     }
 
     private void ObserveActive()
@@ -392,11 +492,13 @@ public sealed class SprintViewModel : ViewModelBase, IDisposable
 
     private async Task FinishAsync(bool completed)
     {
-        if (Stage != SprintStage.Running || _tracker == null || _finishing)
+        if (Stage != RunStage.Running || _tracker == null || _finishing)
             return;
         _finishing = true;
         _running.Disposable = null;
         ObserveActive();
+        _soundscape.Finish(completed);
+        ComboText = null;
 
         var tracker = _tracker;
         var elapsed = _scheduler.Now - _startedAt;
@@ -407,13 +509,14 @@ public sealed class SprintViewModel : ViewModelBase, IDisposable
 
         if (summary.Total.Touched == 0 && seconds < 60)
         {
-            Stage = SprintStage.Idle;
-            _notifications.ShowInfo("Sprint ended with no writing, so it wasn't recorded.");
+            _lastRunId = null;
+            Stage = RunStage.Idle;
+            _notifications.ShowInfo("Run ended with no writing, so it wasn't recorded.");
             return;
         }
 
         var localDate = DateOnly.FromDateTime(_startedAt.ToLocalTime().DateTime);
-        var session = new SprintSessionRecord
+        var session = new RunRecord
         {
             Id = Guid.NewGuid().ToString("N"),
             StartedAt = _startedAt,
@@ -422,43 +525,49 @@ public sealed class SprintViewModel : ViewModelBase, IDisposable
             ActualSeconds = seconds,
             Completed = completed,
             Workspace = _workspaceName,
+            WorkspacePath = string.IsNullOrEmpty(_workspaceRoot) ? null : _workspaceRoot,
             WordsAdded = summary.Total.Added,
             WordsCut = summary.Total.Cut,
             WordsNet = summary.Total.Net,
             Chapters = summary.Chapters.Count,
         };
 
+        _lastRunId = session.Id;
         StreakOutcome? streak = null;
         string? profileError = null;
-        var earlier = await _profile.LoadSessionsAsync();
+        var earlier = await _profile.LoadRunsAsync();
         if (earlier.IsSuccess)
         {
-            var saved = await _profile.AppendSessionAsync(session);
+            var saved = await _profile.AppendRunAsync(session);
             if (saved.IsSuccess)
                 streak = StreakCalculator.Apply(earlier.Value!.Select(s => DateOnly.Parse(s.LocalDate)), localDate);
             else
-                profileError = $"This sprint wasn't recorded: {saved.Error}";
+                profileError = $"This run wasn't recorded: {saved.Error}";
         }
         else
         {
-            profileError = $"This sprint wasn't recorded: {earlier.Error}";
+            profileError = $"This run wasn't recorded: {earlier.Error}";
         }
 
         await OnUiAsync(() =>
         {
             Recap = BuildRecap(summary, seconds, completed, streak, profileError);
             CaptureLeftOff(tracker);
-            Stage = SprintStage.Recap;
+            Intensity = completed ? 1 : RunIntensity.Idle;
+            IsFinalStretch = false;
+            Stage = RunStage.Recap;
+            if (completed)
+                Celebrations++;
         });
     }
 
-    private SprintRecap BuildRecap(SprintSummary summary, int seconds, bool completed, StreakOutcome? streak,
+    private RunRecap BuildRecap(RunSummary summary, int seconds, bool completed, StreakOutcome? streak,
         string? profileError)
     {
         var total = summary.Total;
         var minutes = seconds / 60.0;
         var wpm = minutes >= 0.5 ? (int)Math.Round(Math.Max(0, total.Net) / minutes) : 0;
-        var xp = SprintScoring.Xp(total.Added, total.Cut, seconds, completed);
+        var xp = RunScoring.Xp(total.Added, total.Cut, seconds, completed);
 
         var before = _projectWordsAtStart;
         var after = Math.Max(0, before + total.Net);
@@ -470,7 +579,7 @@ public sealed class SprintViewModel : ViewModelBase, IDisposable
             var percentBefore = 100.0 * before / target;
             percentAfter = 100.0 * after / target;
             targetProgress = $"{percentBefore:0}% → {percentAfter:0}% of your {target:N0}-word target";
-            if (SprintScoring.MilestoneCrossed(percentBefore, percentAfter) is { } m)
+            if (RunScoring.MilestoneCrossed(percentBefore, percentAfter) is { } m)
                 milestone = m == 100 ? "Target reached! The draft hits 100%." : $"Milestone: you crossed {m}% of your target.";
         }
 
@@ -479,9 +588,9 @@ public sealed class SprintViewModel : ViewModelBase, IDisposable
             ? $"{duration} at the desk. Showing up counts."
             : $"{Signed(total.Net)} {Words(total.Net)} in {duration}.";
 
-        return new SprintRecap
+        return new RunRecap
         {
-            Headline = completed ? "SPRINT COMPLETE" : "SPRINT ENDED",
+            Headline = completed ? "RUN COMPLETE" : "RUN ENDED",
             Summary = summaryLine,
             Added = $"+{total.Added:N0}",
             Cut = $"−{total.Cut:N0}",
@@ -489,11 +598,11 @@ public sealed class SprintViewModel : ViewModelBase, IDisposable
             Minutes = duration,
             WordsPerMinute = wpm.ToString("N0"),
             Xp = $"+{xp:N0} XP",
-            ChurnLabel = SprintScoring.Label(SprintScoring.Churn(total)),
+            ChurnLabel = RunScoring.Label(RunScoring.Churn(total)),
             AddedPercent = total.Touched == 0 ? 0 : 100.0 * total.Added / total.Touched,
             HasChanges = total.Touched > 0,
             Chapters = summary.Chapters
-                .Select(c => new SprintRecapChapter(c.Title, Signed(c.Delta.Net),
+                .Select(c => new RunRecapChapter(c.Title, Signed(c.Delta.Net),
                     $"+{c.Delta.Added:N0} / −{c.Delta.Cut:N0}"))
                 .ToList(),
             ProjectWords = $"{before:N0} → {after:N0} words",
@@ -506,7 +615,7 @@ public sealed class SprintViewModel : ViewModelBase, IDisposable
         };
     }
 
-    private void CaptureLeftOff(SprintTracker tracker)
+    private void CaptureLeftOff(RunTracker tracker)
     {
         var key = tracker.LastKey;
         if (key == null && _editor.ActiveNode is { Kind: NodeKind.Chapter } active)
@@ -514,13 +623,13 @@ public sealed class SprintViewModel : ViewModelBase, IDisposable
 
         _leftOffPath = key;
         LeftOffChapter = key == null ? null : tracker.TitleOf(key) ?? _editor.ActiveNode?.Title ?? key;
-        LeftOffLine = key == null ? null : SprintTracker.LastLine(tracker.LatestText(key) ?? _editor.Text);
+        LeftOffLine = key == null ? null : RunTracker.LastLine(tracker.LatestText(key) ?? _editor.Text);
     }
 
     private void ShowFutureYou()
     {
         FutureYouText = "";
-        Stage = SprintStage.FutureYou;
+        Stage = RunStage.FutureYou;
     }
 
     private async Task SaveNoteAsync()
@@ -529,6 +638,7 @@ public sealed class SprintViewModel : ViewModelBase, IDisposable
         {
             CreatedAt = _scheduler.Now,
             Text = FutureYouText.Trim(),
+            RunId = _lastRunId,
             ChapterPath = _leftOffPath,
             ChapterTitle = LeftOffChapter,
             LastLine = LeftOffLine,
@@ -541,8 +651,8 @@ public sealed class SprintViewModel : ViewModelBase, IDisposable
                 _notifications.ShowError($"Your note wasn't saved: {result.Error}");
                 return;
             }
-            Stage = SprintStage.Idle;
-            _notifications.ShowInfo("Note saved. Future You will see it when the next sprint starts.");
+            Stage = RunStage.Idle;
+            _notifications.ShowInfo("Note saved. Future You will see it when the next run starts.");
         });
     }
 

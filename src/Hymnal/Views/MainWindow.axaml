@@ -188,7 +188,8 @@
         <KeyBinding Gesture="F8" Command="{Binding EditorViewModel.Spelling.NextIssueCommand}" />
         <KeyBinding Gesture="Shift+F8" Command="{Binding EditorViewModel.Spelling.PreviousIssueCommand}" />
         <KeyBinding Gesture="F11" Command="{Binding ToggleFocusModeCommand}" />
-        <KeyBinding Gesture="Ctrl+Alt+S" Command="{Binding Sprint.OpenCommand}" />
+        <KeyBinding Gesture="Ctrl+Alt+R" Command="{Binding WritingRun.OpenCommand}" />
+        <KeyBinding Gesture="Ctrl+Alt+L" Command="{Binding WritingRun.ShowLogbookCommand}" />
         <!-- Esc closes the command palette first; ExitFocusModeCommand can't run while it is open. -->
         <KeyBinding Gesture="Escape" Command="{Binding CommandPalette.CloseCommand}" />
         <KeyBinding Gesture="Escape" Command="{Binding ExitFocusModeCommand}" />
@@ -224,18 +225,15 @@
                         <MenuItem Header="_Save"
                                   Command="{Binding EditorViewModel.SaveCommand}"
                                   InputGesture="Ctrl+S" />
+                        <MenuItem Header="New _Idea…"
+                                  IsVisible="{Binding IsIdeasModeAvailable}"
+                                  Command="{Binding QuickCaptureIdeaCommand}"
+                                  InputGesture="Ctrl+Shift+I" />
                         <Separator />
                         <MenuItem Header="E_xit"
                                   Command="{Binding ExitCommand}" />
                     </MenuItem>
                     <MenuItem Header="_View" Foreground="{DynamicResource Cora.Text}">
-                        <MenuItem Header="_Go To…"
-                                  Command="{Binding ShowGoToCommand}"
-                                  InputGesture="Ctrl+P" />
-                        <MenuItem Header="_Command Palette…"
-                                  Command="{Binding ShowCommandsCommand}"
-                                  InputGesture="Ctrl+Shift+P" />
-                        <Separator />
                         <MenuItem Header="Toggle _Left Sidebar"
                                   Command="{Binding ToggleSidebarCommand}"
                                   InputGesture="Ctrl+B" />
@@ -255,16 +253,13 @@
                                   IsVisible="{Binding IsBeatsSectionAvailable}"
                                   Command="{Binding ToggleRightPaneCommand}" CommandParameter="beats"
                                   InputGesture="F7" />
+                        <MenuItem Header="Toggle _AI Chat"
+                                  Command="{Binding ToggleRightPaneCommand}" CommandParameter="chat"
+                                  InputGesture="Ctrl+Shift+A" />
+                        <Separator />
                         <MenuItem Header="_Focus Mode"
                                   Command="{Binding ToggleFocusModeCommand}"
                                   InputGesture="F11" />
-                        <MenuItem Header="Start Writing _Sprint…"
-                                  Command="{Binding Sprint.OpenCommand}"
-                                  InputGesture="Ctrl+Alt+S" />
-                        <MenuItem Header="_End Writing Sprint"
-                                  IsVisible="{Binding Sprint.IsRunning, FallbackValue=False}"
-                                  Command="{Binding Sprint.EndCommand}" />
-                        <Separator />
                         <MenuItem Header="Markua _Preview">
                             <MenuItem Header="_Write Only"
                                       Command="{Binding EditorViewModel.SetViewModeCommand}"
@@ -280,6 +275,40 @@
                                       Command="{Binding EditorViewModel.CycleViewModeCommand}"
                                       InputGesture="F6" />
                         </MenuItem>
+                        <Separator />
+                        <MenuItem Header="_Reset Write Layout"
+                                  Command="{Binding ResetWriteLayoutCommand}" />
+                    </MenuItem>
+                    <MenuItem Header="_Go" Foreground="{DynamicResource Cora.Text}">
+                        <MenuItem Header="_Go To…"
+                                  Command="{Binding ShowGoToCommand}"
+                                  InputGesture="Ctrl+P" />
+                        <MenuItem Header="_Command Palette…"
+                                  Command="{Binding ShowCommandsCommand}"
+                                  InputGesture="Ctrl+Shift+P" />
+                        <Separator />
+                        <MenuItem Header="_Research" Command="{Binding SelectResearchCommand}" />
+                        <MenuItem Header="_Ideas" Command="{Binding SelectIdeasCommand}"
+                                  IsVisible="{Binding IsIdeasModeAvailable}" />
+                        <MenuItem Header="_Plan" Command="{Binding SelectPlanCommand}" />
+                        <MenuItem Header="_Write" Command="{Binding SelectWriteCommand}" />
+                        <MenuItem Header="_Manage" Command="{Binding SelectManageCommand}" />
+                    </MenuItem>
+                    <!-- Markua snippets; InsertMenu.Populate fills it from MarkuaSnippets. -->
+                    <MenuItem x:Name="PART_InsertMenu" Header="_Insert" Foreground="{DynamicResource Cora.Text}" />
+                    <MenuItem Header="_Run" Foreground="{DynamicResource Cora.Text}">
+                        <MenuItem Header="_Start a Run…"
+                                  Command="{Binding WritingRun.OpenCommand}"
+                                  InputGesture="Ctrl+Alt+R" />
+                        <MenuItem Header="_End Run"
+                                  IsVisible="{Binding WritingRun.IsRunning, FallbackValue=False}"
+                                  Command="{Binding WritingRun.EndCommand}" />
+                        <Separator />
+                        <MenuItem Header="_Logbook…"
+                                  Command="{Binding WritingRun.ShowLogbookCommand}"
+                                  InputGesture="Ctrl+Alt+L" />
+                    </MenuItem>
+                    <MenuItem Header="_Tools" Foreground="{DynamicResource Cora.Text}">
                         <MenuItem x:Name="PART_SpellingMenu"
                                   Header="S_pelling"
                                   IsVisible="{Binding EditorViewModel.Spelling.IsAvailable}">
@@ -304,7 +333,6 @@
                             <MenuItem Header="Spelling _Settings and Project Dictionary…"
                                       Command="{Binding OpenSpellingSettingsCommand}" />
                         </MenuItem>
-                        <Separator />
                         <MenuItem x:Name="PART_SoundMenuItem"
                                   Header="S_ound"
                                   ToggleType="CheckBox"
@@ -312,11 +340,11 @@
                                   IsChecked="{Binding SoundPreferences.SoundEnabled, Mode=OneWay}"
                                   IsVisible="{Binding SoundPreferences, Converter={x:Static ObjectConverters.IsNotNull}}"
                                   Foreground="{DynamicResource Cora.Text}" />
-                        <MenuItem Header="_Reset Write Layout"
-                                  Command="{Binding ResetWriteLayoutCommand}" />
+                        <Separator />
+                        <MenuItem Header="_Settings…"
+                                  Command="{Binding OpenSettingsCommand}"
+                                  InputGesture="Ctrl+OemComma" />
                     </MenuItem>
-                    <!-- Markua snippets; InsertMenu.Populate fills it from MarkuaSnippets. -->
-                    <MenuItem x:Name="PART_InsertMenu" Header="_Insert" Foreground="{DynamicResource Cora.Text}" />
                     <MenuItem Header="_Help" Foreground="{DynamicResource Cora.Text}">
                         <MenuItem Header="Check for _Updates"
                                   Command="{Binding Updates.CheckCommand}"
@@ -426,6 +454,31 @@
                                     ToolTip.Tip="Sync local changes, or pull when already up to date" />
                         </StackPanel>
                     </Border>
+
+                    <!-- Start a writing run (Ctrl+Alt+R); its menu holds the Logbook -->
+                    <SplitButton x:Name="PART_RunButton"
+                                 Classes="run-launch"
+                                 Command="{Binding WritingRun.OpenCommand}"
+                                 IsVisible="{Binding WritingRun, Converter={x:Static ObjectConverters.IsNotNull}}"
+                                 ToolTip.Tip="Start a writing run (Ctrl+Alt+R)"
+                                 Margin="0,0,4,0"
+                                 Padding="12,5">
+                        <StackPanel Orientation="Horizontal" Spacing="6">
+                            <Path Data="M13.5 0.67s.74 2.65.74 4.8c0 2.06-1.35 3.73-3.41 3.73-2.07 0-3.63-1.67-3.63-3.73l.03-.36C5.21 7.51 4 10.62 4 14c0 4.42 3.58 8 8 8s8-3.58 8-8C20 8.61 17.41 3.8 13.5.67zM11.71 19c-1.78 0-3.22-1.4-3.22-3.14 0-1.62 1.05-2.76 2.81-3.12 1.77-.36 3.6-1.21 4.62-2.58.39 1.29.59 2.65.59 4.04 0 2.65-2.15 4.8-4.8 4.8z"
+                                  Fill="{DynamicResource Cora.Accent.Store}"
+                                  Width="14" Height="14" Stretch="Uniform" VerticalAlignment="Center" />
+                            <TextBlock Text="RUN" FontWeight="Bold" LetterSpacing="1.5" FontSize="12"
+                                       VerticalAlignment="Center" />
+                        </StackPanel>
+                        <SplitButton.Flyout>
+                            <MenuFlyout Placement="BottomEdgeAlignedRight">
+                                <MenuItem Header="Start a Run…" InputGesture="Ctrl+Alt+R"
+                                          Command="{Binding WritingRun.OpenCommand}" />
+                                <MenuItem Header="Logbook…" InputGesture="Ctrl+Alt+L"
+                                          Command="{Binding WritingRun.ShowLogbookCommand}" />
+                            </MenuFlyout>
+                        </SplitButton.Flyout>
+                    </SplitButton>
 
                     <!-- Settings — always visible -->
                     <Button Classes="nav-icon"
@@ -911,9 +964,9 @@
                                          IsVisible="{Binding ShowsCollectionBar}" />                <ContentControl Content="{Binding SecondaryCentreContent}" />
                 </DockPanel>
 
-                <!-- The running writing sprint's timer, over the editor (and focus mode) -->
-                <views:SprintHudView ZIndex="50"
-                                     DataContext="{Binding Sprint}"
+                <!-- The running writing run's timer, over the editor (and focus mode) -->
+                <views:RunHudView ZIndex="50"
+                                     DataContext="{Binding WritingRun}"
                                      IsVisible="{Binding IsRunning, FallbackValue=False}" />
 
                 <!-- Settings overlay — covers full shell area when IsSettingsOpen -->
@@ -1031,11 +1084,25 @@
             </Grid>
         </Border>
 
-        <!-- Writing sprint screens: start card, recap, note to Future You. -->
-        <views:SprintOverlayView Grid.Row="0"
+        <!-- Writing run screens: start card, recap, note to Future You. -->
+        <views:RunOverlayView Grid.Row="0"
                                  Grid.RowSpan="4"
-                                 DataContext="{Binding Sprint}"
+                                 DataContext="{Binding WritingRun}"
                                  IsVisible="{Binding IsOverlayOpen, FallbackValue=False}" />
+
+        <!-- A run's flames, glow and sparks (and the finish burst), drawn over the page without taking input. -->
+        <controls:RunAtmosphereLayer x:Name="PART_RunAtmosphere"
+                                     Grid.Row="0"
+                                     Grid.RowSpan="4"
+                                     x:DataType="vm:RunViewModel"
+                                     DataContext="{Binding $parent[Window].((vm:MainWindowViewModel)DataContext).WritingRun}"
+                                     IsActive="{Binding IsRunning, FallbackValue=False}"
+                                     Intensity="{Binding Intensity, FallbackValue=0}"
+                                     Sparks="{Binding Sparks, FallbackValue=0}"
+                                     Celebrations="{Binding Celebrations, FallbackValue=0}"
+                                     ShowFlames="{Binding Atmosphere.Flames, FallbackValue=False}"
+                                     ShowGlow="{Binding Atmosphere.EdgeGlow, FallbackValue=False}"
+                                     ShowSparks="{Binding Atmosphere.Sparks, FallbackValue=False}" />
 
         <!-- Command palette (Ctrl+P / Ctrl+Shift+P), over everything including the banner. -->
         <views:CommandPaletteView Grid.Row="0"

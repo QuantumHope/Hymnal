@@ -508,10 +508,10 @@ public partial class MainWindowViewModel : ViewModelBase
     /// <summary>Leaves focus mode; can't run outside it, so Esc is left alone the rest of the time.</summary>
     public ReactiveCommand<Unit, Unit> ExitFocusModeCommand { get; }
 
-    // ── Writing sprints ──────────────────────────────────────────────────────
+    // ── Writing runs ──────────────────────────────────────────────────────
 
-    /// <summary>One-click writing sprints (null when the app is built without them, as in some tests).</summary>
-    public SprintViewModel? Sprint { get; }
+    /// <summary>One-click writing runs (null when the app is built without them, as in some tests).</summary>
+    public RunViewModel? WritingRun { get; }
 
     // ── Exit ─────────────────────────────────────────────────────────────────
 
@@ -550,10 +550,10 @@ public partial class MainWindowViewModel : ViewModelBase
         SubmissionExportViewModel? submissionExportViewModel = null,
         Hymnal.Theming.IThemeService? themes = null,
         UpdatesViewModel? updates = null,
-        SprintViewModel? sprint = null)
+        RunViewModel? run = null)
     {
         _themes = themes;
-        Sprint = sprint;
+        WritingRun = run;
         CollectionsViewModel = collectionsViewModel;
         SubmissionExportViewModel = submissionExportViewModel;
         _settingsStore = settingsStore;
@@ -707,24 +707,24 @@ public partial class MainWindowViewModel : ViewModelBase
             this.WhenAnyValue(x => x.IsFocusMode)
                 .CombineLatest(CommandPalette.WhenAnyValue(x => x.IsOpen), (focus, palette) => focus && !palette));
 
-        // A sprint runs in Write's focus mode; finishing it (recap) leaves focus mode. Leaving focus mode by hand
-        // during a sprint keeps the sprint running, with its HUD over the normal layout.
-        if (sprint != null)
+        // A run runs in Write's focus mode; finishing it (recap) leaves focus mode. Leaving focus mode by hand
+        // during a run keeps the run running, with its HUD over the normal layout.
+        if (run != null)
         {
-            Disposables.Add(sprint.WhenAnyValue(x => x.Stage)
+            Disposables.Add(run.WhenAnyValue(x => x.Stage)
                 .Buffer(2, 1)
                 .Where(pair => pair.Count == 2)
                 .Subscribe(pair =>
                 {
                     var (previous, current) = (pair[0], pair[1]);
-                    if (current == SprintStage.Running && previous != SprintStage.Running)
+                    if (current == RunStage.Running && previous != RunStage.Running)
                     {
                         LeaveSettings();
                         CommandPalette.Close();
                         ActiveMode = ShellMode.Write;
                         IsFocusMode = true;
                     }
-                    else if (previous == SprintStage.Running && current != SprintStage.Running)
+                    else if (previous == RunStage.Running && current != RunStage.Running)
                     {
                         IsFocusMode = false;
                     }

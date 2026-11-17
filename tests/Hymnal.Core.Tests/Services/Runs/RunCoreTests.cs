@@ -1,7 +1,7 @@
 using Hymnal.Core.Services;
-using Hymnal.Core.Services.Sprints;
+using Hymnal.Core.Services.Runs;
 
-namespace Hymnal.Core.Tests.Services.Sprints;
+namespace Hymnal.Core.Tests.Services.Runs;
 
 public class WordDiffTests
 {
@@ -75,9 +75,9 @@ public class WordDiffTests
     }
 }
 
-public class SprintTrackerTests
+public class RunTrackerTests
 {
-    private static SprintTracker NewTracker() => new(new WordCountService());
+    private static RunTracker NewTracker() => new(new WordCountService());
 
     [Fact]
     public void First_observation_is_the_baseline_and_later_ones_drive_live_net()
@@ -128,17 +128,17 @@ public class SprintTrackerTests
     [InlineData("   \n", null)]
     public void LastLine_skips_blank_and_attribute_lines(string text, string? expected)
     {
-        Assert.Equal(expected, SprintTracker.LastLine(text));
+        Assert.Equal(expected, RunTracker.LastLine(text));
     }
 }
 
-public class SprintScoringTests
+public class RunScoringTests
 {
     [Fact]
     public void Xp_counts_added_half_of_cut_minutes_and_the_completion_bonus()
     {
-        Assert.Equal(300 + 5 + 5 * 15 + 25, SprintScoring.Xp(300, 9, 15 * 60 + 30, completed: true));
-        Assert.Equal(0 + 0 + 5 * 2, SprintScoring.Xp(0, 0, 150, completed: false));
+        Assert.Equal(300 + 5 + 5 * 15 + 25, RunScoring.Xp(300, 9, 15 * 60 + 30, completed: true));
+        Assert.Equal(0 + 0 + 5 * 2, RunScoring.Xp(0, 0, 150, completed: false));
     }
 
     [Theory]
@@ -148,7 +148,7 @@ public class SprintScoringTests
     [InlineData(0, 0, ChurnKind.None)]
     public void Churn_is_classified_by_the_share_of_words_cut(int added, int cut, ChurnKind expected)
     {
-        Assert.Equal(expected, SprintScoring.Churn(new WordDelta(added, cut)));
+        Assert.Equal(expected, RunScoring.Churn(new WordDelta(added, cut)));
     }
 
     [Theory]
@@ -159,7 +159,7 @@ public class SprintScoringTests
     [InlineData(50, 50, null)]
     public void MilestoneCrossed_returns_the_highest_crossed(double before, double after, int? expected)
     {
-        Assert.Equal(expected, SprintScoring.MilestoneCrossed(before, after));
+        Assert.Equal(expected, RunScoring.MilestoneCrossed(before, after));
     }
 }
 
@@ -170,14 +170,14 @@ public class StreakCalculatorTests
     private static DateOnly D(int daysAgo) => Today.AddDays(-daysAgo);
 
     [Fact]
-    public void First_sprint_ever_starts_a_streak()
+    public void First_run_ever_starts_a_streak()
     {
         var o = StreakCalculator.Apply([], Today);
         Assert.Equal(new StreakOutcome(StreakChange.Started, 1, 0, 1), o);
     }
 
     [Fact]
-    public void A_sprint_after_yesterday_extends_the_streak()
+    public void A_run_after_yesterday_extends_the_streak()
     {
         var o = StreakCalculator.Apply([D(1), D(2), D(3)], Today);
         Assert.Equal(StreakChange.Extended, o.Change);
@@ -186,7 +186,7 @@ public class StreakCalculatorTests
     }
 
     [Fact]
-    public void A_second_sprint_today_keeps_the_streak()
+    public void A_second_run_today_keeps_the_streak()
     {
         var o = StreakCalculator.Apply([D(0), D(1)], Today);
         Assert.Equal(StreakChange.Kept, o.Change);
@@ -205,7 +205,7 @@ public class StreakCalculatorTests
     }
 
     [Fact]
-    public void Current_counts_from_yesterday_until_today_has_a_sprint()
+    public void Current_counts_from_yesterday_until_today_has_a_run()
     {
         Assert.Equal(2, StreakCalculator.Current([D(1), D(2), D(4)], Today));
         Assert.Equal(0, StreakCalculator.Current([D(2)], Today));

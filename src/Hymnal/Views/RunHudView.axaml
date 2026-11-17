@@ -1,0 +1,117 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:Hymnal.ViewModels"
+             x:Class="Hymnal.Views.RunHudView"
+             x:DataType="vm:RunViewModel"
+             IsVisible="{Binding IsRunning}"
+             HorizontalAlignment="Right"
+             VerticalAlignment="Top"
+             Margin="0,12,20,0"
+             FontFamily="{DynamicResource Cora.Font.Persona}">
+
+    <!-- The running run: time left, progress and live net words, floating over the editor. In the final stretch
+         it runs hot: the timer turns the error colour and pulses. -->
+    <UserControl.Styles>
+        <Style Selector="Border#HudCard">
+            <Setter Property="BorderBrush" Value="{DynamicResource Cora.Accent.Store}" />
+        </Style>
+        <Style Selector="Border#HudCard.hot">
+            <Setter Property="BorderBrush" Value="{DynamicResource Cora.Accent.Error}" />
+            <Setter Property="BorderThickness" Value="2" />
+        </Style>
+        <Style Selector="TextBlock#RemainingText">
+            <Setter Property="Foreground" Value="{DynamicResource Cora.Accent.Store}" />
+        </Style>
+        <Style Selector="TextBlock#RemainingText.hot">
+            <Setter Property="Foreground" Value="{DynamicResource Cora.Accent.Error}" />
+            <Style.Animations>
+                <Animation Duration="0:0:0.8" IterationCount="Infinite" PlaybackDirection="Alternate">
+                    <KeyFrame Cue="0%">
+                        <Setter Property="Opacity" Value="1" />
+                    </KeyFrame>
+                    <KeyFrame Cue="100%">
+                        <Setter Property="Opacity" Value="0.55" />
+                    </KeyFrame>
+                </Animation>
+            </Style.Animations>
+        </Style>
+        <Style Selector="TextBlock#ComboText">
+            <Style.Animations>
+                <Animation Duration="0:0:0.35" FillMode="Forward">
+                    <KeyFrame Cue="0%">
+                        <Setter Property="Opacity" Value="0" />
+                        <Setter Property="ScaleTransform.ScaleX" Value="1.6" />
+                        <Setter Property="ScaleTransform.ScaleY" Value="1.6" />
+                    </KeyFrame>
+                    <KeyFrame Cue="100%">
+                        <Setter Property="Opacity" Value="1" />
+                        <Setter Property="ScaleTransform.ScaleX" Value="1" />
+                        <Setter Property="ScaleTransform.ScaleY" Value="1" />
+                    </KeyFrame>
+                </Animation>
+            </Style.Animations>
+        </Style>
+    </UserControl.Styles>
+
+    <StackPanel Spacing="6" Width="210">
+        <Border x:Name="HudCard"
+                Classes.hot="{Binding IsFinalStretch}"
+                Background="{DynamicResource Cora.Surface.Elevated}"
+                BorderThickness="1"
+                CornerRadius="6"
+                Padding="12,8"
+                Opacity="0.94">
+            <StackPanel Spacing="4">
+                <DockPanel>
+                    <Button DockPanel.Dock="Right"
+                            Content="End"
+                            Command="{Binding EndCommand}"
+                            ToolTip.Tip="End the run now and see the recap"
+                            Padding="10,2"
+                            FontSize="11"
+                            Background="Transparent"
+                            Foreground="{DynamicResource Cora.Text.Secondary}"
+                            BorderBrush="{DynamicResource Cora.Border.Subtle}"
+                            BorderThickness="1"
+                            VerticalAlignment="Center" />
+                    <StackPanel>
+                        <TextBlock Text="RUN"
+                                   FontSize="9"
+                                   FontWeight="SemiBold"
+                                   LetterSpacing="1.6"
+                                   Foreground="{DynamicResource Cora.Text.Secondary}" />
+                        <TextBlock x:Name="RemainingText"
+                                   Classes.hot="{Binding IsFinalStretch}"
+                                   Text="{Binding RemainingDisplay}"
+                                   FontFamily="{DynamicResource Cora.Font.Machine}"
+                                   FontSize="22"
+                                   FontWeight="SemiBold" />
+                    </StackPanel>
+                </DockPanel>
+                <ProgressBar Minimum="0" Maximum="100" Height="4" MinHeight="4" CornerRadius="2"
+                             Value="{Binding Progress}"
+                             Foreground="{DynamicResource Cora.Accent.Store}" />
+                <TextBlock x:Name="LiveNetText"
+                           Text="{Binding LiveNetDisplay}"
+                           FontFamily="{DynamicResource Cora.Font.Machine}"
+                           FontSize="12"
+                           Foreground="{DynamicResource Cora.Text}" />
+            </StackPanel>
+        </Border>
+
+        <TextBlock x:Name="ComboText"
+                   IsVisible="{Binding HasCombo}"
+                   Text="{Binding ComboText}"
+                   HorizontalAlignment="Center"
+                   RenderTransformOrigin="50%,50%"
+                   FontFamily="{DynamicResource Cora.Font.Heading}"
+                   FontSize="14"
+                   FontWeight="Bold"
+                   LetterSpacing="2"
+                   Foreground="{DynamicResource Cora.Accent.Store}">
+            <TextBlock.RenderTransform>
+                <ScaleTransform />
+            </TextBlock.RenderTransform>
+        </TextBlock>
+    </StackPanel>
+</UserControl>

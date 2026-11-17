@@ -1,4 +1,4 @@
-namespace Hymnal.Core.Services.Sprints;
+namespace Hymnal.Core.Services.Runs;
 
 /// <summary>Words added and cut between two versions of a text.</summary>
 public readonly record struct WordDelta(int Added, int Cut)
@@ -10,7 +10,7 @@ public readonly record struct WordDelta(int Added, int Cut)
 }
 
 /// <summary>
-/// A word-level diff for sprint stats. Words are tokenized the way <see cref="WordCountService"/> counts them
+/// A word-level diff for run stats. Words are tokenized the way <see cref="WordCountService"/> counts them
 /// (whitespace-delimited, Markua <c>{…}</c> attribute lines skipped), so a diff's net always equals the change in
 /// word count.
 /// </summary>

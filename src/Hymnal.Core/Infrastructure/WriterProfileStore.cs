@@ -2,7 +2,7 @@ using System.Text.Json;
 using System.Text.Json.Nodes;
 using Hymnal.Core.Common;
 using Hymnal.Core.Interfaces;
-using Hymnal.Core.Models.Sprints;
+using Hymnal.Core.Models.Runs;
 
 namespace Hymnal.Core.Infrastructure;
 
@@ -36,15 +36,15 @@ public sealed class WriterProfileStore : IWriterProfileStore
         Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "Hymnal",
             "writer-profile.json");
 
-    public async Task<Result<IReadOnlyList<SprintSessionRecord>>> LoadSessionsAsync()
+    public async Task<Result<IReadOnlyList<RunRecord>>> LoadRunsAsync()
     {
         var loaded = await LoadDocumentAsync().ConfigureAwait(false);
         if (!loaded.IsSuccess)
-            return Result<IReadOnlyList<SprintSessionRecord>>.Fail(loaded.Error!);
+            return Result<IReadOnlyList<RunRecord>>.Fail(loaded.Error!);
         return ReadSessions(loaded.Value!);
     }
 
-    public async Task<Result<Unit>> AppendSessionAsync(SprintSessionRecord session)
+    public async Task<Result<Unit>> AppendRunAsync(RunRecord session)
     {
         await _lock.WaitAsync().ConfigureAwait(false);
         try
@@ -112,25 +112,25 @@ public sealed class WriterProfileStore : IWriterProfileStore
         }
     }
 
-    private static Result<IReadOnlyList<SprintSessionRecord>> ReadSessions(JsonObject doc)
+    private static Result<IReadOnlyList<RunRecord>> ReadSessions(JsonObject doc)
     {
         try
         {
             var node = doc["sessions"];
             if (node is null)
-                return Result<IReadOnlyList<SprintSessionRecord>>.Ok([]);
+                return Result<IReadOnlyList<RunRecord>>.Ok([]);
             if (node is not JsonArray)
-                return Result<IReadOnlyList<SprintSessionRecord>>.Fail("writer-profile.json: 'sessions' is not a list.");
+                return Result<IReadOnlyList<RunRecord>>.Fail("writer-profile.json: 'sessions' is not a list.");
 
-            var list = node.Deserialize<List<SprintSessionRecord?>>(JsonOptions) ?? [];
+            var list = node.Deserialize<List<RunRecord?>>(JsonOptions) ?? [];
             if (list.Any(s => s is null || string.IsNullOrEmpty(s.LocalDate) || !DateOnly.TryParse(s.LocalDate, out _)))
-                return Result<IReadOnlyList<SprintSessionRecord>>.Fail(
+                return Result<IReadOnlyList<RunRecord>>.Fail(
                     "writer-profile.json contains a session without a valid localDate.");
-            return Result<IReadOnlyList<SprintSessionRecord>>.Ok(list!);
+            return Result<IReadOnlyList<RunRecord>>.Ok(list!);
         }
         catch (JsonException ex)
         {
-            return Result<IReadOnlyList<SprintSessionRecord>>.Fail($"writer-profile.json could not be read: {ex.Message}");
+            return Result<IReadOnlyList<RunRecord>>.Fail($"writer-profile.json could not be read: {ex.Message}");
         }
     }
 }

@@ -1,5 +1,5 @@
 using Hymnal.Core.Common;
-using Hymnal.Core.Models.Sprints;
+using Hymnal.Core.Models.Runs;
 
 namespace Hymnal.Core.Interfaces;
 

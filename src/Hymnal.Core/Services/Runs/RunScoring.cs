@@ -1,6 +1,6 @@
-namespace Hymnal.Core.Services.Sprints;
+namespace Hymnal.Core.Services.Runs;
 
-/// <summary>What a sprint's edits were mostly about, from the share of words cut.</summary>
+/// <summary>What a run's edits were mostly about, from the share of words cut.</summary>
 public enum ChurnKind
 {
     None,
@@ -9,13 +9,13 @@ public enum ChurnKind
     DeepRevision,
 }
 
-public static class SprintScoring
+public static class RunScoring
 {
     public const int CompletionBonus = 25;
     public const int XpPerMinute = 5;
 
     /// <summary>
-    /// Phase 1 XP: words added, half the words cut (rounded up), five per focused minute, and a bonus for a sprint
+    /// Phase 1 XP: words added, half the words cut (rounded up), five per focused minute, and a bonus for a run
     /// that ran its full time.
     /// </summary>
     public static int Xp(int added, int cut, int actualSeconds, bool completed) =>

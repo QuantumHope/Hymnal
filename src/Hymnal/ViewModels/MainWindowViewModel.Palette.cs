@@ -97,10 +97,11 @@ public partial class MainWindowViewModel
         Add("toggle-manage", "View", "Toggle Manage View", ToggleGanttCommand, shortcut: "F5");
         Add("focus-mode", "View", IsFocusMode ? "Leave Focus Mode" : "Focus Mode", ToggleFocusModeCommand,
             shortcut: "F11");
-        if (Sprint != null)
+        if (WritingRun != null)
         {
-            Add("sprint-start", "Write", "Start Writing Sprint…", Sprint.OpenCommand, shortcut: "Ctrl+Alt+S");
-            Add("sprint-end", "Write", "End Writing Sprint", Sprint.EndCommand);
+            Add("run-start", "Run", "Start a Run…", WritingRun.OpenCommand, shortcut: "Ctrl+Alt+R");
+            Add("run-end", "Run", "End Run", WritingRun.EndCommand);
+            Add("run-logbook", "Run", "Logbook…", WritingRun.ShowLogbookCommand, shortcut: "Ctrl+Alt+L");
         }
         if (EditorViewModel.IsPreviewAvailable)
         {

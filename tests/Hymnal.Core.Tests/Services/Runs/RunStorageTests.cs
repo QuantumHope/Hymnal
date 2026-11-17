@@ -1,8 +1,8 @@
 using Hymnal.Core.Infrastructure;
-using Hymnal.Core.Models.Sprints;
+using Hymnal.Core.Models.Runs;
 using Hymnal.Core.Services;
 
-namespace Hymnal.Core.Tests.Services.Sprints;
+namespace Hymnal.Core.Tests.Services.Runs;
 
 public class WriterProfileStoreTests
 {
@@ -20,7 +20,7 @@ public class WriterProfileStoreTests
         }
     }
 
-    private static SprintSessionRecord Session(string date, int added = 100) => new()
+    private static RunRecord Session(string date, int added = 100) => new()
     {
         Id = Guid.NewGuid().ToString("N"),
         StartedAt = DateTimeOffset.Parse(date + "T20:00:00+00:00"),
@@ -38,7 +38,7 @@ public class WriterProfileStoreTests
     [Fact]
     public Task Missing_file_is_an_empty_profile() => WithTempDirAsync(async (_, store) =>
     {
-        var loaded = await store.LoadSessionsAsync();
+        var loaded = await store.LoadRunsAsync();
         Assert.True(loaded.IsSuccess);
         Assert.Empty(loaded.Value!);
     });
@@ -48,10 +48,10 @@ public class WriterProfileStoreTests
     {
         var a = Session("2026-11-16");
         var b = Session("2026-11-17", added: 512);
-        Assert.True((await store.AppendSessionAsync(a)).IsSuccess);
-        Assert.True((await store.AppendSessionAsync(b)).IsSuccess);
+        Assert.True((await store.AppendRunAsync(a)).IsSuccess);
+        Assert.True((await store.AppendRunAsync(b)).IsSuccess);
 
-        var loaded = await store.LoadSessionsAsync();
+        var loaded = await store.LoadRunsAsync();
         Assert.Equal([a, b], loaded.Value!);
     });
 
@@ -61,7 +61,7 @@ public class WriterProfileStoreTests
         var path = Path.Combine(dir, "writer-profile.json");
         File.WriteAllText(path, """{ "schemaVersion": 1, "sessions": [], "unlocks": ["neon-palette"] }""");
 
-        Assert.True((await store.AppendSessionAsync(Session("2026-11-17"))).IsSuccess);
+        Assert.True((await store.AppendRunAsync(Session("2026-11-17"))).IsSuccess);
         Assert.Contains("neon-palette", File.ReadAllText(path));
     });
 
@@ -74,8 +74,8 @@ public class WriterProfileStoreTests
         var path = Path.Combine(dir, "writer-profile.json");
         File.WriteAllText(path, content);
 
-        Assert.False((await store.LoadSessionsAsync()).IsSuccess);
-        Assert.False((await store.AppendSessionAsync(Session("2026-11-17"))).IsSuccess);
+        Assert.False((await store.LoadRunsAsync()).IsSuccess);
+        Assert.False((await store.AppendRunAsync(Session("2026-11-17"))).IsSuccess);
         Assert.Equal(content, File.ReadAllText(path));
     });
 }

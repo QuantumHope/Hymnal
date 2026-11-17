@@ -1,20 +1,20 @@
-namespace Hymnal.Core.Services.Sprints;
+namespace Hymnal.Core.Services.Runs;
 
-/// <summary>What one chapter contributed to a sprint.</summary>
-public sealed record SprintChapterChange(string Key, string Title, WordDelta Delta);
+/// <summary>What one chapter contributed to a run.</summary>
+public sealed record RunChapterChange(string Key, string Title, WordDelta Delta);
 
-/// <summary>A sprint's word changes: per chapter (only chapters with changes) and in total.</summary>
-public sealed record SprintSummary(IReadOnlyList<SprintChapterChange> Chapters, WordDelta Total)
+/// <summary>A run's word changes: per chapter (only chapters with changes) and in total.</summary>
+public sealed record RunSummary(IReadOnlyList<RunChapterChange> Chapters, WordDelta Total)
 {
-    public static SprintSummary Empty { get; } = new([], default);
+    public static RunSummary Empty { get; } = new([], default);
 }
 
 /// <summary>
-/// Follows the text of every chapter edited during a sprint. The first time a chapter is seen its text is the
+/// Follows the text of every chapter edited during a run. The first time a chapter is seen its text is the
 /// baseline; later observations replace its latest text. Pure and single-threaded: the caller decides which edits
 /// belong to which chapter.
 /// </summary>
-public sealed class SprintTracker
+public sealed class RunTracker
 {
     private sealed class Entry
     {
@@ -29,7 +29,7 @@ public sealed class SprintTracker
     private readonly List<string> _order = [];
     private readonly WordCountService _counter;
 
-    public SprintTracker(WordCountService counter)
+    public RunTracker(WordCountService counter)
     {
         _counter = counter;
     }
@@ -73,9 +73,9 @@ public sealed class SprintTracker
     public string? TitleOf(string key) => _entries.TryGetValue(key, out var e) ? e.Title : null;
 
     /// <summary>Runs the word diff for each tracked chapter. Chapters with no change are left out.</summary>
-    public SprintSummary Summarize()
+    public RunSummary Summarize()
     {
-        var chapters = new List<SprintChapterChange>();
+        var chapters = new List<RunChapterChange>();
         WordDelta total = default;
         foreach (var key in _order)
         {
@@ -85,10 +85,10 @@ public sealed class SprintTracker
             var delta = WordDiff.Compute(e.Baseline, e.Latest);
             if (delta.Touched == 0)
                 continue;
-            chapters.Add(new SprintChapterChange(key, e.Title, delta));
+            chapters.Add(new RunChapterChange(key, e.Title, delta));
             total += delta;
         }
-        return new SprintSummary(chapters, total);
+        return new RunSummary(chapters, total);
     }
 
     /// <summary>The last non-blank line of a text, trimmed and shortened for display.</summary>
