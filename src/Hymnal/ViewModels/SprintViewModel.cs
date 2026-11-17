@@ -13,6 +13,7 @@ using Hymnal.Core.Services;
 using Hymnal.Core.Services.Sprints;
 using ReactiveUI;
 using ReactiveUI.Avalonia;
+using Avalonia.Threading;
 
 namespace Hymnal.ViewModels;
 
@@ -139,19 +140,22 @@ public sealed class SprintViewModel : ViewModelBase, IDisposable
         var canOpen = Observable.CombineLatest(
             stage, workspace.WhenAnyValue(x => x.HasWorkspace),
             (s, has) => s == SprintStage.Idle && has);
-        OpenCommand = ReactiveCommand.CreateFromTask(OpenAsync, canOpen);
-        SelectDurationCommand = ReactiveCommand.Create<int>(SelectMinutes);
-        BeginCommand = ReactiveCommand.Create(Begin, stage.Select(s => s == SprintStage.Choosing));
+        // Command results and can-execute changes go to the UI thread (as RxApp.MainThreadScheduler does in the
+        // app), so buttons bound to them are never touched from a background thread.
+        var ui = AvaloniaScheduler.Instance;
+        OpenCommand = ReactiveCommand.CreateFromTask(OpenAsync, canOpen, ui);
+        SelectDurationCommand = ReactiveCommand.Create<int>(SelectMinutes, outputScheduler: ui);
+        BeginCommand = ReactiveCommand.Create(Begin, stage.Select(s => s == SprintStage.Choosing), ui);
         CancelCommand = ReactiveCommand.Create(() => { Stage = SprintStage.Idle; },
-            stage.Select(s => s == SprintStage.Choosing));
+            stage.Select(s => s == SprintStage.Choosing), ui);
         EndCommand = ReactiveCommand.CreateFromTask(() => FinishAsync(completed: false),
-            stage.Select(s => s == SprintStage.Running));
-        ToFutureYouCommand = ReactiveCommand.Create(ShowFutureYou, stage.Select(s => s == SprintStage.Recap));
+            stage.Select(s => s == SprintStage.Running), ui);
+        ToFutureYouCommand = ReactiveCommand.Create(ShowFutureYou, stage.Select(s => s == SprintStage.Recap), ui);
         DoneCommand = ReactiveCommand.Create(() => { Stage = SprintStage.Idle; },
-            stage.Select(s => s is SprintStage.Recap or SprintStage.FutureYou));
+            stage.Select(s => s is SprintStage.Recap or SprintStage.FutureYou), ui);
         SaveNoteCommand = ReactiveCommand.CreateFromTask(SaveNoteAsync,
             Observable.CombineLatest(stage, this.WhenAnyValue(x => x.FutureYouText),
-                (s, text) => s == SprintStage.FutureYou && !string.IsNullOrWhiteSpace(text)));
+                (s, text) => s == SprintStage.FutureYou && !string.IsNullOrWhiteSpace(text)), ui);
 
         foreach (var command in new IHandleObservableErrors[] { OpenCommand, EndCommand, SaveNoteCommand })
             Disposables.Add(command.ThrownExceptions.Subscribe(ex => _notifications.ShowError($"Sprint: {ex.Message}")));
@@ -316,12 +320,15 @@ public sealed class SprintViewModel : ViewModelBase, IDisposable
 
     private async Task OpenAsync()
     {
+        var root = _workspace.WorkspaceRoot;
         var last = await _settings.GetAsync<int?>(LastMinutesKey);
-        SelectMinutes(last is > 0 and <= 240 ? last.Value : DefaultMinutes);
-        PastYouNote = string.IsNullOrEmpty(_workspace.WorkspaceRoot)
-            ? null
-            : await _notes.LatestAsync(_workspace.WorkspaceRoot);
-        Stage = SprintStage.Choosing;
+        var note = string.IsNullOrEmpty(root) ? null : await _notes.LatestAsync(root);
+        await OnUiAsync(() =>
+        {
+            SelectMinutes(last is > 0 and <= 240 ? last.Value : DefaultMinutes);
+            PastYouNote = note;
+            Stage = SprintStage.Choosing;
+        });
     }
 
     private void SelectMinutes(int minutes)
@@ -437,9 +444,12 @@ public sealed class SprintViewModel : ViewModelBase, IDisposable
             profileError = $"This sprint wasn't recorded: {earlier.Error}";
         }
 
-        Recap = BuildRecap(summary, seconds, completed, streak, profileError);
-        CaptureLeftOff(tracker);
-        Stage = SprintStage.Recap;
+        await OnUiAsync(() =>
+        {
+            Recap = BuildRecap(summary, seconds, completed, streak, profileError);
+            CaptureLeftOff(tracker);
+            Stage = SprintStage.Recap;
+        });
     }
 
     private SprintRecap BuildRecap(SprintSummary summary, int seconds, bool completed, StreakOutcome? streak,
@@ -524,18 +534,33 @@ public sealed class SprintViewModel : ViewModelBase, IDisposable
             LastLine = LeftOffLine,
         };
         var result = await _notes.AddAsync(_workspaceRoot, note);
-        if (!result.IsSuccess)
+        await OnUiAsync(() =>
         {
-            _notifications.ShowError($"Your note wasn't saved: {result.Error}");
-            return;
-        }
-        Stage = SprintStage.Idle;
-        _notifications.ShowInfo("Note saved. Future You will see it when the next sprint starts.");
+            if (!result.IsSuccess)
+            {
+                _notifications.ShowError($"Your note wasn't saved: {result.Error}");
+                return;
+            }
+            Stage = SprintStage.Idle;
+            _notifications.ShowInfo("Note saved. Future You will see it when the next sprint starts.");
+        });
     }
 
     public void Dispose() => Disposables.Dispose();
 
     // ── Helpers ────────────────────────────────────────────────────────────
+
+    /// <summary>
+    /// Runs state changes on the UI thread after awaiting services (their continuations can resume on the thread
+    /// pool), inline when already there or when there is no application (view model tests outside a Dispatch).
+    /// </summary>
+    private static async Task OnUiAsync(Action action)
+    {
+        if (Avalonia.Application.Current == null || Dispatcher.UIThread.CheckAccess())
+            action();
+        else
+            await Dispatcher.UIThread.InvokeAsync(action);
+    }
 
     private int? ProjectTarget()
     {
