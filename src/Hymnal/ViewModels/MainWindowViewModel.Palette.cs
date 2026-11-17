@@ -97,6 +97,11 @@ public partial class MainWindowViewModel
         Add("toggle-manage", "View", "Toggle Manage View", ToggleGanttCommand, shortcut: "F5");
         Add("focus-mode", "View", IsFocusMode ? "Leave Focus Mode" : "Focus Mode", ToggleFocusModeCommand,
             shortcut: "F11");
+        if (Sprint != null)
+        {
+            Add("sprint-start", "Write", "Start Writing Sprint…", Sprint.OpenCommand, shortcut: "Ctrl+Alt+S");
+            Add("sprint-end", "Write", "End Writing Sprint", Sprint.EndCommand);
+        }
         if (EditorViewModel.IsPreviewAvailable)
         {
             Add("preview-write", "View", "Markua Preview: Write Only", EditorViewModel.SetViewModeCommand,

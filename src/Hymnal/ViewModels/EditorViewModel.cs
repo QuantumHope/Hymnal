@@ -124,7 +124,10 @@ public partial class EditorViewModel : ViewModelBase, IDisposable, IOpenStoryBuf
 
             this.RaiseAndSetIfChanged(ref _text, value);
             if (!_suppressDirtyTracking)
+            {
                 SetDirtyFlag(true);
+                _proseEdited.OnNext(new ProseEdit(ActiveNode, IsBookSelected, value));
+            }
         }
     }
 
@@ -291,6 +294,15 @@ public partial class EditorViewModel : ViewModelBase, IDisposable, IOpenStoryBuf
     private readonly Subject<Unit> _savedSubject = new();
     /// <summary>Fires a Unit after every successful atomic save.</summary>
     public IObservable<Unit> Saved => _savedSubject.AsObservable();
+
+    private readonly Subject<ProseEdit> _proseEdited = new();
+    /// <summary>
+    /// Fires for every change the author makes to the buffer (typing, paste, insert, spelling fix), with the node it
+    /// was made in, and never for loading a file, a reload or a revert. While a chapter loads, <see cref="Text"/>
+    /// changes before <see cref="ActiveNode"/>, so a <see cref="Text"/> observer can't tell which chapter a change
+    /// belongs to; writing sprints use this instead.
+    /// </summary>
+    public IObservable<ProseEdit> ProseEdited => _proseEdited.AsObservable();
 
     // ── Commands ────────────────────────────────────────────────────────────
 

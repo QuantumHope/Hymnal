@@ -1,0 +1,317 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:Hymnal.ViewModels"
+             x:Class="Hymnal.Views.SprintOverlayView"
+             x:DataType="vm:SprintViewModel"
+             IsVisible="{Binding IsOverlayOpen}"
+             FontFamily="{DynamicResource Cora.Font.Persona}">
+
+    <!-- The writing sprint's screens: the start card, the recap and the note to Future You. -->
+    <UserControl.Styles>
+        <Style Selector="TextBlock.sprint-caps">
+            <Setter Property="FontSize" Value="10" />
+            <Setter Property="FontWeight" Value="SemiBold" />
+            <Setter Property="LetterSpacing" Value="1.6" />
+            <Setter Property="Foreground" Value="{DynamicResource Cora.Text.Secondary}" />
+        </Style>
+        <Style Selector="TextBlock.sprint-headline">
+            <Setter Property="FontFamily" Value="{DynamicResource Cora.Font.Heading}" />
+            <Setter Property="FontSize" Value="30" />
+            <Setter Property="FontWeight" Value="Bold" />
+            <Setter Property="LetterSpacing" Value="3" />
+            <Setter Property="Foreground" Value="{DynamicResource Cora.Accent.Store}" />
+            <Setter Property="HorizontalAlignment" Value="Center" />
+        </Style>
+        <Style Selector="TextBlock.sprint-sub">
+            <Setter Property="FontSize" Value="14" />
+            <Setter Property="Foreground" Value="{DynamicResource Cora.Text}" />
+            <Setter Property="HorizontalAlignment" Value="Center" />
+            <Setter Property="TextWrapping" Value="Wrap" />
+            <Setter Property="TextAlignment" Value="Center" />
+        </Style>
+        <Style Selector="Border.sprint-tile">
+            <Setter Property="Background" Value="{DynamicResource Cora.Surface.Void}" />
+            <Setter Property="BorderBrush" Value="{DynamicResource Cora.Border.Subtle}" />
+            <Setter Property="BorderThickness" Value="1" />
+            <Setter Property="CornerRadius" Value="4" />
+            <Setter Property="Padding" Value="10,8" />
+            <Setter Property="Margin" Value="4" />
+        </Style>
+        <Style Selector="TextBlock.sprint-value">
+            <Setter Property="FontFamily" Value="{DynamicResource Cora.Font.Machine}" />
+            <Setter Property="FontSize" Value="20" />
+            <Setter Property="FontWeight" Value="SemiBold" />
+            <Setter Property="Foreground" Value="{DynamicResource Cora.Text}" />
+        </Style>
+        <Style Selector="TextBlock.sprint-xp">
+            <Setter Property="Foreground" Value="{DynamicResource Cora.Accent.Store}" />
+        </Style>
+        <Style Selector="Border.sprint-section">
+            <Setter Property="BorderBrush" Value="{DynamicResource Cora.Border.Subtle}" />
+            <Setter Property="BorderThickness" Value="0,1,0,0" />
+            <Setter Property="Padding" Value="0,12,0,0" />
+            <Setter Property="Margin" Value="0,12,0,0" />
+        </Style>
+        <Style Selector="Button.sprint-primary">
+            <Setter Property="Background" Value="{DynamicResource Cora.Accent.Store}" />
+            <Setter Property="Foreground" Value="{DynamicResource Cora.Surface.Void}" />
+            <Setter Property="FontWeight" Value="Bold" />
+            <Setter Property="LetterSpacing" Value="1" />
+            <Setter Property="Padding" Value="18,8" />
+            <Setter Property="CornerRadius" Value="4" />
+        </Style>
+        <Style Selector="Button.sprint-secondary">
+            <Setter Property="Background" Value="Transparent" />
+            <Setter Property="Foreground" Value="{DynamicResource Cora.Text.Secondary}" />
+            <Setter Property="BorderBrush" Value="{DynamicResource Cora.Border.Subtle}" />
+            <Setter Property="BorderThickness" Value="1" />
+            <Setter Property="Padding" Value="14,8" />
+            <Setter Property="CornerRadius" Value="4" />
+        </Style>
+        <Style Selector="ToggleButton.sprint-duration">
+            <Setter Property="MinWidth" Value="76" />
+            <Setter Property="Padding" Value="10,10" />
+            <Setter Property="Margin" Value="4" />
+            <Setter Property="HorizontalContentAlignment" Value="Center" />
+            <Setter Property="FontFamily" Value="{DynamicResource Cora.Font.Machine}" />
+            <Setter Property="FontSize" Value="15" />
+            <Setter Property="CornerRadius" Value="4" />
+            <Setter Property="Background" Value="{DynamicResource Cora.Surface.Void}" />
+            <Setter Property="Foreground" Value="{DynamicResource Cora.Text}" />
+            <Setter Property="BorderBrush" Value="{DynamicResource Cora.Border.Subtle}" />
+            <Setter Property="BorderThickness" Value="1" />
+        </Style>
+        <Style Selector="ToggleButton.sprint-duration:checked /template/ ContentPresenter">
+            <Setter Property="Background" Value="{DynamicResource Cora.Wash.Selected}" />
+            <Setter Property="BorderBrush" Value="{DynamicResource Cora.Accent.Store}" />
+        </Style>
+    </UserControl.Styles>
+
+    <Grid>
+        <Border Background="{DynamicResource Cora.Scrim}" />
+
+        <Border x:Name="Card"
+                Width="600"
+                MaxWidth="600"
+                Margin="16,48,16,16"
+                HorizontalAlignment="Center"
+                VerticalAlignment="Top"
+                Background="{DynamicResource Cora.Surface.Elevated}"
+                BorderBrush="{DynamicResource Cora.Accent.Store}"
+                BorderThickness="1"
+                CornerRadius="6"
+                Padding="24,20"
+                ClipToBounds="True">
+            <ScrollViewer MaxHeight="640" HorizontalScrollBarVisibility="Disabled">
+                <Panel>
+
+                    <!-- ── Start card ─────────────────────────────────────────── -->
+                    <StackPanel x:Name="StartCard" IsVisible="{Binding IsChoosing}" Spacing="14">
+                        <TextBlock Classes="sprint-caps" Text="WRITING SPRINT" HorizontalAlignment="Center" />
+                        <TextBlock Classes="sprint-headline" Text="READY?" />
+                        <TextBlock Classes="sprint-sub"
+                                   Text="Pick a length. Focus mode hides everything but the page until time is up." />
+
+                        <ItemsControl ItemsSource="{Binding DurationOptions}" HorizontalAlignment="Center">
+                            <ItemsControl.ItemsPanel>
+                                <ItemsPanelTemplate>
+                                    <StackPanel Orientation="Horizontal" />
+                                </ItemsPanelTemplate>
+                            </ItemsControl.ItemsPanel>
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate x:DataType="vm:SprintDurationOption">
+                                    <ToggleButton Classes="sprint-duration"
+                                                  Content="{Binding Label}"
+                                                  IsChecked="{Binding IsSelected, Mode=OneWay}"
+                                                  Command="{Binding $parent[ItemsControl].((vm:SprintViewModel)DataContext).SelectDurationCommand}"
+                                                  CommandParameter="{Binding Minutes}" />
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+
+                        <Border Classes="sprint-tile" IsVisible="{Binding HasPastYouNote}">
+                            <StackPanel Spacing="4">
+                                <TextBlock Classes="sprint-caps" Text="A NOTE FROM PAST YOU" />
+                                <TextBlock Text="{Binding PastYouNote.Text, FallbackValue=''}"
+                                           TextWrapping="Wrap"
+                                           FontSize="14"
+                                           Foreground="{DynamicResource Cora.Text}" />
+                                <TextBlock Text="{Binding PastYouContext}"
+                                           FontSize="11"
+                                           Foreground="{DynamicResource Cora.Text.Secondary}" />
+                            </StackPanel>
+                        </Border>
+
+                        <StackPanel Orientation="Horizontal" HorizontalAlignment="Center" Spacing="10">
+                            <Button Classes="sprint-secondary" Content="Not now" Command="{Binding CancelCommand}" />
+                            <Button x:Name="BeginButton" Classes="sprint-primary" Content="START SPRINT"
+                                    Command="{Binding BeginCommand}" IsDefault="True" />
+                        </StackPanel>
+                    </StackPanel>
+
+                    <!-- ── Recap ──────────────────────────────────────────────── -->
+                    <StackPanel x:Name="RecapCard" IsVisible="{Binding IsRecap}" Spacing="6">
+                        <TextBlock Classes="sprint-headline" Text="{Binding Recap.Headline, FallbackValue=''}" />
+                        <TextBlock Classes="sprint-sub" Text="{Binding Recap.Summary, FallbackValue=''}" />
+
+                        <Border Classes="sprint-tile" HorizontalAlignment="Center" Padding="16,6"
+                                IsVisible="{Binding Recap.HasMilestone, FallbackValue=False}"
+                                BorderBrush="{DynamicResource Cora.Accent.Success}">
+                            <TextBlock Text="{Binding Recap.Milestone, FallbackValue=''}" FontWeight="SemiBold"
+                                       Foreground="{DynamicResource Cora.Accent.Success}" />
+                        </Border>
+
+                        <UniformGrid Columns="3" Margin="0,8,0,0">
+                            <Border Classes="sprint-tile">
+                                <StackPanel>
+                                    <TextBlock Classes="sprint-caps" Text="ADDED" />
+                                    <TextBlock Classes="sprint-value" Text="{Binding Recap.Added, FallbackValue=''}" />
+                                </StackPanel>
+                            </Border>
+                            <Border Classes="sprint-tile">
+                                <StackPanel>
+                                    <TextBlock Classes="sprint-caps" Text="CUT" />
+                                    <TextBlock Classes="sprint-value" Text="{Binding Recap.Cut, FallbackValue=''}" />
+                                </StackPanel>
+                            </Border>
+                            <Border Classes="sprint-tile">
+                                <StackPanel>
+                                    <TextBlock Classes="sprint-caps" Text="NET" />
+                                    <TextBlock Classes="sprint-value" Text="{Binding Recap.Net, FallbackValue=''}" />
+                                </StackPanel>
+                            </Border>
+                            <Border Classes="sprint-tile">
+                                <StackPanel>
+                                    <TextBlock Classes="sprint-caps" Text="TIME" />
+                                    <TextBlock Classes="sprint-value" Text="{Binding Recap.Minutes, FallbackValue=''}" />
+                                </StackPanel>
+                            </Border>
+                            <Border Classes="sprint-tile">
+                                <StackPanel>
+                                    <TextBlock Classes="sprint-caps" Text="WORDS / MIN" />
+                                    <TextBlock Classes="sprint-value" Text="{Binding Recap.WordsPerMinute, FallbackValue=''}" />
+                                </StackPanel>
+                            </Border>
+                            <Border Classes="sprint-tile" BorderBrush="{DynamicResource Cora.Accent.Store}">
+                                <StackPanel>
+                                    <TextBlock Classes="sprint-caps" Text="EARNED" />
+                                    <TextBlock Classes="sprint-value sprint-xp" Text="{Binding Recap.Xp, FallbackValue=''}" />
+                                </StackPanel>
+                            </Border>
+                        </UniformGrid>
+
+                        <!-- Impact: what share of the words touched were added vs cut -->
+                        <Border Classes="sprint-section" IsVisible="{Binding Recap.HasChanges, FallbackValue=False}">
+                            <StackPanel Spacing="6">
+                                <DockPanel>
+                                    <TextBlock Classes="sprint-caps" Text="IMPACT" />
+                                    <TextBlock Text="{Binding Recap.ChurnLabel, FallbackValue=''}"
+                                               HorizontalAlignment="Right" FontSize="12"
+                                               Foreground="{DynamicResource Cora.Text}" />
+                                </DockPanel>
+                                <ProgressBar Minimum="0" Maximum="100" Height="8" CornerRadius="4"
+                                             Value="{Binding Recap.AddedPercent, FallbackValue=0}"
+                                             Foreground="{DynamicResource Cora.Accent.Success}"
+                                             Background="{DynamicResource Cora.Accent.Error}"
+                                             ToolTip.Tip="Green: words added · red: words cut" />
+                                <ItemsControl ItemsSource="{Binding Recap.Chapters, FallbackValue={x:Null}}">
+                                    <ItemsControl.ItemTemplate>
+                                        <DataTemplate x:DataType="vm:SprintRecapChapter">
+                                            <DockPanel Margin="0,2">
+                                                <TextBlock DockPanel.Dock="Right" Text="{Binding DetailDisplay}"
+                                                           FontSize="11" Margin="12,0,0,0"
+                                                           Foreground="{DynamicResource Cora.Text.Secondary}" />
+                                                <TextBlock DockPanel.Dock="Right" Text="{Binding NetDisplay}"
+                                                           FontFamily="{DynamicResource Cora.Font.Machine}"
+                                                           FontSize="12" Margin="12,0,0,0"
+                                                           Foreground="{DynamicResource Cora.Text}" />
+                                                <TextBlock Text="{Binding Title}" FontSize="12"
+                                                           TextTrimming="CharacterEllipsis"
+                                                           Foreground="{DynamicResource Cora.Text}" />
+                                            </DockPanel>
+                                        </DataTemplate>
+                                    </ItemsControl.ItemTemplate>
+                                </ItemsControl>
+                            </StackPanel>
+                        </Border>
+
+                        <!-- Project progress -->
+                        <Border Classes="sprint-section">
+                            <StackPanel Spacing="6">
+                                <DockPanel>
+                                    <TextBlock Classes="sprint-caps" Text="PROJECT" />
+                                    <TextBlock Text="{Binding Recap.ProjectWords, FallbackValue=''}"
+                                               HorizontalAlignment="Right" FontSize="12"
+                                               Foreground="{DynamicResource Cora.Text}" />
+                                </DockPanel>
+                                <StackPanel Spacing="4" IsVisible="{Binding Recap.HasTarget, FallbackValue=False}">
+                                    <ProgressBar Minimum="0" Maximum="100" Height="8" CornerRadius="4"
+                                                 Value="{Binding Recap.TargetPercentAfter, FallbackValue=0}"
+                                                 Foreground="{DynamicResource Cora.Accent.Store}" />
+                                    <TextBlock Text="{Binding Recap.TargetProgress, FallbackValue=''}" FontSize="11"
+                                               Foreground="{DynamicResource Cora.Text.Secondary}" />
+                                </StackPanel>
+                            </StackPanel>
+                        </Border>
+
+                        <!-- Streak -->
+                        <Border Classes="sprint-section">
+                            <StackPanel Spacing="2">
+                                <TextBlock Classes="sprint-caps" Text="STREAK" />
+                                <TextBlock Text="{Binding Recap.Streak, FallbackValue=''}" FontSize="15" FontWeight="SemiBold"
+                                           IsVisible="{Binding Recap.HasStreak, FallbackValue=False}"
+                                           Foreground="{DynamicResource Cora.Accent.Store}" />
+                                <TextBlock Text="{Binding Recap.BestStreak, FallbackValue=''}" FontSize="11"
+                                           IsVisible="{Binding Recap.HasStreak, FallbackValue=False}"
+                                           Foreground="{DynamicResource Cora.Text.Secondary}" />
+                                <TextBlock Text="{Binding Recap.ProfileError, FallbackValue=''}" FontSize="11"
+                                           TextWrapping="Wrap"
+                                           IsVisible="{Binding Recap.HasProfileError, FallbackValue=False}"
+                                           Foreground="{DynamicResource Cora.Accent.Error}" />
+                            </StackPanel>
+                        </Border>
+
+                        <StackPanel Orientation="Horizontal" HorizontalAlignment="Center" Spacing="10" Margin="0,16,0,0">
+                            <Button Classes="sprint-secondary" Content="Done" Command="{Binding DoneCommand}" />
+                            <Button x:Name="FutureYouButton" Classes="sprint-primary"
+                                    Content="LEAVE A NOTE FOR FUTURE YOU →"
+                                    Command="{Binding ToFutureYouCommand}" IsDefault="True" />
+                        </StackPanel>
+                    </StackPanel>
+
+                    <!-- ── Note to Future You ─────────────────────────────────── -->
+                    <StackPanel x:Name="FutureYouCard" IsVisible="{Binding IsFutureYou}" Spacing="12">
+                        <TextBlock Classes="sprint-caps" Text="NOTE TO FUTURE YOU" HorizontalAlignment="Center" />
+                        <TextBlock Classes="sprint-sub"
+                                   Text="Tomorrow's first minute is the hardest. Tell Future You exactly where to start." />
+
+                        <Border Classes="sprint-tile" IsVisible="{Binding HasLeftOff}">
+                            <StackPanel Spacing="4">
+                                <TextBlock Classes="sprint-caps" Text="WHERE YOU LEFT OFF" />
+                                <TextBlock Text="{Binding LeftOffChapter}" FontWeight="SemiBold" FontSize="13"
+                                           Foreground="{DynamicResource Cora.Text}" />
+                                <TextBlock Text="{Binding LeftOffLine}" FontStyle="Italic" FontSize="12"
+                                           TextWrapping="Wrap"
+                                           Foreground="{DynamicResource Cora.Text.Secondary}" />
+                            </StackPanel>
+                        </Border>
+
+                        <TextBox x:Name="FutureYouInput"
+                                 Text="{Binding FutureYouText}"
+                                 Watermark="What happens next? e.g. Mara opens the letter and recognises the handwriting."
+                                 AcceptsReturn="True"
+                                 TextWrapping="Wrap"
+                                 MinHeight="96"
+                                 FontSize="14" />
+
+                        <StackPanel Orientation="Horizontal" HorizontalAlignment="Center" Spacing="10">
+                            <Button Classes="sprint-secondary" Content="Skip" Command="{Binding DoneCommand}" />
+                            <Button Classes="sprint-primary" Content="SAVE NOTE" Command="{Binding SaveNoteCommand}" />
+                        </StackPanel>
+                    </StackPanel>
+
+                </Panel>
+            </ScrollViewer>
+        </Border>
+    </Grid>
+</UserControl>

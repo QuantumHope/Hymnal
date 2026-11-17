@@ -1,0 +1,57 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:Hymnal.ViewModels"
+             x:Class="Hymnal.Views.SprintHudView"
+             x:DataType="vm:SprintViewModel"
+             IsVisible="{Binding IsRunning}"
+             HorizontalAlignment="Right"
+             VerticalAlignment="Top"
+             Margin="0,12,20,0"
+             FontFamily="{DynamicResource Cora.Font.Persona}">
+
+    <!-- The running sprint: time left, progress and live net words, floating over the editor. -->
+    <Border Background="{DynamicResource Cora.Surface.Elevated}"
+            BorderBrush="{DynamicResource Cora.Accent.Store}"
+            BorderThickness="1"
+            CornerRadius="6"
+            Padding="12,8"
+            Opacity="0.92"
+            Width="200">
+        <StackPanel Spacing="4">
+            <DockPanel>
+                <Button DockPanel.Dock="Right"
+                        Content="End"
+                        Command="{Binding EndCommand}"
+                        ToolTip.Tip="End the sprint now and see the recap"
+                        Padding="10,2"
+                        FontSize="11"
+                        Background="Transparent"
+                        Foreground="{DynamicResource Cora.Text.Secondary}"
+                        BorderBrush="{DynamicResource Cora.Border.Subtle}"
+                        BorderThickness="1"
+                        VerticalAlignment="Center" />
+                <StackPanel>
+                    <TextBlock Text="SPRINT"
+                               FontSize="9"
+                               FontWeight="SemiBold"
+                               LetterSpacing="1.6"
+                               Foreground="{DynamicResource Cora.Text.Secondary}" />
+                    <TextBlock x:Name="RemainingText"
+                               Text="{Binding RemainingDisplay}"
+                               FontFamily="{DynamicResource Cora.Font.Machine}"
+                               FontSize="22"
+                               FontWeight="SemiBold"
+                               Foreground="{DynamicResource Cora.Accent.Store}" />
+                </StackPanel>
+            </DockPanel>
+            <ProgressBar Minimum="0" Maximum="100" Height="4" MinHeight="4" CornerRadius="2"
+                         Value="{Binding Progress}"
+                         Foreground="{DynamicResource Cora.Accent.Store}" />
+            <TextBlock x:Name="LiveNetText"
+                       Text="{Binding LiveNetDisplay}"
+                       FontFamily="{DynamicResource Cora.Font.Machine}"
+                       FontSize="12"
+                       Foreground="{DynamicResource Cora.Text}" />
+        </StackPanel>
+    </Border>
+</UserControl>

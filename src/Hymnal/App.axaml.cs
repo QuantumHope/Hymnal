@@ -106,6 +106,10 @@ public partial class App : Application
 
         // Beat boards (story/anthology plan mode)
         services.AddSingleton<IBeatBoardService, BeatBoardService>();
+
+        // Writing sprints: the global writer profile (AppData) and per-workspace notes to Future You
+        services.AddSingleton<IWriterProfileStore>(sp => new WriterProfileStore(sp.GetRequiredService<IMetadataStore>()));
+        services.AddSingleton<IFutureYouNotesService, FutureYouNotesService>();
         // Writes story files through the same StoryFileWriter singleton the editor uses.
         services.AddSingleton<StorageMigrator>();
 
@@ -398,6 +402,16 @@ public partial class App : Application
                 sp.GetRequiredService<SpellingService>(),
                 _updates));
 
+        services.AddSingleton<SprintViewModel>(sp =>
+            new SprintViewModel(
+                sp.GetRequiredService<EditorViewModel>(),
+                sp.GetRequiredService<WorkspaceViewModel>(),
+                sp.GetRequiredService<IWriterProfileStore>(),
+                sp.GetRequiredService<IFutureYouNotesService>(),
+                sp.GetRequiredService<WordCountService>(),
+                sp.GetRequiredService<IAppSettingsStore>(),
+                sp.GetRequiredService<INotificationService>()));
+
         services.AddTransient<MainWindowViewModel>(sp =>
             new MainWindowViewModel(
                 sp.GetRequiredService<WorkspaceViewModel>(),
@@ -420,7 +434,8 @@ public partial class App : Application
                 sp.GetRequiredService<WriteBeatsViewModel>(),
                 sp.GetRequiredService<CollectionsViewModel>(),
                 sp.GetRequiredService<SubmissionExportViewModel>(),
-                sp.GetRequiredService<IThemeService>()));
+                sp.GetRequiredService<IThemeService>(),
+                sprint: sp.GetRequiredService<SprintViewModel>()));
 
         _serviceProvider = services.BuildServiceProvider();
         Services = _serviceProvider;

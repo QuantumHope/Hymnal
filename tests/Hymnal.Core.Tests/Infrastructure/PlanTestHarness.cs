@@ -224,8 +224,24 @@ internal sealed class PlanTestContext : IDisposable
         return _owned.Track(new WriteBeatsViewModel(Workspace, board, planBoard ?? Board, _settings, Notifications));
     }
 
+    /// <summary>
+    /// Writing sprints over this workspace; the timer runs on <see cref="Scheduler"/>. The writer profile defaults
+    /// to a file in the workspace's folder, so each test has its own.
+    /// </summary>
+    public SprintViewModel CreateSprint(IWriterProfileStore? profile = null) =>
+        _owned.Track(new SprintViewModel(
+            _editor,
+            Workspace,
+            profile ?? new WriterProfileStore(_store, Path.Combine(Workspace.WorkspaceRoot, ".test-writer-profile.json")),
+            new FutureYouNotesService(_store),
+            new WordCountService(),
+            _settings,
+            Notifications,
+            Scheduler));
+
     public MainWindowViewModel CreateMainWindow(PlanHostViewModel host, WriteBeatsViewModel? writeBeats = null,
-        CollectionsViewModel? collections = null, Hymnal.Theming.IThemeService? themes = null)
+        CollectionsViewModel? collections = null, Hymnal.Theming.IThemeService? themes = null,
+        SprintViewModel? sprint = null)
     {
         var docs = new SupplementalDocsViewModel(
             Workspace, new SupplementalDocsService(_store), _editor, Notifications, _settings, new StubFilePickerService());
@@ -250,7 +266,8 @@ internal sealed class PlanTestContext : IDisposable
             planHostViewModel: host,
             writeBeatsViewModel: writeBeats,
             collectionsViewModel: collections,
-            themes: themes);
+            themes: themes,
+            sprint: sprint);
     }
 
     public NotesViewModel CreateNotes() =>

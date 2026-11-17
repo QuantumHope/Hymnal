@@ -188,6 +188,7 @@
         <KeyBinding Gesture="F8" Command="{Binding EditorViewModel.Spelling.NextIssueCommand}" />
         <KeyBinding Gesture="Shift+F8" Command="{Binding EditorViewModel.Spelling.PreviousIssueCommand}" />
         <KeyBinding Gesture="F11" Command="{Binding ToggleFocusModeCommand}" />
+        <KeyBinding Gesture="Ctrl+Alt+S" Command="{Binding Sprint.OpenCommand}" />
         <!-- Esc closes the command palette first; ExitFocusModeCommand can't run while it is open. -->
         <KeyBinding Gesture="Escape" Command="{Binding CommandPalette.CloseCommand}" />
         <KeyBinding Gesture="Escape" Command="{Binding ExitFocusModeCommand}" />
@@ -257,6 +258,12 @@
                         <MenuItem Header="_Focus Mode"
                                   Command="{Binding ToggleFocusModeCommand}"
                                   InputGesture="F11" />
+                        <MenuItem Header="Start Writing _Sprint…"
+                                  Command="{Binding Sprint.OpenCommand}"
+                                  InputGesture="Ctrl+Alt+S" />
+                        <MenuItem Header="_End Writing Sprint"
+                                  IsVisible="{Binding Sprint.IsRunning, FallbackValue=False}"
+                                  Command="{Binding Sprint.EndCommand}" />
                         <Separator />
                         <MenuItem Header="Markua _Preview">
                             <MenuItem Header="_Write Only"
@@ -904,6 +911,11 @@
                                          IsVisible="{Binding ShowsCollectionBar}" />                <ContentControl Content="{Binding SecondaryCentreContent}" />
                 </DockPanel>
 
+                <!-- The running writing sprint's timer, over the editor (and focus mode) -->
+                <views:SprintHudView ZIndex="50"
+                                     DataContext="{Binding Sprint}"
+                                     IsVisible="{Binding IsRunning, FallbackValue=False}" />
+
                 <!-- Settings overlay — covers full shell area when IsSettingsOpen -->
                 <Border IsVisible="{Binding IsSettingsOpen}"
                         Background="{DynamicResource Cora.Surface.Void}"
@@ -1018,6 +1030,12 @@
                 </StackPanel>
             </Grid>
         </Border>
+
+        <!-- Writing sprint screens: start card, recap, note to Future You. -->
+        <views:SprintOverlayView Grid.Row="0"
+                                 Grid.RowSpan="4"
+                                 DataContext="{Binding Sprint}"
+                                 IsVisible="{Binding IsOverlayOpen, FallbackValue=False}" />
 
         <!-- Command palette (Ctrl+P / Ctrl+Shift+P), over everything including the banner. -->
         <views:CommandPaletteView Grid.Row="0"
