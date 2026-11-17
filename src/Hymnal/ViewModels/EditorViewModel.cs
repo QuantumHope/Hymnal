@@ -845,7 +845,14 @@ public class EditorViewModel : ViewModelBase, IDisposable, IOpenStoryBuffer
                     if (HasConflict || ActiveFilePath != path)
                         return false;
 
-                    if (await ProseChangedOnDiskAsync(path) is { } onDisk)
+                    var generation = _bufferGeneration;
+                    var changed = await ProseChangedOnDiskAsync(path);
+
+                    // The buffer was closed, switched or reloaded during the read: what it held is no longer this save's.
+                    if (ActiveFilePath != path || _bufferGeneration != generation)
+                        return !IsDirty;
+
+                    if (changed is { } onDisk)
                     {
                         RaiseConflict(onDisk);
                         return false;
@@ -940,11 +947,20 @@ public class EditorViewModel : ViewModelBase, IDisposable, IOpenStoryBuffer
             // Writing the block rewrites the prose too, so an outside change the watcher hasn't reported yet would be
             // lost. With unsaved edits that is a conflict; a clean buffer is reloaded by the watcher, and the caller
             // keeps its change to try again.
-            if (await ProseChangedOnDiskAsync(ActiveFilePath) is { } onDisk)
+            var path = ActiveFilePath;
+            var generation = _bufferGeneration;
+            var changed = await ProseChangedOnDiskAsync(path);
+
+            // Closing or switching the buffer doesn't take the gate: if it changed during the read, this buffer no
+            // longer holds the file, so fail and let the writer write it as a closed file.
+            if (!ReferenceEquals(_story, story) || ActiveFilePath != path || _bufferGeneration != generation)
+                return StoryResult.Fail("The story file is no longer open in the editor.");
+
+            if (changed is { } onDisk)
             {
                 if (IsDirty)
                     RaiseConflict(onDisk);
-                return StoryResult.Fail($"'{Path.GetFileName(ActiveFilePath)}' changed on disk; try again once it has reloaded.");
+                return StoryResult.Fail($"'{Path.GetFileName(path)}' changed on disk; try again once it has reloaded.");
             }
 
             var updated = story with { Metadata = metadata };
