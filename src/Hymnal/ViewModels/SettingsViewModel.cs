@@ -16,6 +16,7 @@ using Hymnal.Core.Services;
 using Hymnal.Core.Services.Ai;
 using Hymnal.Theming;
 using Hymnal.ViewModels.Ai;
+using MattEland.HopeLab.Updates.ReactiveUI;
 using ReactiveUI;
 using Unit = System.Reactive.Unit;
 
@@ -77,6 +78,12 @@ public class SettingsViewModel : ViewModelBase
 
     /// <summary>True when the Spelling section applies.</summary>
     public bool HasSpelling => Spelling is not null;
+
+    /// <summary>The Updates section (the app-wide update view model); null when the host has no updates.</summary>
+    public UpdatesViewModel? Updates { get; }
+
+    /// <summary>True when the Updates section applies.</summary>
+    public bool HasUpdates => Updates?.IsAvailable == true;
 
     public ObservableCollection<ProviderProfileViewModel> Profiles { get; } = new();
 
@@ -150,6 +157,7 @@ public class SettingsViewModel : ViewModelBase
             this.RaisePropertyChanged(nameof(IsAiProvidersSection));
             this.RaisePropertyChanged(nameof(IsSoundSection));
             this.RaisePropertyChanged(nameof(IsSpellingSection));
+            this.RaisePropertyChanged(nameof(IsUpdatesSection));
         }
     }
 
@@ -158,6 +166,7 @@ public class SettingsViewModel : ViewModelBase
     public bool IsAiProvidersSection => Section == SettingsSection.AiProviders;
     public bool IsSoundSection => Section == SettingsSection.Sound;
     public bool IsSpellingSection => Section == SettingsSection.Spelling;
+    public bool IsUpdatesSection => Section == SettingsSection.Updates;
 
     /// <summary>Shows one section (the nav items' command; the parameter is the section).</summary>
     public ReactiveCommand<SettingsSection, Unit> ShowSectionCommand { get; }
@@ -218,7 +227,8 @@ public class SettingsViewModel : ViewModelBase
         SoundPreferences? sound = null,
         TypingSoundPlayer? typingSounds = null,
         IThemeService? themes = null,
-        SpellingService? spelling = null)
+        SpellingService? spelling = null,
+        UpdatesViewModel? updates = null)
     {
         _themes = themes;
         ThemeSections = BuildThemeSections(themes);
@@ -239,6 +249,7 @@ public class SettingsViewModel : ViewModelBase
         _beatBoard = beatBoard;
         _storageMigrator = storageMigrator;
         _flushStoryEdits = flushStoryEdits;
+        Updates = updates; // app-wide and long-lived: not disposed with Settings
         if (sound is not null)
         {
             Sound = new SoundSettingsViewModel(sound, typingSounds);
@@ -669,5 +680,6 @@ public enum SettingsSection
     Project,
     Sound,
     Spelling,
+    Updates,
     AiProviders,
 }

@@ -1,0 +1,10 @@
+<Project>
+  <PropertyGroup>
+    <!--
+      Hymnal's version. Releases are numbered <major>.<minor>.<commits on main>: the shared release workflow
+      (hopelab-app.json) reads major.minor here and sets the full version when it publishes. A build from source
+      reports this version, so the update check compares against it.
+    -->
+    <Version>0.1.0</Version>
+  </PropertyGroup>
+</Project>

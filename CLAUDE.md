@@ -20,6 +20,12 @@ dotnet test Hymnal.slnx --filter "FullyQualifiedName~BeatBoardServiceTests"
 dotnet test Hymnal.slnx --filter "FullyQualifiedName~BeatBoardServiceTests.<TestMethodName>"
 ```
 
+## Releases and updates
+
+Every push to `main` that passes CI is released by the shared workflow in [MattEland.HopeLab.Shared](https://github.com/QuantumHope/MattEland.HopeLab.Shared) (`.github/workflows/app-release.yml`, called from `ci.yml`) as `v<major>.<minor>.<commits on main>`: self-contained win-x64/linux-x64 archives, a per-user `setup.exe`, a `.deb`, `latest.json` and the install scripts. `hopelab-app.json` describes Hymnal to it (executable, icons, setup AppId, data folder); major.minor come from `<Version>` in `Directory.Build.props`. Never change `windows.setupAppId`.
+
+In the app, `src/Hymnal/Infrastructure/Updates/` wires the shared `MattEland.HopeLab.Updates.ReactiveUI` package (version `0.1.*`): `HymnalUpdates` (options, kept in step with `hopelab-app.json` by a test), `HymnalUpdateHost` (toasts, browser, `settings.json` preferences), `CredentialTokenStore` (a saved GitHub token goes through `ICredentialStore`, never a plain file) and `UpdateRestart` (lock editing, save everything until nothing is pending, start the new copy, exit). The banner is `Views/UpdateBannerView`, the Settings section `Views/UpdatesSettingsView`. Update downloads live in `~/.hymnal/updates`; settings stay in the OS app-data folder. Only a release build (it has `release.json`) updates itself. Don't run the installers or `setup.exe` against the real profile.
+
 ## Test project scope
 
 `tests/Hymnal.Core.Tests` is the only test project, but it references both `Hymnal.Core` and the `Hymnal` app and uses `Avalonia.Headless`. ViewModel and View tests (`ViewModels/`, `Views/`) live there next to the Core tests, so the headless isolation and watcher-disposal rules in AGENTS.md apply to UI tests too.

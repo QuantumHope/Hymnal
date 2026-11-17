@@ -28,6 +28,8 @@
     <PackageReference Include="Avalonia.Themes.Fluent" Version="12.0.4" />
     <PackageReference Include="ReactiveUI" Version="23.2.28" />
     <PackageReference Include="ReactiveUI.Avalonia" Version="12.0.3" />
+    <!-- Releases and in-app updates (MattEland.HopeLab.Shared). Floating: takes the newest 0.1.x; breaking changes go to 0.2. -->
+    <PackageReference Include="MattEland.HopeLab.Updates.ReactiveUI" Version="0.1.*" />
     <PackageReference Include="Silk.NET.OpenAL" Version="2.23.0" />
     <PackageReference Include="Silk.NET.OpenAL.Soft.Native" Version="1.23.1" />
     <PackageReference Include="Splat" Version="19.4.1" />

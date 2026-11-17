@@ -45,6 +45,9 @@ public sealed class IdeasViewModel : ViewModelBase, IDisposable
     /// <summary>Workspace root the current ideas were loaded from; null when nothing is loaded.</summary>
     private string? _loadedRoot;
     private bool _savePending;
+
+    /// <summary>True while idea edits are waiting to be written.</summary>
+    public bool HasPendingChanges => _savePending;
     private bool _lastSaveFailed;
     private Task _saveChain = Task.CompletedTask;
     private ProjectKind? _loadedKind;

@@ -80,6 +80,9 @@ public class NotesViewModel : ViewModelBase, IDisposable
     /// <summary>Text typed but not yet saved (null when nothing is pending); taken by whichever save runs first.</summary>
     private string? _pendingText;
 
+    /// <summary>True while typed notes are waiting on the debounce (or a failed save) to be written.</summary>
+    public bool HasPendingChanges => Volatile.Read(ref _pendingText) is not null;
+
     /// <summary>One notes save at a time, so a flush waits for one already writing.</summary>
     private readonly SemaphoreSlim _saveGate = new(1, 1);
 

@@ -1,0 +1,31 @@
+{
+  "$schema": "https://raw.githubusercontent.com/QuantumHope/MattEland.HopeLab.Shared/main/installers/hopelab-app.schema.json",
+  "name": "Hymnal",
+  "id": "hymnal",
+  "description": "A manuscript editor for planning, writing and editing Leanpub / Markua books",
+  "publisher": "QuantumHope",
+  "desktop": {
+    "project": "src/Hymnal",
+    "executable": "Hymnal",
+    "icon": "src/Hymnal/Assets/hymnal.ico",
+    "png": "src/Hymnal/Assets/hymnal-256.png"
+  },
+  "test": {
+    "solution": "Hymnal.slnx",
+    "arguments": "--filter \"FullyQualifiedName!~GanttView_RowMoveShortcutHelper\" --blame-hang-timeout 90s"
+  },
+  "linux": {
+    "recommends": "git",
+    "categories": "Office;"
+  },
+  "windows": {
+    "setupAppId": "{AADCC81E-C17B-4436-A68E-890A41335EB4}"
+  },
+  "install": {
+    "dataDirectory": ".hymnal",
+    "tokenVariable": "HYMNAL_GITHUB_TOKEN",
+    "processes": ["Hymnal"],
+    "firstRun": "Open a folder with a Book.txt, or an empty folder to start a new book, from File > Open Workspace.",
+    "uninstallNote": "Your manuscripts were not touched. Hymnal's settings stay in your app-data folder (Hymnal/settings.json) and its update downloads in ~/.hymnal; delete them if you like."
+  }
+}
