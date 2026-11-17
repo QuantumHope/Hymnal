@@ -957,7 +957,7 @@ public class MainWindowViewModel : ViewModelBase
     private async Task<bool> FlushAllAsync()
     {
         // The prose first: it is what the author can least afford to lose.
-        var text = await SaveEditorBeforeCloseAsync();
+        var text = await EditorViewModel.SaveBeforeCloseAsync();
 
         var notes = _notesVm.FlushAsync();
         var schedule = _chapterInfoVm.FlushScheduleAsync();
@@ -965,30 +965,12 @@ public class MainWindowViewModel : ViewModelBase
         var beats = PlanHostViewModel == null ? Task.FromResult(true) : PlanHostViewModel.FlushAsync();
         var writeBeats = WriteBeatsViewModel == null ? Task.FromResult(true) : WriteBeatsViewModel.FlushAsync();
         var results = await Task.WhenAll(notes, schedule, ideas, beats, writeBeats);
-        return text && results.All(ok => ok);
-    }
 
-    /// <summary>
-    /// Saves the editor's unsaved text. False when it couldn't be saved, or when its file changed on disk while it
-    /// was being edited (an unresolved conflict): that is never overwritten without asking.
-    /// </summary>
-    private async Task<bool> SaveEditorBeforeCloseAsync()
-    {
-        var editor = EditorViewModel;
-        if (!editor.IsDirty)
-            return true;
-        if (editor.HasConflict)
-            return false;
-        try
-        {
-            await editor.SaveAsync();
-        }
-        catch
-        {
-            // SaveAsync has already shown the error.
-            return false;
-        }
-        return !editor.IsDirty;
+        // The window stays editable while the close waits, so text typed meanwhile is saved too; anything still
+        // unsaved after that makes the close ask rather than lose it.
+        if (text && EditorViewModel.IsDirty)
+            text = await EditorViewModel.SaveBeforeCloseAsync();
+        return text && !EditorViewModel.IsDirty && results.All(ok => ok);
     }
 
     /// <summary>

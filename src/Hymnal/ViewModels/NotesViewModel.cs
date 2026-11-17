@@ -183,6 +183,17 @@ public class NotesViewModel : ViewModelBase, IDisposable
 
     private void OnActiveNodeChanged(ChapterNode? node)
     {
+        // The same file under a new title (a save that changed its # heading) is not a switch: keep the
+        // notes being typed, and their pending save, rather than discarding and reloading them.
+        if (node != null && _loadedNode != null
+            && string.Equals(node.RelativePath, _loadedNode.RelativePath, StringComparison.Ordinal)
+            && _workspaceViewModel.StoryRefFor(node) == _loadedStory)
+        {
+            _loadedNode = node;
+            ChapterTitle = node.Title;
+            return;
+        }
+
         // Cancel any pending save for the previous chapter.
         _pendingText = null;
         _saveCts.Cancel();

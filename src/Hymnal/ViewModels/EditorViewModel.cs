@@ -79,6 +79,13 @@ public class EditorViewModel : ViewModelBase, IDisposable, IOpenStoryBuffer
     private bool _damagedBlockNoticeShown;
     private bool _notUtf8NoticeShown;
 
+    // The prose of the disk version the buffer is based on: as loaded or saved, or the external version the
+    // author chose to keep their edits over. A close-time save compares the file with it (see SaveBeforeCloseAsync).
+    private string _diskProse = "";
+
+    // The prose read when the current conflict was raised; it becomes _diskProse when the author keeps their edits.
+    private string? _conflictProse;
+
     private FileSystemWatcher? _watcher;
     private Timer? _watcherDebounceTimer;
     private bool _disposed;
@@ -373,6 +380,9 @@ public class EditorViewModel : ViewModelBase, IDisposable, IOpenStoryBuffer
 
         KeepLocalCommand = ReactiveCommand.Create(() =>
         {
+            if (_conflictProse != null)
+                _diskProse = _conflictProse;
+            _conflictProse = null;
             HasConflict = false;
             ConflictMessage = null;
         });
@@ -463,6 +473,8 @@ public class EditorViewModel : ViewModelBase, IDisposable, IOpenStoryBuffer
         {
             Text = content;
             OriginalText = content;
+            _diskProse = content;
+            _conflictProse = null;
             SetDirtyFlag(false);
         }
         finally
@@ -789,6 +801,8 @@ public class EditorViewModel : ViewModelBase, IDisposable, IOpenStoryBuffer
             try
             {
                 OriginalText = text;
+                _diskProse = text;
+                _conflictProse = null;
                 SetDirtyFlag(!string.Equals(Text, text, StringComparison.Ordinal));
             }
             finally
@@ -805,6 +819,60 @@ public class EditorViewModel : ViewModelBase, IDisposable, IOpenStoryBuffer
             if (ActiveFilePath == savePath)
                 StartWatcher(savePath);
         }
+    }
+
+    /// <summary>
+    /// Saves unsaved text as the window closes, without waiting for the watcher: the file is read first, and when
+    /// its text is no longer the version the buffer is based on (an outside change the watcher's debounce has not
+    /// reported yet), the conflict is raised and nothing is written. True when nothing was unsaved or the save
+    /// succeeded; false on a conflict or a failed save (whose error has been shown).
+    /// </summary>
+    public async Task<bool> SaveBeforeCloseAsync()
+    {
+        if (!IsDirty)
+            return true;
+        if (HasConflict || !CanSave || ActiveFilePath is not { } path)
+            return false;
+
+        try
+        {
+            // Lock order: the writer's metadata lock, then the write gate.
+            using (_chapterOpen ? await _storyWriter.HoldMetadataChangesAsync(path) : null)
+            {
+                await _writeGate.WaitAsync();
+                try
+                {
+                    if (HasConflict || ActiveFilePath != path)
+                        return false;
+
+                    // A file that is gone has nothing to overwrite; the save writes it again.
+                    if (File.Exists(path))
+                    {
+                        var onDisk = _chapterOpen
+                            ? ProseOf(null, await ReadChapterFileAsync(path))
+                            : await File.ReadAllTextAsync(path);
+                        if (!string.Equals(onDisk, _diskProse, StringComparison.Ordinal))
+                        {
+                            RaiseConflict(onDisk);
+                            return false;
+                        }
+                    }
+
+                    await WriteBufferAsync(_story);
+                }
+                finally
+                {
+                    _writeGate.Release();
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            _notificationService.ShowError($"Save failed: {ex.Message}");
+            return false;
+        }
+
+        return !IsDirty;
     }
 
     // ── IOpenStoryBuffer ─────────────────────────────────────────────────────
@@ -995,11 +1063,25 @@ public class EditorViewModel : ViewModelBase, IDisposable, IOpenStoryBuffer
         }
         else
         {
-            HasConflict = true;
-            ConflictMessage =
-                $"'{Path.GetFileName(ActiveFilePath)}' was changed externally. " +
-                "Choose 'Reload from disk' to accept the external version, or 'Keep my edits' to discard it.";
+            RaiseConflict(ProseOf(content, chapter));
         }
+    }
+
+    private void RaiseConflict(string diskProse)
+    {
+        _conflictProse = diskProse;
+        HasConflict = true;
+        ConflictMessage =
+            $"'{Path.GetFileName(ActiveFilePath)}' was changed externally. " +
+            "Choose 'Reload from disk' to accept the external version, or 'Keep my edits' to discard it.";
+    }
+
+    /// <summary>A file's text as the buffer holds it: a story's prose without its block or byte order mark.</summary>
+    private static string ProseOf(string? content, ChapterRead? chapter)
+    {
+        if (chapter?.Split is { } split)
+            return split.Prose.Length > 0 && split.Prose[0] == ByteOrderMark ? split.Prose[1..] : split.Prose;
+        return chapter?.PlainText ?? content ?? "";
     }
 
     private void StopWatcher()
