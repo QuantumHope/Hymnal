@@ -965,16 +965,15 @@ public partial class MainWindowViewModel : ViewModelBase
     }
 
     /// <summary>
-    /// Writes edits still waiting on a debounced save (story ideas, after any in-flight promote finishes,
-    /// and beats) before the window closes, waiting at most <paramref name="timeout"/> in all. False when
-    /// they could not be saved in time, so the view can ask whether to close anyway. Completes
-    /// synchronously when nothing is pending.
+    /// Saves everything not yet on disk before the window closes, waiting at most <paramref name="timeout"/> in
+    /// all: the editor's unsaved text first, then edits still waiting on a debounced save (notes, the schedule,
+    /// story ideas after any in-flight promote, and beats). False when something could not be saved, so the view
+    /// asks whether to close anyway. That includes text whose file changed on disk meanwhile: saving it would
+    /// silently overwrite the other change, so it is left for the author to decide. Completes synchronously when
+    /// nothing is pending.
     /// </summary>
     public async Task<bool> FlushPendingEditsBeforeCloseAsync(TimeSpan timeout)
     {
-        if (IdeasViewModel == null && PlanHostViewModel == null && WriteBeatsViewModel == null)
-            return true;
-
         try
         {
             var flush = FlushAllAsync();
@@ -996,11 +995,47 @@ public partial class MainWindowViewModel : ViewModelBase
 
     private async Task<bool> FlushAllAsync()
     {
+        // The prose first: it is what the author can least afford to lose.
+        var text = await EditorViewModel.SaveBeforeCloseAsync();
+        var saved = await FlushDebouncedEditsAsync();
+
+        // The window stays editable while the close waits, so whatever was typed meanwhile (text, or a note or
+        // schedule edit after its flush had finished) is saved in a second round; text still unsaved after that
+        // makes the close ask rather than lose it. A flush with nothing pending returns at once.
+        if (text && EditorViewModel.IsDirty)
+            text = await EditorViewModel.SaveBeforeCloseAsync();
+        saved &= await FlushDebouncedEditsAsync();
+        return text && !EditorViewModel.IsDirty && saved;
+    }
+
+    /// <summary>Writes the edits waiting on a debounced save: notes, the schedule, ideas and beats.</summary>
+    private async Task<bool> FlushDebouncedEditsAsync()
+    {
+        var notes = _notesVm.FlushAsync();
+        var schedule = _chapterInfoVm.FlushScheduleAsync();
         var ideas = IdeasViewModel == null ? Task.FromResult(true) : FlushAfterPromoteAsync(IdeasViewModel);
         var beats = PlanHostViewModel == null ? Task.FromResult(true) : PlanHostViewModel.FlushAsync();
         var writeBeats = WriteBeatsViewModel == null ? Task.FromResult(true) : WriteBeatsViewModel.FlushAsync();
-        var results = await Task.WhenAll(ideas, beats, writeBeats);
+        var results = await Task.WhenAll(notes, schedule, ideas, beats, writeBeats);
         return results.All(ok => ok);
+    }
+
+    /// <summary>
+    /// What closing now would lose, for the question asked when <see cref="FlushPendingEditsBeforeCloseAsync"/>
+    /// returns false: the open file's text when it is still unsaved, or other pending edits.
+    /// </summary>
+    public string UnsavedOnCloseMessage
+    {
+        get
+        {
+            var editor = EditorViewModel;
+            if (editor.IsDirty && editor.HasConflict)
+                return "The open file changed on disk while you had unsaved edits, so they weren't saved over it. "
+                       + "Closing now loses your edits. Close anyway? (Cancel, then in Write mode choose Keep my edits or Reload from disk.)";
+            if (editor.IsDirty)
+                return "Your unsaved text couldn't be saved. Closing now loses it. Close anyway?";
+            return "Some notes, schedule, idea or beat edits couldn't be saved. Close anyway?";
+        }
     }
 
     /// <summary>Waits for an in-flight promote (it saves ideas itself), then writes pending idea edits.</summary>
