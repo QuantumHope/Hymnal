@@ -285,6 +285,11 @@ public partial class EditorView : UserControl
         if (!_isAttached || DataContext is not EditorViewModel { Spelling: { IsAvailable: true } spelling } vm)
             return;
 
+        // The view model's text reaches the editor through a posted subscription; put it there now, so a scan
+        // already made (the hook applies it at once) isn't dropped as one of other text.
+        if (vm.Text is { } text && PART_Editor.Text != text)
+            PART_Editor.Text = text;
+
         _spellingHook = new SpellingHook(PART_Editor, spelling, () => vm.Text, SpellingMarkBrush());
         _spellingVisibilitySub = spelling.Service!.Preferences.WhenAnyValue(p => p.HideInFocusMode)
             .Subscribe(_ => UpdateSpellingMarksVisible());

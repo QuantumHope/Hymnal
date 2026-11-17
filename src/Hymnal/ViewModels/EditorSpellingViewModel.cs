@@ -264,12 +264,14 @@ public sealed class EditorSpellingViewModel : ViewModelBase, IDisposable
     /// </summary>
     private IObservable<SpellingScan> Scans(SpellingService service)
     {
-        var texts = _editor.WhenAnyValue(x => x.Text)
+        var typed = _editor.WhenAnyValue(x => x.Text)
             .Publish(t => t.Take(1).Merge(t.Skip(1).Throttle(TypingPause, TaskPoolScheduler.Default)));
+        // A check asked for scans the buffer as it is now, without waiting for the typing pause, so the scan
+        // that answers it (and opens the first issue's menu) is of the current text rather than a stale one.
+        var texts = typed.Merge(_recheck.Select(_ => _editor.Text));
         var checkers = service.WhenAnyValue(s => s.Checker);
-        var rechecks = _recheck.StartWith(Unit.Default);
 
-        return Observable.CombineLatest(texts, checkers, rechecks, (text, checker, _) => (text, checker))
+        return Observable.CombineLatest(texts, checkers, (text, checker) => (text, checker))
             .Select(input => input.checker is null
                 ? Observable.Return(SpellingScan.Empty)
                 : Observable.FromAsync(ct => Task.Run(

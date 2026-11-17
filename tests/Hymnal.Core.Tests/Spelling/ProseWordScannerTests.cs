@@ -72,6 +72,25 @@ public sealed class ProseWordScannerTests
     }
 
     [Fact]
+    public void Backticks_closed_on_the_same_line_are_inline_code_not_a_fence()
+    {
+        Assert.Equal(["is", "code", "Then", "prose"], Words("```x``` is code.\n\nThen prose."));
+    }
+
+    [Fact]
+    public void A_fence_line_with_an_info_string_does_not_close_a_block()
+    {
+        Assert.Equal(["after"], Words("```\nhidden\n```python\nstill\n```\nafter"));
+    }
+
+    [Fact]
+    public void A_comment_opener_in_code_is_not_a_comment()
+    {
+        Assert.Equal(["Prose", "after", "and", "more"],
+            Words("```html\n<!-- an example\n```\nProse after `<!--` and more"));
+    }
+
+    [Fact]
     public void Skips_inline_code_and_attribute_blocks()
     {
         Assert.Equal(["Use", "now", "Heading"], Words("Use `fooBarBaz qwzx` now\n{class: part, idx: zzz}\n# Heading {#chap-one}"));

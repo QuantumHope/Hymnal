@@ -148,8 +148,10 @@ public sealed class SpellingService : ReactiveObject, IDisposable
     {
         if (WorkspaceRoot is not { } root)
             return;
+        // An add or remove that finishes while this reads bumps the generation; its list is newer, so it wins.
+        var generation = ++_workspaceGeneration;
         var loaded = await _projectDictionary.LoadAsync(root).ConfigureAwait(true);
-        if (loaded.IsSuccess && root == WorkspaceRoot)
+        if (loaded.IsSuccess && root == WorkspaceRoot && generation == _workspaceGeneration)
         {
             ProjectWords = loaded.Value!;
             Rebuild();

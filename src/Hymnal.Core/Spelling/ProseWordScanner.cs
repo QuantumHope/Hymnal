@@ -34,13 +34,21 @@ public static class ProseWordScanner
         @"[\p{L}\p{M}\p{Nd}]+(?:['’ʼ][\p{L}\p{M}\p{Nd}]+)*",
         RegexOptions.Compiled | RegexOptions.CultureInvariant);
 
+    // An opening fence. A backtick fence's info string can't hold a backtick (```x``` on one line is inline code).
     private static readonly Regex FenceRegex = new(
-        @"^ {0,3}(`{3,}|~{3,})", RegexOptions.Compiled | RegexOptions.CultureInvariant);
+        @"^ {0,3}(?:(`{3,})[^`]*|(~{3,}).*)$", RegexOptions.Compiled | RegexOptions.CultureInvariant);
 
-    // Inline spans that are not prose. Order does not matter: each match only masks characters.
+    // A closing fence: the fence characters and nothing after them but spaces.
+    private static readonly Regex ClosingFenceRegex = new(
+        @"^ {0,3}(`{3,}|~{3,})[ \t]*$", RegexOptions.Compiled | RegexOptions.CultureInvariant);
+
+    private static readonly Regex InlineCodeRegex = new(
+        @"(`+)[^`\r\n]*?\1", RegexOptions.Compiled | RegexOptions.CultureInvariant);
+
+    // Other inline spans that are not prose (code is masked with the blocks, before comments are found).
+    // Order does not matter: each match only masks characters.
     private static readonly Regex[] InlineSkips =
     [
-        new(@"(`+)[^`\r\n]*?\1", RegexOptions.Compiled | RegexOptions.CultureInvariant),                 // inline code
         new(@"\{[^{}\r\n]*\}", RegexOptions.Compiled | RegexOptions.CultureInvariant),                    // {attributes}
         new(@"\b(?:https?|ftp|file|mailto)://[^\s)>\]]+|\bwww\.[^\s)>\]]+", RegexOptions.Compiled | RegexOptions.IgnoreCase | RegexOptions.CultureInvariant),
         new(@"[\w.+-]+@[\w-]+(?:\.[\w-]+)+", RegexOptions.Compiled | RegexOptions.CultureInvariant),     // e-mail
@@ -136,32 +144,39 @@ public static class ProseWordScanner
         return false;
     }
 
-    /// <summary>Masks code fences, <c>%%</c> comment lines and <c>&lt;!-- --&gt;</c> comments (which may span lines).</summary>
+    /// <summary>
+    /// Masks code fences, inline code, <c>%%</c> comment lines and <c>&lt;!-- --&gt;</c> comments (which may span
+    /// lines). Code is found first, so a comment opener shown in code doesn't hide the prose after it.
+    /// </summary>
     private static void MaskBlocks(string text, bool[] skip)
     {
+        var code = new bool[text.Length];
         string? openFence = null;
         var lineStart = 0;
         while (lineStart <= text.Length)
         {
             var newline = text.IndexOf('\n', lineStart);
             var lineEnd = newline < 0 ? text.Length : newline;
-            var line = text.AsSpan(lineStart, lineEnd - lineStart);
-            var fence = FenceRegex.Match(line.ToString());
+            var line = text.AsSpan(lineStart, lineEnd - lineStart).TrimEnd('\r').ToString();
 
             if (openFence is not null)
             {
-                Array.Fill(skip, true, lineStart, lineEnd - lineStart);
-                if (fence.Success && fence.Groups[1].Value[0] == openFence[0] && fence.Groups[1].Length >= openFence.Length)
+                Array.Fill(code, true, lineStart, lineEnd - lineStart);
+                var close = ClosingFenceRegex.Match(line);
+                if (close.Success && close.Groups[1].Value[0] == openFence[0] && close.Groups[1].Length >= openFence.Length)
                     openFence = null;
             }
-            else if (fence.Success)
+            else if (FenceRegex.Match(line) is { Success: true } open)
             {
-                openFence = fence.Groups[1].Value;
-                Array.Fill(skip, true, lineStart, lineEnd - lineStart);
+                openFence = open.Groups[1].Success ? open.Groups[1].Value : open.Groups[2].Value;
+                Array.Fill(code, true, lineStart, lineEnd - lineStart);
             }
-            else if (line.TrimStart().StartsWith("%%", StringComparison.Ordinal))
+            else
             {
-                Array.Fill(skip, true, lineStart, lineEnd - lineStart);
+                if (line.TrimStart().StartsWith("%%", StringComparison.Ordinal))
+                    Array.Fill(skip, true, lineStart, lineEnd - lineStart);
+                foreach (Match m in InlineCodeRegex.Matches(line))
+                    Array.Fill(code, true, lineStart + m.Index, m.Length);
             }
 
             if (newline < 0)
@@ -169,9 +184,20 @@ public static class ProseWordScanner
             lineStart = newline + 1;
         }
 
+        for (var i = 0; i < code.Length; i++)
+            skip[i] |= code[i];
+
         for (var at = text.IndexOf("<!--", StringComparison.Ordinal); at >= 0;
              at = text.IndexOf("<!--", at, StringComparison.Ordinal))
         {
+            if (code[at])
+            {
+                at += 4;
+                if (at >= text.Length)
+                    break;
+                continue;
+            }
+
             var close = text.IndexOf("-->", at + 4, StringComparison.Ordinal);
             var end = close < 0 ? text.Length : close + 3;
             Array.Fill(skip, true, at, end - at);
