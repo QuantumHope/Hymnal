@@ -17,7 +17,7 @@ using System.Reactive.Subjects;
 
 namespace Hymnal.ViewModels;
 
-public class MainWindowViewModel : ViewModelBase
+public partial class MainWindowViewModel : ViewModelBase
 {
     private readonly IAppSettingsStore _settingsStore;
     private readonly WorkspaceViewModel _workspaceVm;
@@ -90,6 +90,8 @@ public class MainWindowViewModel : ViewModelBase
         {
             this.RaiseAndSetIfChanged(ref _isSettingsOpen, value);
             this.RaisePropertyChanged(nameof(HighlightedMode));
+            // Settings overlays the editor rather than hiding it; Insert must not edit the chapter behind it.
+            EditorViewModel.IsSourceCovered = value;
         }
     }
 
@@ -117,6 +119,9 @@ public class MainWindowViewModel : ViewModelBase
     }
 
     public ReactiveCommand<Unit, Unit> OpenSettingsCommand { get; }
+
+    /// <summary>View → Spelling → Spelling Settings: Settings, opened at the Spelling section.</summary>
+    public ReactiveCommand<Unit, Unit> OpenSpellingSettingsCommand { get; }
     public ReactiveCommand<Unit, Unit> CloseSettingsCommand { get; }
     public ReactiveCommand<Unit, Unit> ToggleAiChatCommand { get; }
 
@@ -189,9 +194,14 @@ public class MainWindowViewModel : ViewModelBase
         }
     }
 
-    /// <summary>Plan mode content: the beat-board host for story and anthology projects, else the Corkboard.</summary>
+    /// <summary>
+    /// Plan mode content: the host (its Details tab beside the beat board, planner or Corkboard) for every
+    /// project kind when it has Details; without them, the host for story and anthology projects, else the Corkboard.
+    /// </summary>
     private object PlanContent =>
-        PlanHostViewModel != null && WorkspaceViewModel.Profile.UsesBeatBoard ? PlanHostViewModel : CorkboardViewModel;
+        PlanHostViewModel != null && (PlanHostViewModel.Details != null || WorkspaceViewModel.Profile.UsesBeatBoard)
+            ? PlanHostViewModel
+            : CorkboardViewModel;
 
     /// <summary>View-model for the active non-Write centre panel (lazy-loaded via ViewLocator).</summary>
     public object? SecondaryCentreContent => ActiveMode switch
@@ -256,6 +266,12 @@ public class MainWindowViewModel : ViewModelBase
     // ── Sidebar visibility (Ctrl+B) ───────────────────────────────────────────
 
     public ReactiveCommand<Unit, Unit> ToggleSidebarCommand { get; }
+
+    /// <summary>
+    /// The window's Ctrl+B: <see cref="ToggleSidebarCommand"/>, except while the editor has focus, where Ctrl+B is
+    /// bold (<see cref="EditorViewModel.TakesInsertShortcuts"/>) and the key passes on to it.
+    /// </summary>
+    public ReactiveCommand<Unit, Unit> ToggleSidebarShortcutCommand { get; }
 
     // ── Rail collapse (Write mode) ────────────────────────────────────────────
     // A rail collapses to its 48px icon strip without closing its panes, so expanding it (Ctrl+B / Ctrl+Alt+B, a
@@ -506,8 +522,10 @@ public class MainWindowViewModel : ViewModelBase
         WriteBeatsViewModel? writeBeatsViewModel = null,
         CollectionsViewModel? collectionsViewModel = null,
         SubmissionExportViewModel? submissionExportViewModel = null,
+        Hymnal.Theming.IThemeService? themes = null,
         UpdatesViewModel? updates = null)
     {
+        _themes = themes;
         CollectionsViewModel = collectionsViewModel;
         SubmissionExportViewModel = submissionExportViewModel;
         _settingsStore = settingsStore;
@@ -543,11 +561,18 @@ public class MainWindowViewModel : ViewModelBase
         CorkboardViewModel.SetViewActive(false);
         GanttViewModel.SetViewActive(false);
 
-        OpenSettingsCommand = ReactiveCommand.Create(() =>
+        void OpenSettings(SettingsSection? section)
         {
             ActiveSettingsViewModel = _settingsVmFactory();
+            if (section == SettingsSection.Spelling && ActiveSettingsViewModel.HasSpelling)
+                ActiveSettingsViewModel.Section = SettingsSection.Spelling;
             IsSettingsOpen = true;
-        });
+        }
+
+        OpenSettingsCommand = ReactiveCommand.Create(() => OpenSettings(null));
+        OpenSpellingSettingsCommand = ReactiveCommand.Create(() => OpenSettings(SettingsSection.Spelling));
+        Disposables.Add(OpenSpellingSettingsCommand.ThrownExceptions
+            .Subscribe(ex => notificationService.ShowError($"Failed to open settings: {ex.Message}")));
         CloseSettingsCommand = ReactiveCommand.Create(LeaveSettings);
         ToggleAiChatCommand = ReactiveCommand.Create(() =>
         {
@@ -576,13 +601,16 @@ public class MainWindowViewModel : ViewModelBase
         Disposables.Add(_isBothLeftPanesOpen);
 
         // Ctrl+B / Ctrl+Alt+B: collapse a rail to its icon strip (its panes are kept), or expand it again.
-        ToggleSidebarCommand = ReactiveCommand.Create(() =>
+        void ToggleSidebar()
         {
             if (IsAnyLeftPaneOpen)
                 SetLeftRailCollapsed(true);
             else
                 ExpandLeftRail();
-        });
+        }
+        ToggleSidebarCommand = ReactiveCommand.Create(ToggleSidebar);
+        ToggleSidebarShortcutCommand = ReactiveCommand.Create(ToggleSidebar,
+            EditorViewModel.WhenAnyValue(x => x.TakesInsertShortcuts).Select(takes => !takes));
 
         SelectResearchCommand = ReactiveCommand.CreateFromTask(EnterResearchModeAsync);
         Disposables.Add(SelectResearchCommand.ThrownExceptions.Subscribe(ex =>
@@ -633,6 +661,12 @@ public class MainWindowViewModel : ViewModelBase
             ActiveMode = IsGanttVisible ? ShellMode.Write : ShellMode.Manage;
         });
 
+        // Built before the focus-mode commands: Esc closes an open palette before it leaves focus mode.
+        CommandPalette = new CommandPaletteViewModel(BuildPaletteEntries, notificationService);
+        Disposables.Add(CommandPalette);
+        ShowGoToCommand = ReactiveCommand.Create(() => CommandPalette.OpenGoTo());
+        ShowCommandsCommand = ReactiveCommand.Create(() => CommandPalette.OpenCommands());
+
         ToggleFocusModeCommand = ReactiveCommand.Create(() =>
         {
             if (IsFocusMode)
@@ -646,7 +680,8 @@ public class MainWindowViewModel : ViewModelBase
         });
         ExitFocusModeCommand = ReactiveCommand.Create(
             () => { IsFocusMode = false; },
-            this.WhenAnyValue(x => x.IsFocusMode));
+            this.WhenAnyValue(x => x.IsFocusMode)
+                .CombineLatest(CommandPalette.WhenAnyValue(x => x.IsOpen), (focus, palette) => focus && !palette));
 
         ResetWriteLayoutCommand = ReactiveCommand.CreateFromTask(ResetWriteLayoutAsync);
         Disposables.Add(ResetWriteLayoutCommand.ThrownExceptions.Subscribe(ex =>
@@ -797,6 +832,10 @@ public class MainWindowViewModel : ViewModelBase
         var openChapter = planHostViewModel?.Planner is { } planner
             ? CorkboardViewModel.OpenChapterRequested.Merge(planner.OpenChapterRequested)
             : CorkboardViewModel.OpenChapterRequested;
+        // Plan's Details tab opens a file in Write too; the sidebar's collection row opens Details.
+        if (planHostViewModel?.Details is { } details)
+            openChapter = openChapter.Merge(details.OpenRequested);
+        Disposables.Add(workspaceViewModel.CollectionDetailsRequested.Subscribe(_ => ShowCollectionDetails()));
         Disposables.Add(
             openChapter
                 .Subscribe(chapter =>
@@ -958,16 +997,15 @@ public class MainWindowViewModel : ViewModelBase
     }
 
     /// <summary>
-    /// Writes edits still waiting on a debounced save (story ideas, after any in-flight promote finishes,
-    /// and beats) before the window closes, waiting at most <paramref name="timeout"/> in all. False when
-    /// they could not be saved in time, so the view can ask whether to close anyway. Completes
-    /// synchronously when nothing is pending.
+    /// Saves everything not yet on disk before the window closes, waiting at most <paramref name="timeout"/> in
+    /// all: the editor's unsaved text first, then edits still waiting on a debounced save (notes, the schedule,
+    /// story ideas after any in-flight promote, and beats). False when something could not be saved, so the view
+    /// asks whether to close anyway. That includes text whose file changed on disk meanwhile: saving it would
+    /// silently overwrite the other change, so it is left for the author to decide. Completes synchronously when
+    /// nothing is pending.
     /// </summary>
     public async Task<bool> FlushPendingEditsBeforeCloseAsync(TimeSpan timeout)
     {
-        if (IdeasViewModel == null && PlanHostViewModel == null && WriteBeatsViewModel == null)
-            return true;
-
         try
         {
             var flush = FlushAllAsync();
@@ -989,9 +1027,10 @@ public class MainWindowViewModel : ViewModelBase
 
     /// <summary>
     /// Saves everything before an installed update restarts Hymnal. Editing and switching are locked first
-    /// (<see cref="IsRestarting"/>), then the save rounds repeat until nothing is dirty or pending, so an edit made while
-    /// an earlier save was still awaited is written too. Null when everything is saved (editing stays locked: Hymnal is
-    /// about to exit); otherwise why not, with editing given back.
+    /// (<see cref="IsRestarting"/>), then the close-time save (<see cref="FlushPendingEditsBeforeCloseAsync"/>: the
+    /// editor's text, then notes, schedule, ideas and beats) repeats until nothing is dirty or pending, so an edit made
+    /// while an earlier save was still awaited is written too. Null when everything is saved (editing stays locked:
+    /// Hymnal is about to exit); otherwise why not, with editing given back.
     /// </summary>
     public async Task<string?> SaveAllBeforeRestartAsync(TimeSpan timeout)
     {
@@ -1000,7 +1039,7 @@ public class MainWindowViewModel : ViewModelBase
         try
         {
             problem = await Hymnal.Infrastructure.Updates.UpdateRestart.SaveUntilCleanAsync(
-                () => SaveEverythingOnceAsync(timeout), () => HasUnsavedWork);
+                () => FlushPendingEditsBeforeCloseAsync(timeout), () => HasUnsavedWork);
         }
         catch
         {
@@ -1015,46 +1054,49 @@ public class MainWindowViewModel : ViewModelBase
     /// <summary>Gives editing back when an update's restart doesn't happen after all (the new copy wouldn't start).</summary>
     public void CancelRestart() => IsRestarting = false;
 
-    /// <summary>
-    /// One save round: the open file (unless it changed on disk while it had edits, which needs the author's choice),
-    /// then pending notes, schedule, idea and beat edits. False when anything couldn't be saved.
-    /// </summary>
-    private async Task<bool> SaveEverythingOnceAsync(TimeSpan timeout)
-    {
-        if (EditorViewModel.IsDirty)
-        {
-            if (EditorViewModel.HasConflict || !EditorViewModel.CanSave)
-                return false;
-            try
-            {
-                await EditorViewModel.SaveAsync();
-            }
-            catch
-            {
-                return false; // SaveAsync has shown the error
-            }
-        }
-
-        try
-        {
-            var notes = await NotesViewModel.FlushAsync();
-            var schedule = await ChapterInfoViewModel.FlushScheduleAsync();
-            var pending = await FlushPendingEditsBeforeCloseAsync(timeout);
-            return notes && schedule && pending;
-        }
-        catch
-        {
-            return false;
-        }
-    }
-
     private async Task<bool> FlushAllAsync()
     {
+        // The prose first: it is what the author can least afford to lose.
+        var text = await EditorViewModel.SaveBeforeCloseAsync();
+        var saved = await FlushDebouncedEditsAsync();
+
+        // The window stays editable while the close waits, so whatever was typed meanwhile (text, or a note or
+        // schedule edit after its flush had finished) is saved in a second round; text still unsaved after that
+        // makes the close ask rather than lose it. A flush with nothing pending returns at once.
+        if (text && EditorViewModel.IsDirty)
+            text = await EditorViewModel.SaveBeforeCloseAsync();
+        saved &= await FlushDebouncedEditsAsync();
+        return text && !EditorViewModel.IsDirty && saved;
+    }
+
+    /// <summary>Writes the edits waiting on a debounced save: notes, the schedule, ideas and beats.</summary>
+    private async Task<bool> FlushDebouncedEditsAsync()
+    {
+        var notes = _notesVm.FlushAsync();
+        var schedule = _chapterInfoVm.FlushScheduleAsync();
         var ideas = IdeasViewModel == null ? Task.FromResult(true) : FlushAfterPromoteAsync(IdeasViewModel);
         var beats = PlanHostViewModel == null ? Task.FromResult(true) : PlanHostViewModel.FlushAsync();
         var writeBeats = WriteBeatsViewModel == null ? Task.FromResult(true) : WriteBeatsViewModel.FlushAsync();
-        var results = await Task.WhenAll(ideas, beats, writeBeats);
+        var results = await Task.WhenAll(notes, schedule, ideas, beats, writeBeats);
         return results.All(ok => ok);
+    }
+
+    /// <summary>
+    /// What closing now would lose, for the question asked when <see cref="FlushPendingEditsBeforeCloseAsync"/>
+    /// returns false: the open file's text when it is still unsaved, or other pending edits.
+    /// </summary>
+    public string UnsavedOnCloseMessage
+    {
+        get
+        {
+            var editor = EditorViewModel;
+            if (editor.IsDirty && editor.HasConflict)
+                return "The open file changed on disk while you had unsaved edits, so they weren't saved over it. "
+                       + "Closing now loses your edits. Close anyway? (Cancel, then in Write mode choose Keep my edits or Reload from disk.)";
+            if (editor.IsDirty)
+                return "Your unsaved text couldn't be saved. Closing now loses it. Close anyway?";
+            return "Some notes, schedule, idea or beat edits couldn't be saved. Close anyway?";
+        }
     }
 
     /// <summary>Waits for an in-flight promote (it saves ideas itself), then writes pending idea edits.</summary>

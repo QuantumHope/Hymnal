@@ -35,7 +35,7 @@ namespace Hymnal.ViewModels;
 /// saved together with any unsaved prose.
 /// </para>
 /// </summary>
-public class EditorViewModel : ViewModelBase, IDisposable, IOpenStoryBuffer
+public partial class EditorViewModel : ViewModelBase, IDisposable, IOpenStoryBuffer
 {
     private const char ByteOrderMark = '\uFEFF';
 
@@ -79,6 +79,13 @@ public class EditorViewModel : ViewModelBase, IDisposable, IOpenStoryBuffer
     private bool _damagedBlockNoticeShown;
     private bool _notUtf8NoticeShown;
 
+    // The prose of the disk version the buffer is based on: as loaded or saved, or the external version the
+    // author chose to keep their edits over. A close-time save compares the file with it (see SaveBeforeCloseAsync).
+    private string _diskProse = "";
+
+    // The prose read when the current conflict was raised; it becomes _diskProse when the author keeps their edits.
+    private string? _conflictProse;
+
     private FileSystemWatcher? _watcher;
     private Timer? _watcherDebounceTimer;
     private bool _disposed;
@@ -100,6 +107,9 @@ public class EditorViewModel : ViewModelBase, IDisposable, IOpenStoryBuffer
         get => _activeFilePath;
         private set => this.RaiseAndSetIfChanged(ref _activeFilePath, value);
     }
+
+    /// <summary>Spell check for the buffer (View → Spelling).</summary>
+    public EditorSpellingViewModel Spelling { get; }
 
     // ── Buffer content ──────────────────────────────────────────────────────
 
@@ -295,7 +305,8 @@ public class EditorViewModel : ViewModelBase, IDisposable, IOpenStoryBuffer
     /// <param name="storyFileWriter">Saves chapter files with their metadata block. Must be the app's shared
     /// writer (its per-file locks only work when shared); the composition root attaches this editor to it.</param>
     public EditorViewModel(IMetadataStore metadataStore, INotificationService notificationService,
-        WordCountService wordCountService, StoryFileWriter storyFileWriter)
+        WordCountService wordCountService, StoryFileWriter storyFileWriter,
+        Hymnal.Spelling.SpellingService? spelling = null)
     {
         _metadataStore = metadataStore;
         _notificationService = notificationService;
@@ -373,6 +384,9 @@ public class EditorViewModel : ViewModelBase, IDisposable, IOpenStoryBuffer
 
         KeepLocalCommand = ReactiveCommand.Create(() =>
         {
+            if (_conflictProse != null)
+                _diskProse = _conflictProse;
+            _conflictProse = null;
             HasConflict = false;
             ConflictMessage = null;
         });
@@ -431,6 +445,10 @@ public class EditorViewModel : ViewModelBase, IDisposable, IOpenStoryBuffer
             .ToProperty(this, x => x.PreviewBaseDirectory);
         Disposables.Add(_previewBaseDirectory);
 
+        // Spell check (off until asked for); built after the properties it follows.
+        Spelling = new EditorSpellingViewModel(this, spelling, notificationService);
+        Disposables.Add(Spelling);
+
         var editorSurfaceVisible = this.WhenAnyValue(x => x.IsEditorSurfaceVisible);
         SetViewModeCommand = ReactiveCommand.Create<EditorViewMode>(mode =>
         {
@@ -451,6 +469,8 @@ public class EditorViewModel : ViewModelBase, IDisposable, IOpenStoryBuffer
             };
         }, editorSurfaceVisible);
 
+        InitializeInsertCommands();
+
         // Register watcher teardown with the composite disposable.
         Disposables.Add(Disposable.Create(StopWatcher));
     }
@@ -463,6 +483,8 @@ public class EditorViewModel : ViewModelBase, IDisposable, IOpenStoryBuffer
         {
             Text = content;
             OriginalText = content;
+            _diskProse = content;
+            _conflictProse = null;
             SetDirtyFlag(false);
         }
         finally
@@ -789,6 +811,8 @@ public class EditorViewModel : ViewModelBase, IDisposable, IOpenStoryBuffer
             try
             {
                 OriginalText = text;
+                _diskProse = text;
+                _conflictProse = null;
                 SetDirtyFlag(!string.Equals(Text, text, StringComparison.Ordinal));
             }
             finally
@@ -805,6 +829,76 @@ public class EditorViewModel : ViewModelBase, IDisposable, IOpenStoryBuffer
             if (ActiveFilePath == savePath)
                 StartWatcher(savePath);
         }
+    }
+
+    /// <summary>
+    /// Saves unsaved text as the window closes, without waiting for the watcher: the file is read first, and when
+    /// its text is no longer the version the buffer is based on (an outside change the watcher's debounce has not
+    /// reported yet), the conflict is raised and nothing is written. True when nothing was unsaved or the save
+    /// succeeded; false on a conflict or a failed save (whose error has been shown).
+    /// </summary>
+    public async Task<bool> SaveBeforeCloseAsync()
+    {
+        if (!IsDirty)
+            return true;
+        if (HasConflict || !CanSave || ActiveFilePath is not { } path)
+            return false;
+
+        try
+        {
+            // Lock order: the writer's metadata lock, then the write gate.
+            using (_chapterOpen ? await _storyWriter.HoldMetadataChangesAsync(path) : null)
+            {
+                await _writeGate.WaitAsync();
+                try
+                {
+                    if (HasConflict || ActiveFilePath != path)
+                        return false;
+
+                    var generation = _bufferGeneration;
+                    var changed = await ProseChangedOnDiskAsync(path);
+
+                    // The buffer was closed, switched or reloaded during the read: what it held is no longer this save's.
+                    if (ActiveFilePath != path || _bufferGeneration != generation)
+                        return !IsDirty;
+
+                    if (changed is { } onDisk)
+                    {
+                        RaiseConflict(onDisk);
+                        return false;
+                    }
+
+                    await WriteBufferAsync(_story);
+                }
+                finally
+                {
+                    _writeGate.Release();
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            _notificationService.ShowError($"Save failed: {ex.Message}");
+            return false;
+        }
+
+        return !IsDirty;
+    }
+
+    /// <summary>
+    /// Reads the open file and returns its prose when it is no longer the version the buffer is based on (an outside
+    /// change the watcher may not have reported yet), else null. A file that is gone has nothing to overwrite, so it
+    /// reads as unchanged. Caller holds <see cref="_writeGate"/>. Throws when the file can't be read.
+    /// </summary>
+    private async Task<string?> ProseChangedOnDiskAsync(string path)
+    {
+        if (!File.Exists(path))
+            return null;
+
+        var onDisk = _chapterOpen
+            ? ProseOf(null, await ReadChapterFileAsync(path))
+            : await File.ReadAllTextAsync(path);
+        return string.Equals(onDisk, _diskProse, StringComparison.Ordinal) ? null : onDisk;
     }
 
     // ── IOpenStoryBuffer ─────────────────────────────────────────────────────
@@ -859,6 +953,25 @@ public class EditorViewModel : ViewModelBase, IDisposable, IOpenStoryBuffer
             // Saving now would overwrite the external version the author has not yet chosen to keep or discard.
             if (HasConflict)
                 return StoryResult.Fail($"Resolve the external change to '{Path.GetFileName(ActiveFilePath)}' first.");
+
+            // Writing the block rewrites the prose too, so an outside change the watcher hasn't reported yet would be
+            // lost. With unsaved edits that is a conflict; a clean buffer is reloaded by the watcher, and the caller
+            // keeps its change to try again.
+            var path = ActiveFilePath;
+            var generation = _bufferGeneration;
+            var changed = await ProseChangedOnDiskAsync(path);
+
+            // Closing or switching the buffer doesn't take the gate: if it changed during the read, this buffer no
+            // longer holds the file, so fail and let the writer write it as a closed file.
+            if (!ReferenceEquals(_story, story) || ActiveFilePath != path || _bufferGeneration != generation)
+                return StoryResult.Fail("The story file is no longer open in the editor.");
+
+            if (changed is { } onDisk)
+            {
+                if (IsDirty)
+                    RaiseConflict(onDisk);
+                return StoryResult.Fail($"'{Path.GetFileName(path)}' changed on disk; try again once it has reloaded.");
+            }
 
             var updated = story with { Metadata = metadata };
             await WriteBufferAsync(updated);
@@ -995,11 +1108,25 @@ public class EditorViewModel : ViewModelBase, IDisposable, IOpenStoryBuffer
         }
         else
         {
-            HasConflict = true;
-            ConflictMessage =
-                $"'{Path.GetFileName(ActiveFilePath)}' was changed externally. " +
-                "Choose 'Reload from disk' to accept the external version, or 'Keep my edits' to discard it.";
+            RaiseConflict(ProseOf(content, chapter));
         }
+    }
+
+    private void RaiseConflict(string diskProse)
+    {
+        _conflictProse = diskProse;
+        HasConflict = true;
+        ConflictMessage =
+            $"'{Path.GetFileName(ActiveFilePath)}' was changed externally. " +
+            "Choose 'Reload from disk' to accept the external version, or 'Keep my edits' to discard it.";
+    }
+
+    /// <summary>A file's text as the buffer holds it: a story's prose without its block or byte order mark.</summary>
+    private static string ProseOf(string? content, ChapterRead? chapter)
+    {
+        if (chapter?.Split is { } split)
+            return split.Prose.Length > 0 && split.Prose[0] == ByteOrderMark ? split.Prose[1..] : split.Prose;
+        return chapter?.PlainText ?? content ?? "";
     }
 
     private void StopWatcher()

@@ -25,7 +25,7 @@
 
     <Grid RowDefinitions="Auto,Auto,*,Auto">
 
-        <!-- Anthology, on the collection: the story planner (every collection) or the open collection's cards -->
+        <!-- On the collection: Details, then the project's own board (Beats / Planner / Cards), and an anthology's Cards -->
         <Border Grid.Row="0"
                 Padding="12,6"
                 Background="{DynamicResource Cora.Surface.Panel}"
@@ -33,15 +33,23 @@
                 BorderThickness="0,0,0,1"
                 IsVisible="{Binding ShowsViewSwitch}">
             <StackPanel Orientation="Horizontal" Spacing="6">
-                <ToggleButton Classes="view-switch"
-                              Content="Planner"
-                              ToolTip.Tip="Every collection side by side over a library of stories"
-                              IsChecked="{Binding !IsCardsView}"
+                <ToggleButton x:Name="DetailsTab"
+                              Classes="view-switch"
+                              Content="Details"
+                              ToolTip.Tip="The open collection at a glance: its title, progress and contents"
+                              IsChecked="{Binding IsDetailsView, Mode=OneWay}"
+                              Click="DetailsView_Click" />
+                <ToggleButton x:Name="BoardTab"
+                              Classes="view-switch"
+                              Content="{Binding BoardTabLabel}"
+                              IsChecked="{Binding IsBoardTabSelected, Mode=OneWay}"
                               Click="PlannerView_Click" />
-                <ToggleButton Classes="view-switch"
+                <ToggleButton x:Name="CardsTab"
+                              Classes="view-switch"
                               Content="Cards"
                               ToolTip.Tip="The open collection's stories as cards"
-                              IsChecked="{Binding IsCardsView}"
+                              IsVisible="{Binding ShowsCardsTab}"
+                              IsChecked="{Binding IsCardsTabSelected, Mode=OneWay}"
                               Click="CardsView_Click" />
             </StackPanel>
         </Border>

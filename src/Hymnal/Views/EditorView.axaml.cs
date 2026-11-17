@@ -1,9 +1,13 @@
 using System;
+using System.Collections.Generic;
+using System.Linq;
 using System.Reactive.Disposables;
 using System.Reactive.Linq;
 using System.Text.RegularExpressions;
 using Avalonia;
 using Avalonia.Controls;
+using Avalonia.Input;
+using Avalonia.Interactivity;
 using Avalonia.Media;
 using Avalonia.Styling;
 using AvaloniaEdit.Document;
@@ -11,6 +15,7 @@ using AvaloniaEdit.Highlighting;
 using AvaloniaEdit.Highlighting.Xshd;
 using AvaloniaEdit.Rendering;
 using Hymnal.Audio;
+using Hymnal.Core.Markua.Editing;
 using Hymnal.Infrastructure;
 using Hymnal.Theming;
 using Hymnal.Views.Editor;
@@ -27,9 +32,19 @@ namespace Hymnal.Views;
 ///   2. Two-way text sync: ViewModel.Text ↔ PART_Editor.Text
 ///      (AvaloniaEdit.TextEditor does not expose Text as a bindable AvaloniaProperty,
 ///      so we wire it manually via TextChanged and WhenAnyValue).
+///   3. The Insert menu's target (<see cref="IEditorTextSurface"/>) and its shortcuts.
 /// </summary>
-public partial class EditorView : UserControl
+public partial class EditorView : UserControl, IEditorTextSurface
 {
+    /// <summary>The Insert menu's shortcuts, from <see cref="MarkuaSnippets"/>.</summary>
+    internal static IReadOnlyList<(KeyGesture Gesture, MarkuaSnippet Snippet)> InsertShortcuts { get; } =
+        MarkuaSnippets.All
+            .Where(s => s.Shortcut != null)
+            .Select(s => (KeyGesture.Parse(s.Shortcut!.Gesture), s))
+            .ToList();
+
+    private IDisposable? _surfaceRegistration;
+
     private CompositeDisposable _viewDisposables = new();
     private IDisposable? _vmTextSub;
     private IDisposable? _vmLayoutSub;
@@ -37,6 +52,8 @@ public partial class EditorView : UserControl
     private MarkuaColorizingTransformer? _markuaColorizer;
     private ValidationMargin? _validationMargin;
     private TypingSoundHook? _typingSoundHook;
+    private SpellingHook? _spellingHook;
+    private IDisposable? _spellingVisibilitySub;
     private bool _isAttached;
 
     public static readonly StyledProperty<bool> HasWorkspaceProperty =
@@ -127,7 +144,10 @@ public partial class EditorView : UserControl
             UpdateTypingSoundHook();
 
         if (change.Property == IsDistractionFreeProperty)
+        {
             ApplyDistractionFree(change.GetNewValue<bool>());
+            UpdateSpellingMarksVisible();
+        }
 
         if (change.Property == HeaderContentProperty)
         {
@@ -198,6 +218,26 @@ public partial class EditorView : UserControl
             PART_Editor.TextChanged -= OnEditorTextChanged;
         }));
 
+        // Insert shortcuts (Ctrl+B, Ctrl+I, …) are read on the way down, before AvaloniaEdit's own bindings (its
+        // Ctrl+I indents) and the window's (Ctrl+B toggles the sidebar elsewhere) can claim them.
+        PART_Editor.AddHandler(KeyDownEvent, OnEditorKeyDown, RoutingStrategies.Tunnel);
+        _viewDisposables.Add(Disposable.Create(() => PART_Editor.RemoveHandler(KeyDownEvent, OnEditorKeyDown)));
+
+        // Tell the view model while the source has focus, so the window's Ctrl+B (sidebar) stands down for bold.
+        // Changes only: Write and Research share the view model, and the one not focused mustn't clear it.
+        _viewDisposables.Add(PART_Editor.TextArea.GetObservable(IsKeyboardFocusWithinProperty)
+            .Skip(1)
+            .Subscribe(focused =>
+            {
+                if (DataContext is EditorViewModel vm)
+                    vm.IsSourceFocused = focused;
+            }));
+        _viewDisposables.Add(Disposable.Create(() =>
+        {
+            if (PART_Editor.TextArea.IsKeyboardFocusWithin && DataContext is EditorViewModel vm)
+                vm.IsSourceFocused = false;
+        }));
+
         // Split view: keep the preview scrolled to the same place as the source.
         PART_Editor.TextArea.TextView.ScrollOffsetChanged += OnEditorScrolled;
         _viewDisposables.Add(Disposable.Create(() =>
@@ -207,11 +247,13 @@ public partial class EditorView : UserControl
 
         _isAttached = true;
         UpdateTypingSoundHook();
+        UpdateSpellingHook();
         _viewDisposables.Add(Disposable.Create(() =>
         {
             _isAttached = false;
             _typingSoundHook?.Dispose();
             _typingSoundHook = null;
+            DisposeSpellingHook();
         }));
 
         // VM → Editor: initial sync + react to DataContext changes.
@@ -222,6 +264,8 @@ public partial class EditorView : UserControl
             DataContextChanged -= OnDataContextChanged;
             _vmTextSub?.Dispose();
             _vmTextSub = null;
+            _surfaceRegistration?.Dispose();
+            _surfaceRegistration = null;
             _vmLayoutSub?.Dispose();
             _vmLayoutSub = null;
         }));
@@ -266,7 +310,48 @@ public partial class EditorView : UserControl
         _vmTextSub?.Dispose();
         _vmTextSub = null;
         SubscribeToVmText();
+        UpdateSpellingHook();
     }
+
+    // ── Spell check ──────────────────────────────────────────────────────────
+
+    /// <summary>Connects the editor to its view model's spell check (marks, fixes, F8 navigation).</summary>
+    private void UpdateSpellingHook()
+    {
+        DisposeSpellingHook();
+        if (!_isAttached || DataContext is not EditorViewModel { Spelling: { IsAvailable: true } spelling } vm)
+            return;
+
+        // The view model's text reaches the editor through a posted subscription; put it there now, so a scan
+        // already made (the hook applies it at once) isn't dropped as one of other text.
+        if (vm.Text is { } text && PART_Editor.Text != text)
+            PART_Editor.Text = text;
+
+        _spellingHook = new SpellingHook(PART_Editor, spelling, () => vm.Text, SpellingMarkBrush());
+        _spellingVisibilitySub = spelling.Service!.Preferences.WhenAnyValue(p => p.HideInFocusMode)
+            .Subscribe(_ => UpdateSpellingMarksVisible());
+    }
+
+    private void DisposeSpellingHook()
+    {
+        _spellingVisibilitySub?.Dispose();
+        _spellingVisibilitySub = null;
+        _spellingHook?.Dispose();
+        _spellingHook = null;
+    }
+
+    /// <summary>Focus Mode hides the marks unless the writer chose to keep them (Settings → Spelling).</summary>
+    private void UpdateSpellingMarksVisible()
+    {
+        if (_spellingHook is null || DataContext is not EditorViewModel vm)
+            return;
+        var hideInFocus = vm.Spelling.Service?.Preferences.HideInFocusMode ?? true;
+        _spellingHook.MarksVisible = !(IsDistractionFree && hideInFocus);
+    }
+
+    // The theme's error colour now; the fallback is Synthwave's, per the ThemeBrushes convention.
+    private static IBrush SpellingMarkBrush() =>
+        new SolidColorBrush(ThemeBrushes.Color("Cora.Accent.Error", "#FF5A5C"));
 
     // ── Write / Split / Preview layout ───────────────────────────────────────
 
@@ -323,7 +408,11 @@ public partial class EditorView : UserControl
     private void SubscribeToVmText()
     {
         SubscribeToVmLayout();
+        _surfaceRegistration?.Dispose();
+        _surfaceRegistration = null;
         if (DataContext is not EditorViewModel vm) return;
+
+        _surfaceRegistration = vm.AttachSurface(this);
 
         _vmTextSub = vm.WhenAnyValue(x => x.Text)
             .ObserveOn(AvaloniaScheduler.Instance)
@@ -349,6 +438,38 @@ public partial class EditorView : UserControl
         }
     }
 
+    // ── Insert menu ──────────────────────────────────────────────────────────
+
+    private void OnEditorKeyDown(object? sender, KeyEventArgs e)
+    {
+        if (DataContext is not EditorViewModel { CanInsertMarkua: true } vm)
+            return;
+        foreach (var (gesture, snippet) in InsertShortcuts)
+        {
+            if (!gesture.Matches(e))
+                continue;
+            if (vm.InsertSnippet(snippet, this))
+                e.Handled = true;
+            return;
+        }
+    }
+
+    bool IEditorTextSurface.IsReadyForEdits => _isAttached && PART_Editor.IsEffectivelyVisible;
+
+    string IEditorTextSurface.Text => PART_Editor.Document.Text;
+
+    TextSpan IEditorTextSurface.Selection =>
+        new(PART_Editor.SelectionStart, PART_Editor.SelectionLength);
+
+    void IEditorTextSurface.Apply(TextEdit edit)
+    {
+        // One Replace is one undo step; the TextChanged it raises carries the text to the view model.
+        PART_Editor.Document.Replace(edit.Offset, edit.Length, edit.Text);
+        PART_Editor.Select(edit.Selection.Start, edit.Selection.Length);
+        PART_Editor.TextArea.Caret.BringCaretToView();
+        PART_Editor.TextArea.Focus();
+    }
+
     // ── Syntax styling ───────────────────────────────────────────────────────
 
     private void OnThemeResourcesChanged(object? sender, ResourcesChangedEventArgs e) => RefreshEditorTheme();
@@ -362,6 +483,7 @@ public partial class EditorView : UserControl
     private void RefreshEditorTheme()
     {
         ApplyEditorTheme();
+        _spellingHook?.SetMarkBrush(SpellingMarkBrush());
         PART_Editor.TextArea.TextView.Redraw();
     }
 

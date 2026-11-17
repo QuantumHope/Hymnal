@@ -92,6 +92,29 @@ public sealed class CollectionsViewModel : ViewModelBase
         return true;
     }
 
+    /// <summary>
+    /// Renames collection <paramref name="slug"/>; the open one (or a null slug, an open collection with no
+    /// name yet) goes through <see cref="RenameOpenAsync"/> so the sidebar and Plan follow at once.
+    /// </summary>
+    public async Task<bool> RenameAsync(string? slug, string title)
+    {
+        if (slug == null || Collections.FirstOrDefault(c => c.Slug == slug) is null or { IsActive: true })
+        {
+            var active = await _service.GetActiveSlugAsync(Root);
+            if (slug == null || slug == active)
+                return await RenameOpenAsync(title);
+        }
+
+        var result = await _service.SetTitleAsync(Root, slug, title);
+        if (!result.IsSuccess)
+        {
+            _notifications.ShowError(result.Error!);
+            return false;
+        }
+        await RefreshAsync();
+        return true;
+    }
+
     /// <summary>Adds an empty collection; returns its slug, or null when it couldn't be created.</summary>
     public async Task<string?> CreateAsync(string title)
     {

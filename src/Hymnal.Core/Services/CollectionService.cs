@@ -140,6 +140,28 @@ public sealed class CollectionService(IMetadataStore store)
         }
     }
 
+    /// <summary>
+    /// Retitles collection <paramref name="slug"/>, open or not. Only the title changes: the folder name (the
+    /// slug) stays, so nothing that refers to the collection moves.
+    /// </summary>
+    public async Task<Result<Unit>> SetTitleAsync(string root, string slug, string title)
+    {
+        title = (title ?? "").Trim();
+        if (title.Length == 0)
+            return Result<Unit>.Fail("A collection needs a title.");
+        if (!IsValidSlug(slug) || !File.Exists(Path.Combine(root, CollectionsFolder, slug, CollectionFile)))
+            return Result<Unit>.Fail("That collection no longer exists.");
+        try
+        {
+            await WriteTitleAsync(root, slug, title).ConfigureAwait(false);
+            return Result<Unit>.Ok(Unit.Default);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            return Result<Unit>.Fail($"The collection could not be renamed: {ex.Message}");
+        }
+    }
+
     /// <summary>Adds an empty collection (not opened). Returns its slug.</summary>
     public async Task<Result<string>> CreateAsync(string root, string title)
     {

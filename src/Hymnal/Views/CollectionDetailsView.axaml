@@ -1,0 +1,237 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:Hymnal.ViewModels"
+             xmlns:conv="using:Hymnal.Views.Converters"
+             x:Class="Hymnal.Views.CollectionDetailsView"
+             x:DataType="vm:CollectionDetailsViewModel"
+             x:Name="Root"
+             Background="{DynamicResource Cora.Surface.Void}"
+             FontFamily="{DynamicResource Cora.Font.Persona}">
+
+    <UserControl.Styles>
+        <Style Selector="TextBlock.details-caps">
+            <Setter Property="FontSize" Value="10" />
+            <Setter Property="FontWeight" Value="SemiBold" />
+            <Setter Property="LetterSpacing" Value="1.5" />
+            <Setter Property="Foreground" Value="{DynamicResource Cora.Text.Secondary}" />
+        </Style>
+        <Style Selector="TextBlock.details-meta">
+            <Setter Property="FontSize" Value="12" />
+            <Setter Property="Foreground" Value="{DynamicResource Cora.Text.Secondary}" />
+        </Style>
+        <Style Selector="Button.details-action">
+            <Setter Property="Padding" Value="12,5" />
+            <Setter Property="FontSize" Value="12" />
+            <Setter Property="CornerRadius" Value="4" />
+            <Setter Property="Background" Value="Transparent" />
+            <Setter Property="BorderBrush" Value="{DynamicResource Cora.Border.Input}" />
+            <Setter Property="BorderThickness" Value="1" />
+            <Setter Property="Foreground" Value="{DynamicResource Cora.Text}" />
+        </Style>
+        <Style Selector="Button.details-row">
+            <Setter Property="HorizontalAlignment" Value="Stretch" />
+            <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+            <Setter Property="Padding" Value="10,7" />
+            <Setter Property="Background" Value="Transparent" />
+            <Setter Property="BorderThickness" Value="0" />
+            <Setter Property="CornerRadius" Value="4" />
+            <Setter Property="Cursor" Value="Hand" />
+        </Style>
+        <Style Selector="Button.details-row:pointerover /template/ ContentPresenter#PART_ContentPresenter">
+            <Setter Property="Background" Value="{DynamicResource Cora.Wash.Hover}" />
+        </Style>
+        <Style Selector="Button.collection-chip">
+            <Setter Property="Padding" Value="12,5" />
+            <Setter Property="CornerRadius" Value="14" />
+            <Setter Property="Background" Value="{DynamicResource Cora.Surface.Elevated}" />
+            <Setter Property="BorderBrush" Value="{DynamicResource Cora.Border.Subtle}" />
+            <Setter Property="BorderThickness" Value="1" />
+            <Setter Property="Foreground" Value="{DynamicResource Cora.Text}" />
+            <Setter Property="Cursor" Value="Hand" />
+        </Style>
+    </UserControl.Styles>
+
+    <ScrollViewer HorizontalScrollBarVisibility="Disabled">
+        <StackPanel MaxWidth="860" Margin="32,24,32,32" Spacing="22" HorizontalAlignment="Stretch">
+
+            <!-- Title, renamed in place -->
+            <StackPanel Spacing="6">
+                <TextBlock Classes="caps details-caps" Text="{Binding NounLabel}" />
+                <Grid ColumnDefinitions="*,Auto" IsVisible="{Binding !IsEditingTitle}">
+                    <TextBlock x:Name="TitleText"
+                               Classes="heading"
+                               Text="{Binding Title}"
+                               FontSize="28"
+                               FontWeight="Bold"
+                               TextTrimming="CharacterEllipsis"
+                               Foreground="{DynamicResource Cora.Text}"
+                               ToolTip.Tip="Double-click to rename"
+                               DoubleTapped="Title_DoubleTapped" />
+                    <Button x:Name="RenameButton"
+                            Grid.Column="1"
+                            Classes="details-action"
+                            Margin="12,0,0,0"
+                            VerticalAlignment="Center"
+                            Content="Rename…"
+                            IsVisible="{Binding CanRename}"
+                            Command="{Binding BeginRenameCommand}" />
+                </Grid>
+                <TextBox x:Name="TitleInput"
+                         IsVisible="{Binding IsEditingTitle}"
+                         Text="{Binding EditTitle}"
+                         FontSize="24"
+                         Padding="10,6"
+                         Background="{DynamicResource Cora.Surface.Panel}"
+                         Foreground="{DynamicResource Cora.Text}"
+                         BorderBrush="{DynamicResource Cora.Border.Focus}"
+                         BorderThickness="1"
+                         Watermark="Title"
+                         KeyDown="TitleInput_KeyDown"
+                         LostFocus="TitleInput_LostFocus" />
+                <TextBlock Classes="details-meta"
+                           IsVisible="{Binding !IsNamed}"
+                           Text="Not named yet: give it a title to show in the sidebar, Plan and the Schedule." />
+                <TextBlock Classes="details-meta" FontSize="13" Text="{Binding Summary}" />
+                <ItemsControl ItemsSource="{Binding StatusCounts}">
+                    <ItemsControl.ItemsPanel>
+                        <ItemsPanelTemplate>
+                            <WrapPanel Orientation="Horizontal" />
+                        </ItemsPanelTemplate>
+                    </ItemsControl.ItemsPanel>
+                    <ItemsControl.ItemTemplate>
+                        <DataTemplate x:DataType="vm:CollectionStatusCount">
+                            <Border Margin="0,4,6,0"
+                                    Padding="8,2"
+                                    CornerRadius="8"
+                                    Background="{Binding Status, Converter={x:Static conv:StatusToBrushConverter.Instance}}">
+                                <TextBlock Text="{Binding Text}"
+                                           FontSize="11"
+                                           FontWeight="SemiBold"
+                                           Foreground="{DynamicResource Cora.IconInk}" />
+                            </Border>
+                        </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                </ItemsControl>
+            </StackPanel>
+
+            <!-- Actions -->
+            <WrapPanel Orientation="Horizontal">
+                <Button x:Name="PublishButton"
+                        Classes="details-action"
+                        Margin="0,0,8,8"
+                        Content="Publish to LeanPub…"
+                        IsVisible="{Binding CanPublish}"
+                        Click="Publish_Click" />
+                <Button x:Name="ExportButton"
+                        Classes="details-action"
+                        Margin="0,0,8,8"
+                        Content="Export for submission…"
+                        IsVisible="{Binding CanExportStory}"
+                        Click="Export_Click" />
+                <Button x:Name="BookTxtButton"
+                        Classes="details-action"
+                        Margin="0,0,8,8"
+                        Content="Edit Book.txt"
+                        ToolTip.Tip="The raw list Hymnal reads, opened in Write"
+                        Click="BookTxt_Click" />
+            </WrapPanel>
+
+            <!-- Contents -->
+            <StackPanel Spacing="6">
+                <TextBlock Classes="caps details-caps" Text="{Binding ContentsTitle}" />
+                <TextBlock Classes="details-meta"
+                           IsVisible="{Binding IsEmpty}"
+                           Text="{Binding EmptyText}" />
+                <ItemsControl x:Name="RowsList" ItemsSource="{Binding Rows}">
+                    <ItemsControl.ItemTemplate>
+                        <DataTemplate x:DataType="vm:CollectionDetailsRow">
+                            <Button Classes="details-row"
+                                    Command="{Binding #Root.((vm:CollectionDetailsViewModel)DataContext).OpenRowCommand}"
+                                    CommandParameter="{Binding}"
+                                    ToolTip.Tip="Open in Write">
+                                <Grid ColumnDefinitions="36,96,*,Auto,90">
+                                    <TextBlock Grid.Column="0"
+                                               Text="{Binding Number}"
+                                               VerticalAlignment="Center"
+                                               Foreground="{DynamicResource Cora.Text.Secondary}" />
+                                    <TextBlock Grid.Column="1"
+                                               Classes="caps details-caps"
+                                               FontSize="9"
+                                               VerticalAlignment="Center"
+                                               TextTrimming="CharacterEllipsis"
+                                               Text="{Binding NounLabel}" />
+                                    <StackPanel Grid.Column="2"
+                                                VerticalAlignment="Center"
+                                                Spacing="1"
+                                                Margin="{Binding IsIndented, Converter={x:Static conv:BoolToIndentConverter.Instance}}">
+                                        <TextBlock Text="{Binding Title}"
+                                                   FontSize="14"
+                                                   FontWeight="{Binding IsDivider, Converter={x:Static conv:BoolToBoldConverter.Instance}}"
+                                                   TextTrimming="CharacterEllipsis"
+                                                   TextWrapping="NoWrap"
+                                                   Foreground="{DynamicResource Cora.Text}" />
+                                        <TextBlock Text="{Binding Detail}"
+                                                   IsVisible="{Binding HasDetail}"
+                                                   FontSize="11"
+                                                   TextWrapping="NoWrap"
+                                                   Foreground="{DynamicResource Cora.Text.Secondary}" />
+                                    </StackPanel>
+                                    <Border Grid.Column="3"
+                                            Margin="12,0"
+                                            Padding="7,1"
+                                            CornerRadius="8"
+                                            VerticalAlignment="Center"
+                                            IsVisible="{Binding !IsDivider}"
+                                            Background="{Binding Status, Converter={x:Static conv:StatusToBrushConverter.Instance}}">
+                                        <TextBlock Text="{Binding StatusLabel}"
+                                                   FontSize="10"
+                                                   FontWeight="Bold"
+                                                   Foreground="{DynamicResource Cora.IconInk}" />
+                                    </Border>
+                                    <TextBlock Grid.Column="4"
+                                               Text="{Binding WordsText}"
+                                               HorizontalAlignment="Right"
+                                               VerticalAlignment="Center"
+                                               FontSize="12"
+                                               Foreground="{DynamicResource Cora.Text.Secondary}" />
+                                </Grid>
+                            </Button>
+                        </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                </ItemsControl>
+            </StackPanel>
+
+            <!-- The workspace's other collections (anthology) -->
+            <StackPanel Spacing="8" IsVisible="{Binding SupportsMultiple}">
+                <TextBlock Classes="caps details-caps" Text="OTHER COLLECTIONS" />
+                <ItemsControl ItemsSource="{Binding OtherCollections}">
+                    <ItemsControl.ItemsPanel>
+                        <ItemsPanelTemplate>
+                            <WrapPanel Orientation="Horizontal" />
+                        </ItemsPanelTemplate>
+                    </ItemsControl.ItemsPanel>
+                    <ItemsControl.ItemTemplate>
+                        <DataTemplate x:DataType="vm:CollectionChip">
+                            <Button Classes="collection-chip"
+                                    Margin="0,0,8,8"
+                                    ToolTip.Tip="Open this collection"
+                                    Command="{Binding #Root.((vm:CollectionDetailsViewModel)DataContext).OpenCollectionCommand}"
+                                    CommandParameter="{Binding Slug}">
+                                <StackPanel Orientation="Horizontal" Spacing="8">
+                                    <TextBlock Text="{Binding Title}" FontWeight="SemiBold" />
+                                    <TextBlock Text="{Binding CountText}"
+                                               Foreground="{DynamicResource Cora.Text.Secondary}" />
+                                </StackPanel>
+                            </Button>
+                        </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                </ItemsControl>
+                <Button x:Name="NewCollectionButton"
+                        Classes="details-action"
+                        HorizontalAlignment="Left"
+                        Content="+ New collection…"
+                        Click="NewCollection_Click" />
+            </StackPanel>
+        </StackPanel>
+    </ScrollViewer>
+</UserControl>

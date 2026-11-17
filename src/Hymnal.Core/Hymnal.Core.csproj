@@ -17,11 +17,15 @@
     <PackageReference Include="OpenAI" Version="2.10.0" />
     <PackageReference Include="System.Reactive" Version="6.1.0" />
     <PackageReference Include="Microsoft.Extensions.DependencyInjection.Abstractions" Version="10.0.8" />
+    <PackageReference Include="WeCantSpell.Hunspell" Version="7.0.1" />
   </ItemGroup>
 
   <ItemGroup>
     <EmbeddedResource Include="Resources\Prompts\*.txt" />
     <EmbeddedResource Include="Resources\BeatTemplates\*.json" />
+    <!-- Bundled Hunspell dictionaries (see Resources/Dictionaries/README.md), read by DictionaryCatalog -->
+    <EmbeddedResource Include="Resources\Dictionaries\*.dic;Resources\Dictionaries\*.aff"
+                      LogicalName="Hymnal.Dictionaries.%(Filename)%(Extension)" />
   </ItemGroup>
 
 </Project>
