@@ -196,13 +196,15 @@ public sealed class EditMenu : IDisposable
         return false;
     }
 
-    private void Run(Action<EditTarget> execute)
+    private void Run(Func<EditTarget, bool> canExecute, Action<EditTarget> execute)
     {
         Refresh();
         if (_target is not { } target)
             return;
         target.Control.Focus();
         RestoreBoxSelection();
+        if (!target.IsUsable || !canExecute(target))
+            return;
         execute(target);
         Refresh();
     }
@@ -218,7 +220,7 @@ public sealed class EditMenu : IDisposable
 
         public bool CanExecute(object? parameter) => menu.CanRun(canExecute);
 
-        public void Execute(object? parameter) => menu.Run(execute);
+        public void Execute(object? parameter) => menu.Run(canExecute, execute);
 
         public void RaiseCanExecuteChanged() => CanExecuteChanged?.Invoke(this, EventArgs.Empty);
     }
@@ -272,8 +274,9 @@ public sealed class EditMenu : IDisposable
 
         private bool HasSelection => box.SelectionStart != box.SelectionEnd;
 
-        public override bool CanUndo => box.IsUndoEnabled && box.CanUndo;
-        public override bool CanRedo => box.IsUndoEnabled && box.CanRedo;
+        // A box's undo history ignores IsReadOnly, so Undo/Redo would change text the author can't edit.
+        public override bool CanUndo => box.IsUndoEnabled && !box.IsReadOnly && box.CanUndo;
+        public override bool CanRedo => box.IsUndoEnabled && !box.IsReadOnly && box.CanRedo;
         public override bool CanCut => box.CanCut;
         public override bool CanCopy => box.CanCopy;
         public override bool CanPaste => box.CanPaste;
@@ -293,8 +296,8 @@ public sealed class EditMenu : IDisposable
     {
         public override Control Control => editor.TextArea;
 
-        public override bool CanUndo => editor.CanUndo;
-        public override bool CanRedo => editor.CanRedo;
+        public override bool CanUndo => !editor.IsReadOnly && editor.CanUndo;
+        public override bool CanRedo => !editor.IsReadOnly && editor.CanRedo;
         public override bool CanCut => editor.CanCut;
         public override bool CanCopy => editor.CanCopy;
         public override bool CanPaste => editor.CanPaste;

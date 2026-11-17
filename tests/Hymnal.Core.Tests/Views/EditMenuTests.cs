@@ -158,10 +158,13 @@ public sealed class EditMenuTests
             using var attached = menu;
             try
             {
-                notes.Text = "fixed words";
-                notes.IsReadOnly = true;
+                // Edited first, then made read-only: the edit history must not let Undo change the text.
                 Focus(notes);
                 await Pump();
+                window.KeyTextInput("fixed words");
+                await Pump();
+                notes.IsReadOnly = true;
+                Assert.True(notes.CanUndo, "the box still has an edit to undo");
                 notes.SelectionStart = 0;
                 notes.SelectionEnd = 5;
                 await OpenMenu(root);
@@ -171,6 +174,10 @@ public sealed class EditMenuTests
                 Assert.False(Item(root, "Cu_t").Command!.CanExecute(null));
                 Assert.False(Item(root, "_Paste").Command!.CanExecute(null));
                 Assert.False(Item(root, "_Delete").Command!.CanExecute(null));
+                Assert.False(Item(root, "_Undo").Command!.CanExecute(null));
+                Assert.False(Item(root, "_Redo").Command!.CanExecute(null));
+                Item(root, "_Undo").Command!.Execute(null);
+                Assert.Equal("fixed words", notes.Text);
             }
             finally
             {
