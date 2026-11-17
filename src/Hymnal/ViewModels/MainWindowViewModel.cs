@@ -983,12 +983,30 @@ public class MainWindowViewModel : ViewModelBase
         {
             await editor.SaveAsync();
         }
-        catch (Exception)
+        catch
         {
             // SaveAsync has already shown the error.
             return false;
         }
         return !editor.IsDirty;
+    }
+
+    /// <summary>
+    /// What closing now would lose, for the question asked when <see cref="FlushPendingEditsBeforeCloseAsync"/>
+    /// returns false: the open file's text when it is still unsaved, or other pending edits.
+    /// </summary>
+    public string UnsavedOnCloseMessage
+    {
+        get
+        {
+            var editor = EditorViewModel;
+            if (editor.IsDirty && editor.HasConflict)
+                return "The open file changed on disk while you had unsaved edits, so they weren't saved over it. "
+                       + "Closing now loses your edits. Close anyway? (Cancel, then in Write mode choose Keep my edits or Reload from disk.)";
+            if (editor.IsDirty)
+                return "Your unsaved text couldn't be saved. Closing now loses it. Close anyway?";
+            return "Some notes, schedule, idea or beat edits couldn't be saved. Close anyway?";
+        }
     }
 
     /// <summary>Waits for an in-flight promote (it saves ideas itself), then writes pending idea edits.</summary>

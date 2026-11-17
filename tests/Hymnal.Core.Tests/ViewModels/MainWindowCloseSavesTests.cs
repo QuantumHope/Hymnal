@@ -3,7 +3,6 @@ using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
 using Hymnal.Core.Tests.Infrastructure;
-using Hymnal.Views;
 using static Hymnal.Core.Tests.Infrastructure.PlanTestHarness;
 
 namespace Hymnal.ViewModels;
@@ -67,7 +66,7 @@ public sealed class MainWindowCloseSavesTests
 
                 // Not saved: the close asks instead, and explains why.
                 Assert.False(await Within(window.FlushPendingEditsBeforeCloseAsync(CloseTimeout)));
-                Assert.Contains("changed on disk", MainWindow.CloseWithUnsavedMessage(window));
+                Assert.Contains("changed on disk", window.UnsavedOnCloseMessage);
             });
 
             Assert.Contains("Changed elsewhere.", Read(root, "story.md"));
