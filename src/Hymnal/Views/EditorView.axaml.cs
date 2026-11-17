@@ -307,13 +307,9 @@ public partial class EditorView : UserControl
         _spellingHook.MarksVisible = !(IsDistractionFree && hideInFocus);
     }
 
-    private static IBrush SpellingMarkBrush()
-    {
-        var theme = Application.Current?.ActualThemeVariant ?? ThemeVariant.Dark;
-        return TryGetResource("Cora.Accent.Error", theme, out var brush) && brush is IBrush b
-            ? b
-            : new SolidColorBrush(Color.Parse("#E5484D"));
-    }
+    // The theme's error colour now; the fallback is Synthwave's, per the ThemeBrushes convention.
+    private static IBrush SpellingMarkBrush() =>
+        new SolidColorBrush(ThemeBrushes.Color("Cora.Accent.Error", "#FF5A5C"));
 
     // ── Write / Split / Preview layout ───────────────────────────────────────
 

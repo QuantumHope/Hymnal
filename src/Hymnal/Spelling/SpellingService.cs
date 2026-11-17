@@ -161,7 +161,10 @@ public sealed class SpellingService : ReactiveObject, IDisposable
     {
         if (Checker is not null)
             return Task.FromResult<SpellChecker?>(Checker);
-        if (_loading is not null && string.Equals(_loadingLanguage, Preferences.Language, StringComparison.OrdinalIgnoreCase))
+        // A load still running is shared; a failed one is retried, since the writer may have installed a
+        // dictionary since (the "no dictionary" message tells them where to put one).
+        if (_loading is not null && !_loading.IsCompleted
+            && string.Equals(_loadingLanguage, Preferences.Language, StringComparison.OrdinalIgnoreCase))
             return _loading;
         return ReloadDictionaryAsync();
     }
@@ -201,6 +204,8 @@ public sealed class SpellingService : ReactiveObject, IDisposable
             return Result<Unit>.Fail(changed.Error ?? "The project dictionary could not be changed.");
         if (root == WorkspaceRoot)
         {
+            // These words were read after any load SetWorkspaceAsync still has running, so they win over it.
+            _workspaceGeneration++;
             ProjectWords = changed.Value!;
             Rebuild();
         }

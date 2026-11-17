@@ -205,7 +205,7 @@ public sealed class EditorSpellingViewModel : ViewModelBase, IDisposable
             return;
         if (Service.Status == SpellingStatus.Unavailable)
         {
-            _notifications?.ShowInfo(Service.StatusMessage ?? Service.NoDictionaryMessage);
+            _ = RetryUnavailableAsync(Service);
             return;
         }
 
@@ -213,6 +213,22 @@ public sealed class EditorSpellingViewModel : ViewModelBase, IDisposable
         if (IsActive)
             _recheck.OnNext(Unit.Default);
         IsRequested = true;
+    }
+
+    /// <summary>
+    /// Tries the dictionary again (one may have been installed since) and checks if it loads; otherwise says why
+    /// spell check can't run.
+    /// </summary>
+    private async Task RetryUnavailableAsync(SpellingService service)
+    {
+        var checker = await service.EnsureLoadedAsync();
+        if (checker is null)
+        {
+            _notifications?.ShowInfo(service.StatusMessage ?? service.NoDictionaryMessage);
+            return;
+        }
+
+        CheckSpelling();
     }
 
     private void Navigate(int direction)
@@ -258,7 +274,11 @@ public sealed class EditorSpellingViewModel : ViewModelBase, IDisposable
                 ? Observable.Return(SpellingScan.Empty)
                 : Observable.FromAsync(ct => Task.Run(
                         () => new SpellingScan(input.text, input.checker.FindIssues(input.text, ct)), ct))
-                    .Catch<SpellingScan, OperationCanceledException>(_ => Observable.Empty<SpellingScan>()))
+                    // A cancelled scan was replaced by a newer one. Any other failure (a dictionary quirk) drops this
+                    // scan's marks but must not end the pipeline, which would stop spell check until restart.
+                    .Catch<SpellingScan, Exception>(ex => ex is OperationCanceledException
+                        ? Observable.Empty<SpellingScan>()
+                        : Observable.Return(new SpellingScan(input.text, []))))
             .Switch();
     }
 }

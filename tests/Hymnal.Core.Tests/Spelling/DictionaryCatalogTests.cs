@@ -34,6 +34,18 @@ public sealed class DictionaryCatalogTests : IDisposable
     }
 
     [Fact]
+    public void Underscore_and_hyphen_ids_are_listed_once()
+    {
+        Install("en-US");
+        Install("en_US");
+
+        var available = new DictionaryCatalog(_folder, bundle: null).Available();
+
+        Assert.Single(available);
+        Assert.Equal("English (United States)", available[0].DisplayName);
+    }
+
+    [Fact]
     public void Missing_folder_or_bundle_means_no_dictionaries()
     {
         var catalog = new DictionaryCatalog(Path.Combine(_folder, "missing"), bundle: null);

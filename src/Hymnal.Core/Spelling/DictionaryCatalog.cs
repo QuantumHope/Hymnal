@@ -55,6 +55,7 @@ public sealed class DictionaryCatalog
     /// <summary>Every installed dictionary, sorted by name.</summary>
     public IReadOnlyList<DictionaryInfo> Available()
     {
+        // Keyed by normalized id, so a user's en_US.dic (Hunspell's usual naming) replaces a bundled en-US.
         var found = new Dictionary<string, DictionaryInfo>(StringComparer.OrdinalIgnoreCase);
 
         if (_bundle is not null)
@@ -66,7 +67,7 @@ public sealed class DictionaryCatalog
                     continue;
                 var id = name[ResourcePrefix.Length..^4];
                 if (names.Contains(ResourcePrefix + id + ".aff"))
-                    found[id] = new DictionaryInfo(id, DisplayNameFor(id), DictionarySource.Bundled);
+                    found[Normalize(id)] = new DictionaryInfo(id, DisplayNameFor(id), DictionarySource.Bundled);
             }
         }
 
@@ -78,7 +79,7 @@ public sealed class DictionaryCatalog
                 {
                     var id = Path.GetFileNameWithoutExtension(dic);
                     if (File.Exists(Path.ChangeExtension(dic, ".aff")))
-                        found[id] = new DictionaryInfo(id, DisplayNameFor(id), DictionarySource.User);
+                        found[Normalize(id)] = new DictionaryInfo(id, DisplayNameFor(id), DictionarySource.User);
                 }
             }
             catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
@@ -100,12 +101,11 @@ public sealed class DictionaryCatalog
         if (all.Count == 0)
             return null;
 
-        static string Norm(string id) => id.Replace('_', '-');
-        static string Lang(string id) => Norm(id).Split('-')[0];
+        static string Lang(string id) => Normalize(id).Split('-')[0];
 
         if (!string.IsNullOrWhiteSpace(preferredId))
         {
-            var exact = all.FirstOrDefault(d => string.Equals(Norm(d.Id), Norm(preferredId), StringComparison.OrdinalIgnoreCase));
+            var exact = all.FirstOrDefault(d => string.Equals(Normalize(d.Id), Normalize(preferredId), StringComparison.OrdinalIgnoreCase));
             if (exact is not null)
                 return exact;
             var sameLanguage = all.FirstOrDefault(d => string.Equals(Lang(d.Id), Lang(preferredId), StringComparison.OrdinalIgnoreCase));
@@ -113,9 +113,12 @@ public sealed class DictionaryCatalog
                 return sameLanguage;
         }
 
-        return all.FirstOrDefault(d => string.Equals(Norm(d.Id), SpellCheckSettings.DefaultLanguage, StringComparison.OrdinalIgnoreCase))
+        return all.FirstOrDefault(d => string.Equals(Normalize(d.Id), SpellCheckSettings.DefaultLanguage, StringComparison.OrdinalIgnoreCase))
                ?? all[0];
     }
+
+    /// <summary><c>en_US</c> and <c>en-US</c> name the same dictionary.</summary>
+    private static string Normalize(string id) => id.Replace('_', '-');
 
     /// <summary>Reads a dictionary. Fails (rather than throws) when it is missing or damaged.</summary>
     public async Task<Result<IWordChecker>> LoadAsync(DictionaryInfo info, CancellationToken cancellationToken = default)

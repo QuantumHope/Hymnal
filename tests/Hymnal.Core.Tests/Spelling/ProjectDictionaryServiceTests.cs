@@ -66,6 +66,22 @@ public sealed class ProjectDictionaryServiceTests : IDisposable
         Assert.Equal(["Elara", "Thornwick", "wyvern"], result.Value!);
     }
 
+    [Fact]
+    public async Task Changes_keep_the_writers_own_comments()
+    {
+        await _service.AddAsync(_root, "Elara");
+        await File.AppendAllTextAsync(FilePath, "# Elvish names\nThornwick\n");
+
+        await _service.AddAsync(_root, "wyvern");
+        await _service.RemoveAsync(_root, "Elara");
+
+        var text = await File.ReadAllTextAsync(FilePath);
+        Assert.StartsWith("# Hymnal project dictionary", text);
+        Assert.Contains("# Elvish names\n", text);
+        Assert.Single(text.Split('\n'), line => line == "# Elvish names");
+        Assert.Equal(["Thornwick", "wyvern"], (await _service.LoadAsync(_root)).Value!);
+    }
+
     [Theory]
     [InlineData("", "Enter a word")]
     [InlineData("   ", "Enter a word")]

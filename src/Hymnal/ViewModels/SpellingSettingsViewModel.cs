@@ -35,7 +35,9 @@ public sealed class SpellingSettingsViewModel : ViewModelBase, IDisposable
         Disposables.Add(Preferences.WhenAnyValue(p => p.Language).Subscribe(language =>
         {
             _syncing = true;
-            try { SelectedLanguage = Languages.FirstOrDefault(l => l == service.Catalog.Resolve(language)); }
+            // Resolve reads the dictionaries folder, so once per change, not once per listed language.
+            var resolved = service.Catalog.Resolve(language);
+            try { SelectedLanguage = Languages.FirstOrDefault(l => l == resolved); }
             finally { _syncing = false; }
         }));
 

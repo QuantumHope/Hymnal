@@ -87,13 +87,28 @@ public sealed class ProjectDictionaryService
             .Select(line => line.Trim())
             .Where(line => line.Length > 0 && !line.StartsWith('#')));
 
-    /// <summary>The file text for <paramref name="words"/>: the header, then one word per line, sorted.</summary>
-    public static string Format(IEnumerable<string> words)
+    /// <summary>
+    /// The file text for <paramref name="words"/>: the header, then the writer's own <paramref name="comments"/>
+    /// (kept from the file being rewritten), then one word per line, sorted.
+    /// </summary>
+    public static string Format(IEnumerable<string> words, IEnumerable<string>? comments = null)
     {
         var text = new StringBuilder(Header);
+        foreach (var comment in comments ?? [])
+            text.Append(comment).Append('\n');
         foreach (var word in Sorted(words))
             text.Append(word).Append('\n');
         return text.ToString();
+    }
+
+    /// <summary>The <c>#</c> lines in <paramref name="text"/> other than Hymnal's own header.</summary>
+    private static IEnumerable<string> WriterComments(string text)
+    {
+        var header = Header.Split('\n');
+        return text.Split('\n')
+            .Select(line => line.TrimEnd('\r'))
+            .Where(line => line.TrimStart().StartsWith('#') && !header.Contains(line))
+            .ToList();
     }
 
     private static IReadOnlyList<string> Sorted(IEnumerable<string> words) =>
@@ -107,15 +122,22 @@ public sealed class ProjectDictionaryService
         await _gate.WaitAsync().ConfigureAwait(false);
         try
         {
-            var loaded = await LoadAsync(workspaceRoot).ConfigureAwait(false);
-            if (!loaded.IsSuccess)
-                return loaded;
+            var path = PathFor(workspaceRoot);
+            string text;
+            try
+            {
+                text = File.Exists(path) ? await File.ReadAllTextAsync(path).ConfigureAwait(false) : "";
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+            {
+                return Result<IReadOnlyList<string>>.Fail($"The project dictionary could not be read: {ex.Message}");
+            }
 
-            var words = new HashSet<string>(loaded.Value!, StringComparer.Ordinal);
+            var words = new HashSet<string>(Parse(text), StringComparer.Ordinal);
             if (!change(words))
-                return loaded;
+                return Result<IReadOnlyList<string>>.Ok(Sorted(words));
 
-            await _store.WriteTextAtomicAsync(PathFor(workspaceRoot), Format(words)).ConfigureAwait(false);
+            await _store.WriteTextAtomicAsync(path, Format(words, WriterComments(text))).ConfigureAwait(false);
             return Result<IReadOnlyList<string>>.Ok(Sorted(words));
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)

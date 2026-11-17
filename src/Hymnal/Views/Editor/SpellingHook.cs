@@ -151,7 +151,8 @@ internal sealed class SpellingHook : IDisposable
 
     private void Navigate(int direction)
     {
-        if (_document is null)
+        // Write and Research share one view model, so both editors hear F8; only the one on screen answers.
+        if (_document is null || !_editor.IsEffectivelyVisible)
             return;
 
         var caret = _editor.TextArea.Caret.Offset;

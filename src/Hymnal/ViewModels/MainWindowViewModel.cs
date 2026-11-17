@@ -515,18 +515,16 @@ public class MainWindowViewModel : ViewModelBase
         CorkboardViewModel.SetViewActive(false);
         GanttViewModel.SetViewActive(false);
 
-        OpenSettingsCommand = ReactiveCommand.Create(() =>
+        void OpenSettings(SettingsSection? section)
         {
             ActiveSettingsViewModel = _settingsVmFactory();
-            IsSettingsOpen = true;
-        });
-        OpenSpellingSettingsCommand = ReactiveCommand.Create(() =>
-        {
-            ActiveSettingsViewModel = _settingsVmFactory();
-            if (ActiveSettingsViewModel.HasSpelling)
+            if (section == SettingsSection.Spelling && ActiveSettingsViewModel.HasSpelling)
                 ActiveSettingsViewModel.Section = SettingsSection.Spelling;
             IsSettingsOpen = true;
-        });
+        }
+
+        OpenSettingsCommand = ReactiveCommand.Create(() => OpenSettings(null));
+        OpenSpellingSettingsCommand = ReactiveCommand.Create(() => OpenSettings(SettingsSection.Spelling));
         Disposables.Add(OpenSpellingSettingsCommand.ThrownExceptions
             .Subscribe(ex => notificationService.ShowError($"Failed to open settings: {ex.Message}")));
         CloseSettingsCommand = ReactiveCommand.Create(LeaveSettings);
