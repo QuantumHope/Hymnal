@@ -173,4 +173,57 @@ public sealed class MainWindowCloseSavesTests
         }
         finally { DeleteFolder(root); }
     }
+
+    private const string EmbeddedJson = "{ \"schemaVersion\": 1, \"kind\": \"story\", \"storage\": \"embedded\" }";
+
+    [Theory]
+    [InlineData("\n")]
+    [InlineData("\r\n")]
+    public async Task Closing_an_embedded_story_saves_its_text_and_note_into_the_file(string newline)
+    {
+        var root = CreateWorkspace(EmbeddedJson, ("story.md", $"# Story{newline}{newline}First draft.{newline}"));
+        try
+        {
+            await Ui(root, 1, async context =>
+            {
+                var window = context.CreateMainWindow(context.CreateHost());
+                await OpenAsync(context, "story.md");
+                await PumpUntilAsync(() => window.NotesViewModel.LoadError == null);
+
+                context.Editor.Text = $"# Story{newline}{newline}Typed just before closing.{newline}";
+                window.NotesViewModel.Text = "An embedded note.";
+                Assert.True(await Within(window.FlushPendingEditsBeforeCloseAsync(CloseTimeout)));
+                Assert.False(context.Editor.HasConflict);
+            });
+
+            var file = Read(root, "story.md");
+            Assert.Contains("Typed just before closing.", file);
+            Assert.Contains("An embedded note.", file);
+        }
+        finally { DeleteFolder(root); }
+    }
+
+    [Fact]
+    public async Task Closing_an_embedded_story_never_writes_a_note_over_an_outside_change_to_its_prose()
+    {
+        var root = CreateWorkspace(EmbeddedJson, ("story.md", "# Story\n\nFirst draft.\n"));
+        try
+        {
+            await Ui(root, 1, async context =>
+            {
+                var window = context.CreateMainWindow(context.CreateHost());
+                await OpenAsync(context, "story.md");
+                await PumpUntilAsync(() => window.NotesViewModel.LoadError == null);
+
+                // The editor is clean; the prose changes on disk and a note waits on its debounce as the window closes.
+                await File.WriteAllTextAsync(Path.Combine(root, "story.md"), "# Story\n\nChanged elsewhere.\n");
+                window.NotesViewModel.Text = "A note typed just before closing.";
+
+                Assert.False(await Within(window.FlushPendingEditsBeforeCloseAsync(CloseTimeout)));
+            });
+
+            Assert.Contains("Changed elsewhere.", Read(root, "story.md"));
+        }
+        finally { DeleteFolder(root); }
+    }
 }

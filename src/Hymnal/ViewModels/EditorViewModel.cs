@@ -845,17 +845,10 @@ public class EditorViewModel : ViewModelBase, IDisposable, IOpenStoryBuffer
                     if (HasConflict || ActiveFilePath != path)
                         return false;
 
-                    // A file that is gone has nothing to overwrite; the save writes it again.
-                    if (File.Exists(path))
+                    if (await ProseChangedOnDiskAsync(path) is { } onDisk)
                     {
-                        var onDisk = _chapterOpen
-                            ? ProseOf(null, await ReadChapterFileAsync(path))
-                            : await File.ReadAllTextAsync(path);
-                        if (!string.Equals(onDisk, _diskProse, StringComparison.Ordinal))
-                        {
-                            RaiseConflict(onDisk);
-                            return false;
-                        }
+                        RaiseConflict(onDisk);
+                        return false;
                     }
 
                     await WriteBufferAsync(_story);
@@ -873,6 +866,22 @@ public class EditorViewModel : ViewModelBase, IDisposable, IOpenStoryBuffer
         }
 
         return !IsDirty;
+    }
+
+    /// <summary>
+    /// Reads the open file and returns its prose when it is no longer the version the buffer is based on (an outside
+    /// change the watcher may not have reported yet), else null. A file that is gone has nothing to overwrite, so it
+    /// reads as unchanged. Caller holds <see cref="_writeGate"/>. Throws when the file can't be read.
+    /// </summary>
+    private async Task<string?> ProseChangedOnDiskAsync(string path)
+    {
+        if (!File.Exists(path))
+            return null;
+
+        var onDisk = _chapterOpen
+            ? ProseOf(null, await ReadChapterFileAsync(path))
+            : await File.ReadAllTextAsync(path);
+        return string.Equals(onDisk, _diskProse, StringComparison.Ordinal) ? null : onDisk;
     }
 
     // ── IOpenStoryBuffer ─────────────────────────────────────────────────────
@@ -927,6 +936,16 @@ public class EditorViewModel : ViewModelBase, IDisposable, IOpenStoryBuffer
             // Saving now would overwrite the external version the author has not yet chosen to keep or discard.
             if (HasConflict)
                 return StoryResult.Fail($"Resolve the external change to '{Path.GetFileName(ActiveFilePath)}' first.");
+
+            // Writing the block rewrites the prose too, so an outside change the watcher hasn't reported yet would be
+            // lost. With unsaved edits that is a conflict; a clean buffer is reloaded by the watcher, and the caller
+            // keeps its change to try again.
+            if (await ProseChangedOnDiskAsync(ActiveFilePath) is { } onDisk)
+            {
+                if (IsDirty)
+                    RaiseConflict(onDisk);
+                return StoryResult.Fail($"'{Path.GetFileName(ActiveFilePath)}' changed on disk; try again once it has reloaded.");
+            }
 
             var updated = story with { Metadata = metadata };
             await WriteBufferAsync(updated);

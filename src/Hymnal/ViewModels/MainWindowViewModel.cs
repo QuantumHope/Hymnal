@@ -958,19 +958,27 @@ public class MainWindowViewModel : ViewModelBase
     {
         // The prose first: it is what the author can least afford to lose.
         var text = await EditorViewModel.SaveBeforeCloseAsync();
+        var saved = await FlushDebouncedEditsAsync();
 
+        // The window stays editable while the close waits, so whatever was typed meanwhile (text, or a note or
+        // schedule edit after its flush had finished) is saved in a second round; text still unsaved after that
+        // makes the close ask rather than lose it. A flush with nothing pending returns at once.
+        if (text && EditorViewModel.IsDirty)
+            text = await EditorViewModel.SaveBeforeCloseAsync();
+        saved &= await FlushDebouncedEditsAsync();
+        return text && !EditorViewModel.IsDirty && saved;
+    }
+
+    /// <summary>Writes the edits waiting on a debounced save: notes, the schedule, ideas and beats.</summary>
+    private async Task<bool> FlushDebouncedEditsAsync()
+    {
         var notes = _notesVm.FlushAsync();
         var schedule = _chapterInfoVm.FlushScheduleAsync();
         var ideas = IdeasViewModel == null ? Task.FromResult(true) : FlushAfterPromoteAsync(IdeasViewModel);
         var beats = PlanHostViewModel == null ? Task.FromResult(true) : PlanHostViewModel.FlushAsync();
         var writeBeats = WriteBeatsViewModel == null ? Task.FromResult(true) : WriteBeatsViewModel.FlushAsync();
         var results = await Task.WhenAll(notes, schedule, ideas, beats, writeBeats);
-
-        // The window stays editable while the close waits, so text typed meanwhile is saved too; anything still
-        // unsaved after that makes the close ask rather than lose it.
-        if (text && EditorViewModel.IsDirty)
-            text = await EditorViewModel.SaveBeforeCloseAsync();
-        return text && !EditorViewModel.IsDirty && results.All(ok => ok);
+        return results.All(ok => ok);
     }
 
     /// <summary>
