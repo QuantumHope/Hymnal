@@ -79,6 +79,9 @@ public sealed record RunRecap
     public IReadOnlyList<RunRecapMinute> Timeline { get; init; } = [];
     public bool HasTimeline => Timeline.Count > 0;
 
+    /// <summary>Any minute added or cut words; otherwise the chart would only be empty axes.</summary>
+    public bool HasChartData => Timeline.Any(m => m.Added > 0 || m.Cut > 0);
+
     /// <summary>The busiest minute, e.g. "Best minute: +48 (minute 7)".</summary>
     public string? BestMinute { get; init; }
     public required string ProjectWords { get; init; }

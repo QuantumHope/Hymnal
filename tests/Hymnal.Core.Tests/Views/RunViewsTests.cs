@@ -5,6 +5,7 @@ using System.Threading.Tasks;
 using Avalonia.Controls;
 using Avalonia.Headless;
 using Avalonia.Input;
+using Avalonia;
 using Hymnal.Core.Tests.Infrastructure;
 using Hymnal.ViewModels;
 using Hymnal.Views;
@@ -82,17 +83,18 @@ public sealed class RunViewsTests
                 await Within(run.EndCommand.Execute().ToTask());
                 await context.SettleAsync();
                 Assert.False(hud.IsVisible);
-                Assert.True(overlay.FindControl<StackPanel>("RecapCard")!.IsVisible);
+                Assert.True(overlay.FindControl<Grid>("RecapCard")!.IsVisible);
                 Assert.True(overlay.FindControl<Button>("DoneButton")!.IsFocused);
 
-                // The recap is a screen of its own: the card fills the window (up to 1,180 px), the chart gets
-                // room, and everything fits without scrolling.
+                // The recap is a screen of its own: the card fills the window (up to 1,180 px), the chart takes
+                // two of three columns and the spare height, and Done is on screen.
                 var card = overlay.FindControl<Border>("Card")!;
                 Assert.Equal(1000 - 48, card.Bounds.Width);
-                Assert.True(overlay.FindControl<RunMinuteChart>("MinuteChart")!.Bounds.Width > 450);
-                var scroll = overlay.FindControl<ScrollViewer>("CardScroll")!;
-                Assert.True(scroll.Extent.Height <= scroll.Viewport.Height + 1,
-                    $"recap needs {scroll.Extent.Height:0} px but has {scroll.Viewport.Height:0}");
+                var chartBounds = overlay.FindControl<RunMinuteChart>("MinuteChart")!.Bounds;
+                Assert.True(chartBounds.Width > 500 && chartBounds.Height >= 150, $"chart {chartBounds}");
+                var done = overlay.FindControl<Button>("DoneButton")!;
+                var doneBottom = done.TranslatePoint(new Point(0, done.Bounds.Height), card)!.Value.Y;
+                Assert.True(doneBottom <= card.Bounds.Height, $"Done ends at {doneBottom:0} in a {card.Bounds.Height:0} px card");
                 Assert.True(overlay.FindControl<TextBox>("FutureYouInput")!.IsEffectivelyVisible);
                 Assert.True(overlay.FindControl<StreakHeatmap>("StreakCalendar")!.IsEffectivelyVisible);
                 var chart = overlay.FindControl<RunMinuteChart>("MinuteChart")!;

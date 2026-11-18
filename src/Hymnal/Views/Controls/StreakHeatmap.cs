@@ -23,7 +23,14 @@ public sealed class StreakHeatmap : Control
     public static readonly StyledProperty<double> CellSizeProperty =
         AvaloniaProperty.Register<StreakHeatmap, double>(nameof(CellSize), 13);
 
+    public static readonly StyledProperty<bool> FitProperty =
+        AvaloniaProperty.Register<StreakHeatmap, bool>(nameof(Fit));
+
+    public static readonly StyledProperty<bool> ShowLegendProperty =
+        AvaloniaProperty.Register<StreakHeatmap, bool>(nameof(ShowLegend));
+
     private const double Gap = 3;
+    private const double LegendHeight = 22;
     private const double DayLabelWidth = 26;
     private const double MonthLabelHeight = 14;
 
@@ -31,8 +38,8 @@ public sealed class StreakHeatmap : Control
 
     static StreakHeatmap()
     {
-        AffectsRender<StreakHeatmap>(DaysProperty, CellSizeProperty);
-        AffectsMeasure<StreakHeatmap>(DaysProperty, CellSizeProperty);
+        AffectsRender<StreakHeatmap>(DaysProperty, CellSizeProperty, ShowLegendProperty, FitProperty);
+        AffectsMeasure<StreakHeatmap>(DaysProperty, CellSizeProperty, ShowLegendProperty, FitProperty);
     }
 
     public StreakHeatmap()
@@ -45,12 +52,36 @@ public sealed class StreakHeatmap : Control
 
     public double CellSize { get => GetValue(CellSizeProperty); set => SetValue(CellSizeProperty, value); }
 
+    /// <summary>
+    /// Grow or shrink the squares to fill the space the layout offers (between 8 and 24 px), instead of
+    /// <see cref="CellSize"/>.
+    /// </summary>
+    public bool Fit { get => GetValue(FitProperty); set => SetValue(FitProperty, value); }
+
+    /// <summary>A "Less … More" key under the squares, and the streak colour.</summary>
+    public bool ShowLegend { get => GetValue(ShowLegendProperty); set => SetValue(ShowLegendProperty, value); }
+
     private int Weeks => ((Days?.Count ?? 0) + 6) / 7;
 
-    private double Pitch => CellSize + Gap;
+    private double _fittedCell = double.NaN;
 
-    protected override Size MeasureOverride(Size availableSize) =>
-        new(DayLabelWidth + Weeks * Pitch, MonthLabelHeight + 7 * Pitch);
+    /// <summary>The square size in use: <see cref="CellSize"/>, or the fitted size with <see cref="Fit"/>.</summary>
+    internal double Cell => Fit && double.IsFinite(_fittedCell) ? _fittedCell : CellSize;
+
+    private double Pitch => Cell + Gap;
+
+    protected override Size MeasureOverride(Size availableSize)
+    {
+        if (Fit && Weeks > 0 && double.IsFinite(availableSize.Width))
+        {
+            // As large as fits both ways: the width over the weeks, and the height over the seven days.
+            var cell = (availableSize.Width - DayLabelWidth) / Weeks - Gap;
+            if (double.IsFinite(availableSize.Height))
+                cell = Math.Min(cell, (availableSize.Height - MonthLabelHeight - (ShowLegend ? LegendHeight : 0)) / 7 - Gap);
+            _fittedCell = Math.Clamp(Math.Floor(cell), 8, 24);
+        }
+        return new Size(DayLabelWidth + Weeks * Pitch, MonthLabelHeight + 7 * Pitch + (ShowLegend ? LegendHeight : 0));
+    }
 
     /// <summary>The day under a point, or null.</summary>
     internal int? IndexAt(Point point)
@@ -132,7 +163,7 @@ public sealed class StreakHeatmap : Control
         var neutral = Res("Cora.Text.Secondary.Color", Colors.Gray);
         var surface = Res("Cora.Surface.Void.Color", Colors.Black);
         var text = Res("Cora.Text.Color", Colors.White);
-        var size = CellSize;
+        var size = Cell;
         var radius = Math.Max(2, size / 5);
 
         // Weekday labels on the left (Mon, Wed, Fri), months over the first week that starts in them.
@@ -182,7 +213,39 @@ public sealed class StreakHeatmap : Control
             else if (_hover == i)
                 ctx.DrawRectangle(null, hoverPen, rect.Inflate(0.5), radius, radius);
         }
+
+        if (ShowLegend)
+            DrawLegend(ctx, accent, neutral, surface);
     }
+
+    /// <summary>Right-aligned under the squares: "streak ■   Less ■■■■■ More".</summary>
+    private void DrawLegend(DrawingContext ctx, Color accent, Color neutral, Color surface)
+    {
+        const double swatch = 10;
+        var y = MonthLabelHeight + 7 * Pitch + LegendHeight / 2 + 2;
+        var right = DayLabelWidth + Weeks * Pitch - Gap;
+        var x = right;
+
+        x -= Measure("More").Width;
+        Label(ctx, "More", new Point(x, y), neutral);
+        for (var level = 4; level >= 0; level--)
+        {
+            x -= swatch + 3;
+            var r = new Rect(x, y - swatch / 2, swatch, swatch);
+            ctx.DrawRectangle(new SolidColorBrush(Shade(neutral, surface, level)), null, r, 2, 2);
+        }
+        x -= Measure("Less").Width + 5;
+        Label(ctx, "Less", new Point(x, y), neutral);
+
+        x -= 18 + swatch;
+        ctx.DrawRectangle(new SolidColorBrush(Shade(accent, surface, 3)), null,
+            new Rect(x, y - swatch / 2, swatch, swatch), 2, 2);
+        x -= Measure("Streak").Width + 5;
+        Label(ctx, "Streak", new Point(x, y), accent);
+    }
+
+    private static FormattedText Measure(string text) =>
+        new(text, CultureInfo.CurrentCulture, FlowDirection.LeftToRight, new Typeface(FontFamily.Default), 9, null);
 
     private static void Label(DrawingContext ctx, string text, Point leftMiddle, Color color)
     {
