@@ -28,7 +28,7 @@ The research shapes three guardrails:
 
 | Topic | Decision |
 |---|---|
-| Author identity | The author has a **character sheet** of their own: level, class mastery, stats, titles, relics and inventory. It lives in the global writer profile. |
+| Author identity | The author has a **character sheet** of their own: level, a **background**, the **perks** taken, **class levels** (multiclassing allowed), achievements, titles, relics and inventory. It lives in the global writer profile. **No attributes** (Might, Stamina and the like): the background and perks change how the editor behaves, and class levels unlock and improve editor features. |
 | Before a run | Pick a **class** and a **theme**, then a **goal** from an offered set (usually three). Rerolling the offer costs currency. |
 | The dungeon | Shown as **tiles**. A **room is a paragraph**, a floor is a chapter (or scene file), the dungeon is the book, and a series is a world of dungeons. |
 | Room types | Each paragraph is given a **family** (dialogue, action, description…), and the family picks its tile graphic. Families come from a classifier: instant heuristics first, then a cheap model, run when the paragraph is changed or after the caret leaves it. |
@@ -36,36 +36,70 @@ The research shapes three guardrails:
 | Classes | Some classes are built for **drafting** and others for **editing**, and each has its own **skills**. AI analysis is a spell. Repeated-word search, synonyms and spell check are skills. |
 | Currencies | Runs earn **XP** (levels, never spent) and **gold** (spent), and goals pay bonus gold. Spend it on cosmetics, real editor improvements (new skills, skill slots, classes, goal types) and rerolls. |
 | Failure | **No permadeath.** A run that misses its goal is a *missed goal*: the words stay, and so do XP and the base gold. Only the goal's bonus is lost. The Logbook says "Goal missed" without judgement. |
-| Name | **Hymnal will be renamed.** The candidates are in §10. |
+| Name | **Hymnal will be renamed.** The preferred name is **Inkdeep**, with Wordcrawl as the backup (§10). |
 
 ## 3. The author's character sheet
 
-The author is the player character. The sheet lives in `writer-profile.json`, the global profile from phase 1. It
-stays **derived**: runs store raw numbers, and the sheet is recomputed from them, so a change to the formulas is
-re-applied to all history (the same rule as phase 1's XP).
+The author is the player character, built the way a tabletop character is: a **background** chosen once, **perks**
+picked along the way, and **class levels** taken as they level up. There are **no attributes**. Nothing on the sheet
+is a number that makes goals easier. Everything on it is an editor behaviour, an editor feature or a record of what
+you've done.
 
-- **Level** comes from lifetime XP. Use the curve from the runs spec, phase 3 (about weekly level-ups at first for a
-  15-minute daily habit).
-- **Stats** describe how you write. They don't gate anything:
+The sheet lives in `writer-profile.json`, the global profile from phase 1. The parts that are **earned** (level, XP,
+achievements) are derived from raw run records, so a formula change is re-applied to all history. The parts that
+are **chosen** (background, perks, class levels) are stored as choices. They can be **respecced**: free at first,
+and later for gold.
 
-  | Stat | Derived from | Flavour |
-  |---|---|---|
-  | Might | Words added per focused minute (rolling 30 runs) | Drafting power |
-  | Precision | Share of words cut in revision runs, and goals met in editing classes | Renovation skill |
-  | Stamina | Median run length | How deep you delve |
-  | Resolve | Current and best streak | The torch you keep lit |
-  | Insight | Spells cast and suggestions accepted (only when AI is on) | Reading the walls |
+### Level
 
-- **Class mastery** gives each class its own level from the XP earned while playing it. Mastery unlocks that class's
-  skills (§5).
+Level comes from lifetime XP. Use the curve from the runs spec, phase 3 (about weekly level-ups at first for a
+15-minute daily habit). Each level-up grants **one class level**, to put into any class you've unlocked (§5). Every
+few levels (for example 3, 6, 9…) also grants a **perk pick**.
+
+### Background
+
+Chosen when the sheet is created; it says what kind of writer you are. It gives one starting perk and the default
+loadout. It also sets the tone of the launch pad and the run summaries.
+
+| Background | Flavour | Starting perk (an editor behaviour) |
+|---|---|---|
+| **Wanderer** (discovery writer) | Writes to find out what happens | *Open road*: the run card offers a prompt card by default, and the outline pane starts collapsed |
+| **Architect** (plotter) | Outlines first | *Blueprint*: the chapter's beats are pinned above the editor in Write |
+| **Gardener** (reviser) | Grows a draft, then prunes it | *Pruning shears*: words you cut stay in a per-chapter "clippings" bin for 30 days, so cutting feels safe |
+| **Chronicler** (series writer) | Keeps a long story straight | *Ledger*: the chapter pane shows the previous chapter's last paragraph |
+| **Poet** (short-form, poetry, flash) | Small, finished pieces | *Encore*: finishing a short piece (Done status) triggers the full celebration |
+
+### Perks
+
+Picked at perk levels from a pool, and some need a background, a class level or an achievement first. A perk is a
+**change to how the editor behaves**: always on and passive, with an off switch in Settings so a perk never traps
+anyone. Examples:
+
+- *Typewriter scroll*: the line being typed stays centred vertically.
+- *Ember trail*: the last sentence you typed glows faintly, to help you pick the thread back up.
+- *Quiet margins*: notes and beat markers fade while you type and come back when you pause.
+- *Lantern*: on reopening a chapter, the caret goes to the last edit, not the top.
+- *Deep pockets*: one more skill-bar slot.
+- *Scavenger*: the goal offer shows four goals.
+- *Second draft*: once per run, see the previous version of a paragraph side by side.
+
+### Achievements, titles and relics
+
+- **Achievements** are on the sheet as a trophy shelf, for example "First floor cleared", "100 rooms renovated" or
+  "30-day torch". They are rules over the run history, so they can also be awarded for past runs.
 - **Titles** come from achievements, for example "Delver of the Third Floor" or "Mason of a Hundred Rooms". You equip
   one and it shows on the run card and the recap.
-- **Relics** are achievement rewards with a small passive effect that changes *options*, never makes goals easier.
-  For example, one more goal offered, one free reroll a day, or a skill charge carried between runs.
+- **Relics** are achievement rewards with a small effect on *options*, never on how hard a goal is. For example, one
+  free reroll a day, or a skill charge carried between runs.
 - **Inventory** holds owned cosmetics, unlocked classes, skills and goal types.
 
-The sheet is a view of its own (Run → Character, plus a palette command). It shows the portrait for the equipped
-class and theme, the stats as bars, mastery levels, the equipped title and relics, and the wallet.
+The sheet is a view of its own (Run → Character, plus a palette command). It shows:
+- the portrait (the background plus the equipped theme)
+- the level and XP bar
+- the class levels as a split bar (for example "Delver 4 / Mason 2")
+- the perks taken
+- the achievements shelf, the equipped title and relics
+- the wallet
 
 ## 4. The run loadout
 
@@ -113,15 +147,24 @@ draft, and an editing class keeps them close at hand.
 class only decides what is *in your hands during a run*. Unlocks add *new* skills and variants, and nothing that
 exists today is locked away.
 
-| Class | Leaning | Starting skills | Mastery unlocks (examples) |
-|---|---|---|---|
-| **Delver** | Drafting | *Tunnel vision* (spelling squiggles hidden, focus mode on), *Second wind* (adds 5 minutes, once per run) | *Prompt card* (a random prompt for the stuck moment), *Momentum* (combo multiplier for unbroken typing) |
-| **Cartographer** | Planning and drafting | *Survey* (the next beat and the chapter's outline pinned above the editor) | *Waypoint* (drop a TODO marker and keep writing), *Beat link* |
-| **Mason** | Editing | *Echo sight* (highlights repeated words and phrases nearby), *Spellward* (spell check, with a sweep through issues one by one) | *Thesaurus* (synonyms for the word at the caret), *Trim* (flags filler words and adverbs) |
-| **Seer** | Editing with AI | *Scry* (AI feedback on one paragraph), *Read the room* (AI names the paragraph's family and mood) | *Echoes of the past* (AI continuity check against earlier chapters), *Oracle* (a pacing read of the whole chapter) |
+### Class levels and multiclassing
 
-- **Skills** are commands with a hotkey and a slot on a **skill bar** in the run HUD. Some have **charges** per
-  run, mainly the AI spells, which also caps cost. Spells use a **mana** pool that refills each run.
+Each character level grants one **class level**, which goes into any unlocked class. Multiclassing is expected: a
+writer who drafts and revises might be *Delver 5 / Mason 3*. A class's levels **unlock** its skills, then **improve**
+them (rank II, rank III). Each rank is a real step up in the editor feature, not a bigger number on a goal.
+
+| Class | Leaning | Lv 1 | Lv 2 | Lv 3 | Lv 5 (capstone) |
+|---|---|---|---|---|---|
+| **Delver** | Drafting | *Tunnel vision*: spelling squiggles hidden, focus mode on | *Second wind*: adds 5 minutes, once per run | *Prompt card*: a random prompt for the stuck moment | *Momentum*: combo multiplier for unbroken typing; *Tunnel vision II* also hides the word count until the run ends |
+| **Cartographer** | Planning and drafting | *Survey*: the next beat and the chapter outline pinned above the editor | *Waypoint*: drop a TODO marker and keep writing | *Beat link*: link the scene being drafted to its beat | *Survey II*: the whole floor's beats as a strip, with the drafted ones ticked |
+| **Mason** | Editing | *Spellward*: spell check, with a sweep through issues one by one | *Echo sight*: repeated words within a paragraph | *Thesaurus*: synonyms for the word at the caret | *Echo sight II*: repeated phrases across the chapter; *Trim*: filler words and adverbs |
+| **Seer** | Editing with AI | *Read the room*: AI names the paragraph's family and mood | *Scry*: AI feedback on one paragraph | *Echoes of the past*: AI continuity check against earlier chapters | *Oracle*: a pacing read of the whole chapter; *Scry II* compares two versions of a paragraph |
+
+- The class you **play** in a run is the one whose skills sit on the skill bar. With multiclassing, the loadout can
+  also slot one skill from a second class. The *Deep pockets* perk adds a slot.
+- **Skills** are commands with a hotkey and a slot on the **skill bar** in the run HUD. Some have **charges** per
+  run, mainly the AI spells, which also caps cost. Spells use a **mana** pool that refills each run. Ranks raise the
+  number of charges.
 - **Classes beyond these four** can be unlocked later, for example a dialogue-focused **Bard** or a world-building
   **Loremaster** who works in research docs.
 - **Implementation:** skills wrap existing services. Spell check is `Spelling/SpellChecker`. Echo sight and Trim
@@ -212,15 +255,16 @@ AI is off until the author turns it on and chooses a provider. With AI off, the 
 | Currency | Earned by | Spent on |
 |---|---|---|
 | **XP** | Every run (phase 1 formula) | Nothing. It sets the level. |
-| **Class XP** | XP earned while playing a class | Nothing. It sets class mastery. |
 | **Gold** | Every run (from XP), plus the goal bonus, plus first-time achievements | The shop |
 
 The shop is phase 4's unlock web, extended:
 
 - **Cosmetics:** themes, tile sets, portraits, titles, sound schemes, the editor companion (zen garden).
-- **Editor improvements:** new skills for a class, a second or third skill-bar slot, extra spell charges, new goal
-  types for the deck, new classes. These add options and don't loosen goals.
-- **Rerolls and conveniences:** reroll the goal offer, add a fourth goal to an offer, a streak freeze.
+- **Editor improvements:** unlock a new class so it can take levels, extra spell charges, new goal types for the
+  deck. Skills themselves come from class levels, and perks come from perk picks. These add options and don't loosen
+  goals.
+- **Rerolls and conveniences:** reroll the goal offer, add a fourth goal to an offer, a streak freeze, and a
+  **respec** (move class levels or swap perks) after the first free one.
 
 Prices are data. There's no real-money currency, and gold can't be bought. The wallet is stored as raw earnings and
 purchases, so the balance is recomputed and a formula change can be applied to history.
@@ -229,7 +273,8 @@ purchases, so the balance is recomputed and a formula change can be applied to h
 
 - `writer-profile.json` gains:
   - per run: `classId`, `themeId`, `goal { id, target, met }`, `goldEarned`, `summary`
-  - at the top level: `purchases[]`, `equipped { title, relics[], skillBar }`, `achievements[]`
+  - at the top level: `character { background, perks[], classLevels { classId: n }, respecs }`, `purchases[]`,
+    `equipped { title, relics[], skillBar }`, `achievements[]`
 
   The format keeps its rule of only gaining fields, and old runs read as "no class, no goal".
 - `.hymnal-data/rooms/{chapterUuid}.json`: the paragraph rooms (§6).
@@ -239,21 +284,21 @@ purchases, so the balance is recomputed and a formula change can be applied to h
 
 ## 10. The name
 
-Hymnal will be renamed to fit the motif. Requirements:
-- reads well as a desktop app and a command
-- hints at both writing and delving
-- isn't the name of an existing writing tool (availability **not yet checked**)
+Hymnal will be renamed to fit the motif. The author prefers **Inkdeep** (ink plus depth, read as a place you go down
+into), with **Wordcrawl** as the backup. Also considered: Delve, Folio & Flame, Scriptorium Below, Quillcrawl.
 
-Candidates to look at:
+**Availability check (2026-11-17, informal):**
 
-| Name | Why |
-|---|---|
-| **Delve** | Runs are delves. Short and a verb. Probably crowded as a product name. |
-| **Inkdeep** | Ink plus depth. Reads as a place. |
-| **Wordcrawl** | A dungeon crawl made of words. Clearly genre-flavoured. |
-| **Folio & Flame** | Manuscript plus torch (the streak). More literary. |
-| **Scriptorium Below** | The monastery writing room plus a dungeon. Longer. |
-| **Quillcrawl** | Like Wordcrawl, with a more fantasy feel. |
+| | Inkdeep | Wordcrawl |
+|---|---|---|
+| Existing product with the name (web search) | None found (near names: InkJot, InkMark, Inkline) | None found (near names: WordSpiral, Word Craft) |
+| `.com` | Registered since 2000: a personal portfolio site ("inkdeep.:.tikisurf"), not a product | Registered |
+| `.app` / `.io` / `.dev` | Looked unregistered (RDAP 404) | `.app` registered; `.io` looked unregistered |
+
+**Still to do before committing to the name:**
+- a trademark search (USPTO, and EUIPO/UKIPO if it ships there)
+- register `inkdeep.app` (or `.dev`)
+- check the GitHub org/repo and the NuGet and package-manager ids (winget, `.deb`)
 
 A rename touches the solution, namespaces, AppData paths (`%AppData%/Hymnal`, so a one-time migration),
 `.hymnal-data/` (read the old folder name forever), the embedded `<!-- hymnal:v1 -->` marker (keep reading it),
@@ -266,17 +311,17 @@ This replaces and extends phases 2–5 of the runs spec:
 | Phase | Contents |
 |---|---|
 | 2. Launch pad + loadout | Launch pad (Future You note, last room, **Enter**). Loadout with the class (Delver and Mason to start), the theme and the goal deck (Excavate, Break ground, Renovate, Clear rubble). Missed-goal recap. `goal` stored on runs. |
-| 3. Character sheet + progression | Level, stats, class mastery, titles, achievements and relics. The skill bar with the starting skills (Tunnel vision, Second wind, Echo sight, Spellward). |
+| 3. Character sheet + progression | Character creation (background), level, class levels with multiclassing, perk picks and the first perks, achievements shelf, titles and relics, the free first respec. The skill bar with the Delver and Mason level 1–2 skills (Tunnel vision, Second wind, Spellward, Echo sight). |
 | 4. Dungeon map | Paragraph rooms and fingerprints, the heuristic classifier, the tile view (floors, doors, rock), condition and freshness, and the run path on the recap. |
 | 5. Economy + shop | Gold, the shop (the old unlock web) with cosmetics, editor improvements and rerolls, and the Cartographer class. |
 | 6. AI layer | Provider opt-in per project, the model classifier, run summaries, the Seer class (Scry, Read the room) and the token budget. |
-| 7. Rename | Its own spec once a name is chosen. Can happen at any point. |
+| 7. Rename to Inkdeep | Its own spec, after the trademark search. Can happen at any point. |
 | Later | The series overworld, more classes (Bard, Loremaster), and a LitRPG tracker for the characters' stats (R-F7, kept separate from the author's sheet). |
 
 ## 12. Open questions
 
-1. Do stats ever feed back into play (for example Stamina raising the dial's maximum), or do they only describe the
-   writer? Only describing is safer (R-F5).
+1. How often are perk picks granted, and is there a level cap, or does levelling go on for ever with class levels
+   beyond each class's capstone giving cosmetic ranks?
 2. Is a paragraph the right room for very short paragraphs, such as a line of dialogue? Merge consecutive
    same-family paragraphs under N words into one room?
 3. Where does the dungeon map live: Plan, its own mode, or the launch pad?
