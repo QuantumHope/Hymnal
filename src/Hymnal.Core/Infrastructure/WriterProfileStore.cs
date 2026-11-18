@@ -48,8 +48,12 @@ public sealed class WriterProfileStore : IWriterProfileStore
     public async Task<Result<Unit>> AppendRunAsync(RunRecord session)
     {
         await _lock.WaitAsync().ConfigureAwait(false);
+        IDisposable? fileLock = null;
         try
         {
+            // The profile is global: another running Hymnal may be appending too, so the whole read-append-write
+            // holds the cross-process lock, or one of the two runs would be lost.
+            fileLock = await CrossProcessFileLock.AcquireAsync(_path).ConfigureAwait(false);
             var loaded = await LoadDocumentAsync().ConfigureAwait(false);
             if (!loaded.IsSuccess)
                 return Result<Unit>.Fail(loaded.Error!);
@@ -76,6 +80,7 @@ public sealed class WriterProfileStore : IWriterProfileStore
         }
         finally
         {
+            fileLock?.Dispose();
             _lock.Release();
         }
     }

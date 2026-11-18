@@ -4,6 +4,7 @@ using Avalonia.Controls;
 using Avalonia.Input;
 using Avalonia.Interactivity;
 using Avalonia.Threading;
+using Avalonia.VisualTree;
 using Hymnal.ViewModels;
 
 namespace Hymnal.Views;
@@ -25,6 +26,38 @@ public partial class RunOverlayView : UserControl
     }
 
     private RunViewModel? ViewModel => DataContext as RunViewModel;
+
+    private IInputElement? _focusBeforeOpen;
+
+    protected override void OnPropertyChanged(AvaloniaPropertyChangedEventArgs change)
+    {
+        base.OnPropertyChanged(change);
+        if (change.Property == IsVisibleProperty)
+            OnShownChanged(change.GetNewValue<bool>());
+    }
+
+    /// <summary>
+    /// Remembers what had focus when a screen opens and gives it back when the screen is cancelled or dismissed
+    /// (as the command palette does), so typing resumes where it was. Beginning a run is left alone: focus mode
+    /// puts the caret in the editor itself.
+    /// </summary>
+    private void OnShownChanged(bool shown)
+    {
+        if (shown)
+        {
+            var current = TopLevel.GetTopLevel(this)?.FocusManager?.GetFocusedElement();
+            if (current is not Visual v || !this.IsVisualAncestorOf(v))
+                _focusBeforeOpen = current;
+            return;
+        }
+
+        var previous = _focusBeforeOpen;
+        _focusBeforeOpen = null;
+        if (ViewModel?.Stage == RunStage.Running)
+            return;
+        if (previous is Visual { IsEffectivelyVisible: true } visual && TopLevel.GetTopLevel(visual) != null)
+            Dispatcher.UIThread.Post(() => previous.Focus(), DispatcherPriority.Input);
+    }
 
     private static void FocusWhenShown(AvaloniaPropertyChangedEventArgs args, InputElement target)
     {

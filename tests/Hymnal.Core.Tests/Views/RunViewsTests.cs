@@ -35,9 +35,11 @@ public sealed class RunViewsTests
 
                 var overlay = new RunOverlayView { DataContext = run };
                 var hud = new RunHudView { DataContext = run };
-                var window = new Window { Width = 1000, Height = 800, Content = new Grid { Children = { hud, overlay } } };
+                var page = new TextBox { Name = "Page" }; // stands in for the editor under the screens
+                var window = new Window { Width = 1000, Height = 800, Content = new Grid { Children = { page, hud, overlay } } };
                 window.Show();
                 await context.SettleAsync();
+                page.Focus();
 
                 Assert.False(overlay.IsVisible);
                 Assert.False(hud.IsVisible);
@@ -53,6 +55,16 @@ public sealed class RunViewsTests
                 Assert.True(dial.IsFocused);
                 Assert.Equal(15, dial.Value);
 
+                // To a screen reader the dial is a named slider over the run's range.
+                var peer = Avalonia.Automation.Peers.ControlAutomationPeer.CreatePeerForElement(dial);
+                Assert.Equal(Avalonia.Automation.Peers.AutomationControlType.Slider, peer.GetAutomationControlType());
+                Assert.Equal("Run length in minutes", peer.GetName());
+                var range = Assert.IsAssignableFrom<Avalonia.Automation.Provider.IRangeValueProvider>(peer);
+                Assert.Equal((1d, 180d, 15d), (range.Minimum, range.Maximum, range.Value));
+                range.SetValue(20);
+                Assert.Equal(20, run.SelectedMinutes);
+                range.SetValue(15);
+
                 // The dial: arrows nudge it, typed digits set it, and the view model follows.
                 Press(window, Key.Up);
                 Assert.Equal(16, run.SelectedMinutes);
@@ -66,6 +78,8 @@ public sealed class RunViewsTests
 
                 Press(window, Key.Escape);
                 Assert.Equal(RunStage.Idle, run.Stage);
+                await context.SettleAsync();
+                Assert.True(page.IsFocused, "cancelling gives focus back to where it was");
 
                 // Running: only the HUD.
                 await Within(run.OpenCommand.Execute().ToTask());

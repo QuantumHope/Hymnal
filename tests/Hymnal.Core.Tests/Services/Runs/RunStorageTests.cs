@@ -36,6 +36,20 @@ public class WriterProfileStoreTests
     };
 
     [Fact]
+    public Task Appends_from_separate_stores_at_once_are_all_kept() => WithTempDirAsync(async (dir, _) =>
+    {
+        // Each store has its own in-process lock, as two running Hymnals would; only the file lock keeps both runs.
+        var path = Path.Combine(dir, "writer-profile.json");
+        var runs = Enumerable.Range(0, 12).Select(i => Session("2026-11-" + (10 + i % 5), added: 100 + i)).ToList();
+        var results = await Task.WhenAll(runs.Select(r =>
+            Task.Run(() => new WriterProfileStore(new MetadataStore(), path).AppendRunAsync(r))));
+
+        Assert.All(results, r => Assert.True(r.IsSuccess, r.Error));
+        var saved = (await new WriterProfileStore(new MetadataStore(), path).LoadRunsAsync()).Value!;
+        Assert.Equal(runs.Select(r => r.Id).Order(), saved.Select(r => r.Id).Order());
+    });
+
+    [Fact]
     public Task Missing_file_is_an_empty_profile() => WithTempDirAsync(async (_, store) =>
     {
         var loaded = await store.LoadRunsAsync();
@@ -94,6 +108,32 @@ public class FutureYouNotesServiceTests
         {
             Directory.Delete(dir, true);
         }
+    }
+
+    [Fact]
+    public Task Notes_from_separate_services_at_once_are_all_kept() => WithTempDirAsync(async (dir, _) =>
+    {
+        var notes = Enumerable.Range(0, 12)
+            .Select(i => new FutureYouNote { CreatedAt = DateTimeOffset.UnixEpoch.AddMinutes(i), Text = $"Note {i}" })
+            .ToList();
+        var results = await Task.WhenAll(notes.Select(n =>
+            Task.Run(() => new FutureYouNotesService(new MetadataStore()).AddAsync(dir, n))));
+
+        Assert.All(results, r => Assert.True(r.IsSuccess, r.Error));
+        var saved = (await new FutureYouNotesService(new MetadataStore()).LoadAsync(dir)).Value!;
+        Assert.Equal(notes.Select(n => n.Text).Order(), saved.Select(n => n.Text).Order());
+    });
+
+    [Fact]
+    public async Task The_file_lock_is_exclusive_until_released()
+    {
+        var target = Path.Combine(Path.GetTempPath(), "hymnal-lock-" + Guid.NewGuid().ToString("N"), "x.json");
+        var held = await CrossProcessFileLock.AcquireAsync(target);
+        await Assert.ThrowsAsync<IOException>(() => CrossProcessFileLock.AcquireAsync(target, TimeSpan.FromMilliseconds(100)));
+        held.Dispose();
+        (await CrossProcessFileLock.AcquireAsync(target, TimeSpan.FromMilliseconds(100))).Dispose();
+        Assert.Equal(CrossProcessFileLock.LockPathFor(target),
+            CrossProcessFileLock.LockPathFor(Path.Combine(Path.GetDirectoryName(target)!, ".", "x.json")));
     }
 
     [Fact]

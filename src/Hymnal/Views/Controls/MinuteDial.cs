@@ -1,6 +1,9 @@
 using System;
 using System.Globalization;
 using Avalonia;
+using Avalonia.Automation;
+using Avalonia.Automation.Peers;
+using Avalonia.Automation.Provider;
 using Avalonia.Controls;
 using Avalonia.Data;
 using Avalonia.Input;
@@ -45,6 +48,9 @@ public sealed class MinuteDial : Control
     {
         Cursor = new Cursor(StandardCursorType.Hand);
     }
+
+    /// <summary>A screen reader sees a slider: its name, the minutes, the range, and every change.</summary>
+    protected override AutomationPeer OnCreateAutomationPeer() => new MinuteDialAutomationPeer(this);
 
     public int Value { get => GetValue(ValueProperty); set => SetValue(ValueProperty, value); }
     public int Minimum { get => GetValue(MinimumProperty); set => SetValue(MinimumProperty, value); }
@@ -259,8 +265,40 @@ public sealed class MinuteDial : Control
     private FontFamily TryFont(string key) =>
         this.TryFindResource(key, ActualThemeVariant, out var value) && value is FontFamily f ? f : FontFamily.Default;
 
+    protected override void OnPropertyChanged(AvaloniaPropertyChangedEventArgs change)
+    {
+        base.OnPropertyChanged(change);
+        if (change.Property == ValueProperty)
+            (ControlAutomationPeer.FromElement(this) as MinuteDialAutomationPeer)?.ValueChanged(
+                change.GetOldValue<int>(), change.GetNewValue<int>());
+    }
+
     private static Color WithAlpha(Color c, byte alpha) => Color.FromArgb(alpha, c.R, c.G, c.B);
 
     private static Color Lighten(Color c, double amount) => Color.FromRgb(
         (byte)(c.R + (255 - c.R) * amount), (byte)(c.G + (255 - c.G) * amount), (byte)(c.B + (255 - c.B) * amount));
+}
+
+/// <summary>The dial as a range-value control (a slider) for screen readers.</summary>
+internal sealed class MinuteDialAutomationPeer(MinuteDial owner) : ControlAutomationPeer(owner), IRangeValueProvider
+{
+    private MinuteDial Dial => (MinuteDial)Owner;
+
+    public bool IsReadOnly => !Dial.IsEnabled;
+    public double Minimum => Dial.Minimum;
+    public double Maximum => Dial.Maximum;
+    public double Value => Dial.Value;
+    public double SmallChange => 1;
+    public double LargeChange => 5;
+
+    public void SetValue(double value) => Dial.Value = (int)Math.Round(value);
+
+    internal void ValueChanged(int oldValue, int newValue) =>
+        RaisePropertyChangedEvent(RangeValuePatternIdentifiers.ValueProperty, (double)oldValue, (double)newValue);
+
+    protected override AutomationControlType GetAutomationControlTypeCore() => AutomationControlType.Slider;
+
+    protected override string GetClassNameCore() => nameof(MinuteDial);
+
+    protected override string? GetNameCore() => base.GetNameCore() is { Length: > 0 } name ? name : "Run length in minutes";
 }

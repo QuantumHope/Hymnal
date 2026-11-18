@@ -166,6 +166,8 @@ public sealed class RunViewModel : ViewModelBase, IDisposable
         _scheduler = scheduler ?? AvaloniaScheduler.Instance;
         Atmosphere = atmosphere ?? new RunAtmospherePreferences();
         _soundscape = soundscape ?? new SilentRunSoundscape();
+        // Turning Sparks off mid-run also takes down a callout already showing.
+        Disposables.Add(Atmosphere.WhenAnyValue(a => a.Sparks).Where(on => !on).Subscribe(_ => ComboText = null));
 
         DurationOptions = Presets.Select(m => new RunDurationOption(m)).ToList();
         SelectMinutes(DefaultMinutes);
@@ -535,7 +537,8 @@ public sealed class RunViewModel : ViewModelBase, IDisposable
         if (net > _lastNet)
         {
             Sparks += net - _lastNet;
-            if (RunCombos.Crossed(_peakNet, net) is { } combo)
+            // Combo callouts belong to the Sparks layer: turned off in Settings → Runs, they don't show.
+            if (Atmosphere.Sparks && RunCombos.Crossed(_peakNet, net) is { } combo)
             {
                 ComboText = RunCombos.Callout(combo);
                 _comboUntil = _scheduler.Now + ComboShown;
@@ -752,6 +755,23 @@ public sealed class RunViewModel : ViewModelBase, IDisposable
         LeftOffLine = key == null ? null : RunTracker.LastLine(tracker.LatestText(key) ?? _editor.Text);
     }
 
+    /// <summary>A note typed on the recap that Done hasn't saved yet (the window asks before closing over it).</summary>
+    public bool HasPendingNote => Stage == RunStage.Recap && !string.IsNullOrWhiteSpace(FutureYouText);
+
+    /// <summary>
+    /// Saves a note typed on the recap but not yet saved, as when the window closes or the app restarts. True when
+    /// there was nothing to save or it was saved; false (the text kept) when it couldn't be.
+    /// </summary>
+    public async Task<bool> FlushNoteAsync()
+    {
+        if (!HasPendingNote)
+            return true;
+        var result = await SaveNoteAsync();
+        if (result.IsSuccess)
+            await OnUiAsync(() => FutureYouText = "");
+        return result.IsSuccess;
+    }
+
     private async Task DoneAsync()
     {
         if (string.IsNullOrWhiteSpace(FutureYouText))
@@ -760,6 +780,22 @@ public sealed class RunViewModel : ViewModelBase, IDisposable
             return;
         }
 
+        var result = await SaveNoteAsync();
+        await OnUiAsync(() =>
+        {
+            if (!result.IsSuccess)
+            {
+                _notifications.ShowError($"Your note wasn't saved: {result.Error}");
+                return;
+            }
+            FutureYouText = "";
+            Stage = RunStage.Idle;
+            _notifications.ShowInfo("Note saved. Future You will see it when the next run starts.");
+        });
+    }
+
+    private Task<Hymnal.Core.Common.Result<Hymnal.Core.Common.Unit>> SaveNoteAsync()
+    {
         var note = new FutureYouNote
         {
             CreatedAt = _scheduler.Now,
@@ -769,17 +805,7 @@ public sealed class RunViewModel : ViewModelBase, IDisposable
             ChapterTitle = LeftOffChapter,
             LastLine = LeftOffLine,
         };
-        var result = await _notes.AddAsync(_workspaceRoot, note);
-        await OnUiAsync(() =>
-        {
-            if (!result.IsSuccess)
-            {
-                _notifications.ShowError($"Your note wasn't saved: {result.Error}");
-                return;
-            }
-            Stage = RunStage.Idle;
-            _notifications.ShowInfo("Note saved. Future You will see it when the next run starts.");
-        });
+        return _notes.AddAsync(_workspaceRoot, note);
     }
 
     public void Dispose() => Disposables.Dispose();

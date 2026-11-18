@@ -61,6 +61,7 @@ public sealed class RunAmbiencePlayer : IRunSoundscape, IDisposable
     private double _progress;
     private Timer? _heartbeat;
     private bool _disposed;
+    private CancellationTokenSource? _preview;
 
     public RunAmbiencePlayer(IAudioEngine engine, SoundPreferences sound, RunAtmospherePreferences atmosphere,
         Func<bool> typingUsesEngine)
@@ -75,6 +76,7 @@ public sealed class RunAmbiencePlayer : IRunSoundscape, IDisposable
 
     public void Start()
     {
+        CancelPreview();
         lock (_gate)
         {
             _active = true;
@@ -98,6 +100,7 @@ public sealed class RunAmbiencePlayer : IRunSoundscape, IDisposable
 
     public void Finish(bool completed)
     {
+        CancelPreview();
         lock (_gate)
             _active = false;
         Enqueue(() =>
@@ -113,11 +116,48 @@ public sealed class RunAmbiencePlayer : IRunSoundscape, IDisposable
         });
     }
 
+    /// <summary>
+    /// Plays the sample once. Clicks while one is queued or playing are ignored, and starting or ending a run (or
+    /// disposing) cuts it short, so samples never hold up a run's own sounds.
+    /// </summary>
     public void Preview()
     {
+        CancellationToken token;
+        lock (_gate)
+        {
+            if (_preview != null || _disposed)
+                return;
+            _preview = new CancellationTokenSource();
+            token = _preview.Token;
+        }
+
         Enqueue(() =>
         {
-            if (!_sound.SoundEnabled || (!_engine.IsRunning && !_engine.TryStart()))
+            try
+            {
+                PlayPreview(token);
+            }
+            finally
+            {
+                lock (_gate)
+                {
+                    _preview?.Dispose();
+                    _preview = null;
+                }
+            }
+        });
+    }
+
+    private void CancelPreview()
+    {
+        lock (_gate)
+            _preview?.Cancel();
+    }
+
+    private void PlayPreview(CancellationToken token)
+    {
+        {
+            if (token.IsCancellationRequested || !_sound.SoundEnabled || (!_engine.IsRunning && !_engine.TryStart()))
                 return;
 
             // The fire and drone under four beats that quicken, then the chime.
@@ -135,17 +175,26 @@ public sealed class RunAmbiencePlayer : IRunSoundscape, IDisposable
             foreach (var bpm in new[] { 60.0, 80, 110, 140 })
             {
                 _engine.Play(heart, new PlaybackOptions(AudioBus.Ambience, HeartbeatGain(1)));
-                Thread.Sleep(TimeSpan.FromSeconds(60 / bpm));
+                if (token.WaitHandle.WaitOne(TimeSpan.FromSeconds(60 / bpm)))
+                {
+                    loop?.Stop();
+                    return; // a run started or ended: its sounds take over
+                }
             }
             loop?.Stop();
-            _engine.Play(chime, new PlaybackOptions(AudioBus.Ambience, 0.9f));
-            Thread.Sleep(TimeSpan.FromSeconds(3.3));
+            var ring = _engine.Play(chime, new PlaybackOptions(AudioBus.Ambience, 0.9f));
+            if (token.WaitHandle.WaitOne(TimeSpan.FromSeconds(3.3)))
+            {
+                ring?.Stop();
+                return;
+            }
             ReleaseEngine();
-        });
+        }
     }
 
     public void Dispose()
     {
+        CancelPreview();
         lock (_gate)
         {
             if (_disposed)
