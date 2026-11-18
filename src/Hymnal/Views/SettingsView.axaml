@@ -104,6 +104,13 @@
                              IsChecked="{Binding IsSoundSection, Mode=OneWay}"
                              Command="{Binding ShowSectionCommand}"
                              CommandParameter="{x:Static vm:SettingsSection.Sound}" />
+                <RadioButton x:Name="PART_RunsNav"
+                             Classes="settingsNav" GroupName="settingsSection"
+                             Content="Runs"
+                             IsVisible="{Binding HasRuns}"
+                             IsChecked="{Binding IsRunsSection, Mode=OneWay}"
+                             Command="{Binding ShowSectionCommand}"
+                             CommandParameter="{x:Static vm:SettingsSection.Runs}" />
                 <RadioButton x:Name="PART_SpellingNav"
                              Classes="settingsNav" GroupName="settingsSection"
                              Content="Spelling"
@@ -282,6 +289,53 @@
                             Background="{DynamicResource Cora.Accent.Store}"
                             Foreground="{DynamicResource Cora.IconInk}"
                             CornerRadius="5" />
+                </StackPanel>
+
+                <!-- Runs section: what a writing run looks and sounds like -->
+                <StackPanel x:Name="PART_RunsSection" Spacing="10" IsVisible="{Binding IsRunsSection}">
+                    <TextBlock Classes="heading"
+                               Text="Runs"
+                               FontSize="18"
+                               FontWeight="SemiBold"
+                               Foreground="{DynamicResource Cora.Text}" />
+                    <TextBlock Text="A run is a timed burst of writing in focus mode (Run → New Run…, or the NEW RUN button). These layers build up through it and peak in its last minute. Turn off any you find distracting."
+                               FontSize="12"
+                               TextWrapping="Wrap"
+                               Foreground="{DynamicResource Cora.Text.Secondary}" />
+                    <CheckBox Content="Flames and embers along the bottom of the window"
+                              IsChecked="{Binding RunAtmosphere.Flames, FallbackValue=False}"
+                              Foreground="{DynamicResource Cora.Text}" />
+                    <CheckBox Content="Glow around the window edge, and a vignette that closes in"
+                              IsChecked="{Binding RunAtmosphere.EdgeGlow, FallbackValue=False}"
+                              Foreground="{DynamicResource Cora.Text}" />
+                    <CheckBox Content="Sparks off the word count, and combo callouts"
+                              IsChecked="{Binding RunAtmosphere.Sparks, FallbackValue=False}"
+                              Foreground="{DynamicResource Cora.Text}" />
+                    <StackPanel Spacing="4">
+                        <CheckBox Content="Ambience: a drone and crackling fire, a heartbeat that quickens through the run, and a chime at the end"
+                                  IsChecked="{Binding RunAtmosphere.Ambience, FallbackValue=False}"
+                                  Foreground="{DynamicResource Cora.Text}" />
+                        <TextBlock Text="Plays only while Sound → Play sounds is on."
+                                   Margin="28,0,0,0"
+                                   FontSize="12"
+                                   Foreground="{DynamicResource Cora.Text.Secondary}" />
+                    </StackPanel>
+                    <StackPanel Orientation="Horizontal" Spacing="12" Margin="28,0,0,0">
+                        <TextBlock Text="Ambience volume" VerticalAlignment="Center"
+                                   IsEnabled="{Binding RunAtmosphere.Ambience, FallbackValue=False}"
+                                   Foreground="{DynamicResource Cora.Text}" />
+                        <Slider Width="220" Minimum="0" Maximum="1" SmallChange="0.05" LargeChange="0.1"
+                                IsEnabled="{Binding RunAtmosphere.Ambience, FallbackValue=False}"
+                                Value="{Binding RunAtmosphere.AmbienceVolume, FallbackValue=0}" />
+                        <TextBlock Text="{Binding RunAtmosphere.AmbienceVolume, StringFormat={}{0:P0}, FallbackValue=''}"
+                                   VerticalAlignment="Center" MinWidth="44"
+                                   Foreground="{DynamicResource Cora.Text.Secondary}" />
+                        <Button x:Name="PART_PreviewRunSound" Content="Play a sample"
+                                Command="{Binding PreviewRunSoundCommand}"
+                                IsEnabled="{Binding RunAtmosphere.Ambience, FallbackValue=False}"
+                                ToolTip.Tip="A few seconds of fire, a quickening heartbeat and the finish chime"
+                                Padding="10,4" />
+                    </StackPanel>
                 </StackPanel>
 
                 <!-- Sound section (typing sounds on the Write surface) -->

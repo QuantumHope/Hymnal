@@ -31,7 +31,8 @@ public sealed class IdeasViewSmokeTests
         var views = Path.GetDirectoryName(FindRepositoryFile("src/Hymnal/Views/MainWindow.axaml"))!;
         var count = 0;
         foreach (var file in Directory.EnumerateFiles(views, "*.axaml", SearchOption.AllDirectories))
-            count += Regex.Matches(File.ReadAllText(file), "Ctrl\\+Shift\\+I\"").Count;
+            // A menu item's InputGesture only displays the shortcut; count the key bindings that act on it.
+            count += Regex.Matches(File.ReadAllText(file), "<KeyBinding Gesture=\"Ctrl\\+Shift\\+I\"").Count;
 
         Assert.Equal(1, count);
     }

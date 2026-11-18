@@ -72,6 +72,13 @@ public partial class MainWindow : Window
 
                 vm.ShowQuickIdeaDialogAsync = () => QuickIdeaDialog.ShowAsync(this);
 
+                // The run Logbook opens as its own window once its runs are loaded.
+                if (vm.WritingRun is { } run)
+                {
+                    _layoutDisposables.Add(run.ShowLogbookCommand.Subscribe(logbook =>
+                        new RunLogbookDialog { DataContext = logbook }.ShowDialog(this)));
+                }
+
                 // About dialog — needs Window reference so it's wired here, not in the VM.
                 _layoutDisposables.Add(
                     vm.ShowAboutCommand.Subscribe(_ =>

@@ -41,6 +41,31 @@ public sealed class MainWindowFocusModeTests
     }
 
     [Fact]
+    public async Task Esc_cancels_a_run_start_card_opened_in_focus_mode_before_leaving_focus()
+    {
+        var root = CreateWorkspace(StoryJson, ("story.md", "# Story\n\nText.\n"));
+        try
+        {
+            await Ui(root, 1, async context =>
+            {
+                var run = context.CreateRun();
+                var window = context.CreateMainWindow(context.CreateHost(), run: run);
+                await Within(window.ToggleFocusModeCommand.Execute().ToTask());
+                Assert.True(await window.ExitFocusModeCommand.CanExecute.FirstAsyncTask());
+
+                await Within(run.OpenCommand.Execute().ToTask());
+                Assert.False(await window.ExitFocusModeCommand.CanExecute.FirstAsyncTask());
+                Assert.True(await run.CancelCommand.CanExecute.FirstAsyncTask());
+
+                await Within(run.CancelCommand.Execute().ToTask());
+                Assert.True(window.IsFocusMode);
+                Assert.True(await window.ExitFocusModeCommand.CanExecute.FirstAsyncTask());
+            });
+        }
+        finally { DeleteFolder(root); }
+    }
+
+    [Fact]
     public async Task Focus_starts_from_any_mode_in_Write_and_ends_when_Write_is_left()
     {
         var root = CreateWorkspace(StoryJson, ("story.md", "# Story\n\nText.\n"));

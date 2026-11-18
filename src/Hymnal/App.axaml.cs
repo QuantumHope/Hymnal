@@ -66,6 +66,18 @@ public partial class App : Application
             sp.GetRequiredService<SoundPreferences>(),
             ThemeSoundSchemes.SynthwaveThemeId));
 
+        // Writing runs: the atmosphere choices and the run's ambience (on the same audio output)
+        services.AddSingleton(sp => new RunAtmospherePreferences(sp.GetRequiredService<IAppSettingsStore>()));
+        services.AddSingleton<IRunSoundscape>(sp =>
+        {
+            var typing = sp.GetRequiredService<TypingSoundPlayer>();
+            return new RunAmbiencePlayer(
+                sp.GetRequiredService<IAudioEngine>(),
+                sp.GetRequiredService<SoundPreferences>(),
+                sp.GetRequiredService<RunAtmospherePreferences>(),
+                () => typing.Scheme != null);
+        });
+
         // Spell check: preferences, the dictionaries, each workspace's project dictionary, and the checker that
         // combines them (the dictionary is read only once something asks for a check).
         services.AddSingleton<SpellCheckSettingsService>();
@@ -106,6 +118,10 @@ public partial class App : Application
 
         // Beat boards (story/anthology plan mode)
         services.AddSingleton<IBeatBoardService, BeatBoardService>();
+
+        // Writing runs: the global writer profile (AppData) and per-workspace notes to Future You
+        services.AddSingleton<IWriterProfileStore>(sp => new WriterProfileStore(sp.GetRequiredService<IMetadataStore>()));
+        services.AddSingleton<IFutureYouNotesService, FutureYouNotesService>();
         // Writes story files through the same StoryFileWriter singleton the editor uses.
         services.AddSingleton<StorageMigrator>();
 
@@ -396,7 +412,21 @@ public partial class App : Application
                 sp.GetRequiredService<TypingSoundPlayer>(),
                 sp.GetRequiredService<IThemeService>(),
                 sp.GetRequiredService<SpellingService>(),
-                _updates));
+                _updates,
+                sp.GetRequiredService<RunAtmospherePreferences>(),
+                sp.GetRequiredService<IRunSoundscape>()));
+
+        services.AddSingleton<RunViewModel>(sp =>
+            new RunViewModel(
+                sp.GetRequiredService<EditorViewModel>(),
+                sp.GetRequiredService<WorkspaceViewModel>(),
+                sp.GetRequiredService<IWriterProfileStore>(),
+                sp.GetRequiredService<IFutureYouNotesService>(),
+                sp.GetRequiredService<WordCountService>(),
+                sp.GetRequiredService<IAppSettingsStore>(),
+                sp.GetRequiredService<INotificationService>(),
+                atmosphere: sp.GetRequiredService<RunAtmospherePreferences>(),
+                soundscape: sp.GetRequiredService<IRunSoundscape>()));
 
         services.AddTransient<MainWindowViewModel>(sp =>
             new MainWindowViewModel(
@@ -420,7 +450,8 @@ public partial class App : Application
                 sp.GetRequiredService<WriteBeatsViewModel>(),
                 sp.GetRequiredService<CollectionsViewModel>(),
                 sp.GetRequiredService<SubmissionExportViewModel>(),
-                sp.GetRequiredService<IThemeService>()));
+                sp.GetRequiredService<IThemeService>(),
+                run: sp.GetRequiredService<RunViewModel>()));
 
         _serviceProvider = services.BuildServiceProvider();
         Services = _serviceProvider;

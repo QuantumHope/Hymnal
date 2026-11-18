@@ -97,6 +97,12 @@ public partial class MainWindowViewModel
         Add("toggle-manage", "View", "Toggle Manage View", ToggleGanttCommand, shortcut: "F5");
         Add("focus-mode", "View", IsFocusMode ? "Leave Focus Mode" : "Focus Mode", ToggleFocusModeCommand,
             shortcut: "F11");
+        if (WritingRun != null)
+        {
+            Add("run-start", "Run", "New Run…", WritingRun.OpenCommand, shortcut: "Ctrl+Alt+R");
+            Add("run-end", "Run", "End Run", WritingRun.EndCommand);
+            Add("run-logbook", "Run", "Logbook…", WritingRun.ShowLogbookCommand, shortcut: "Ctrl+Alt+L");
+        }
         if (EditorViewModel.IsPreviewAvailable)
         {
             Add("preview-write", "View", "Markua Preview: Write Only", EditorViewModel.SetViewModeCommand,

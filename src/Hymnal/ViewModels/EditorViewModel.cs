@@ -124,7 +124,10 @@ public partial class EditorViewModel : ViewModelBase, IDisposable, IOpenStoryBuf
 
             this.RaiseAndSetIfChanged(ref _text, value);
             if (!_suppressDirtyTracking)
+            {
                 SetDirtyFlag(true);
+                _proseEdited.OnNext(new ProseEdit(ActiveNode, IsBookSelected, value));
+            }
         }
     }
 
@@ -291,6 +294,15 @@ public partial class EditorViewModel : ViewModelBase, IDisposable, IOpenStoryBuf
     private readonly Subject<Unit> _savedSubject = new();
     /// <summary>Fires a Unit after every successful atomic save.</summary>
     public IObservable<Unit> Saved => _savedSubject.AsObservable();
+
+    private readonly Subject<ProseEdit> _proseEdited = new();
+    /// <summary>
+    /// Fires for every change the author makes to the buffer (typing, paste, insert, spelling fix), with the node it
+    /// was made in, and never for loading a file, a reload or a revert. While a chapter loads, <see cref="Text"/>
+    /// changes before <see cref="ActiveNode"/>, so a <see cref="Text"/> observer can't tell which chapter a change
+    /// belongs to; writing runs use this instead.
+    /// </summary>
+    public IObservable<ProseEdit> ProseEdited => _proseEdited.AsObservable();
 
     // ── Commands ────────────────────────────────────────────────────────────
 
@@ -675,9 +687,11 @@ public partial class EditorViewModel : ViewModelBase, IDisposable, IOpenStoryBuf
         _chapterOpen = false;
         HasConflict = false;
         ConflictMessage = null;
-        ActiveNode = node;
-        ActiveFilePath = null;
+        // Buffer before node, as when a chapter opens: observers of ActiveNode (writing runs take a chapter's
+        // baseline from Text then) must not see the previous chapter's text under this node.
         SetBufferContent(string.Empty);
+        ActiveFilePath = null;
+        ActiveNode = node;
         ShowMissingChapterPrompt = true;
         IsBookSelected = false;
     }

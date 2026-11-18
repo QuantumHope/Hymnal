@@ -1,0 +1,164 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:vm="using:Hymnal.ViewModels"
+        xmlns:controls="using:Hymnal.Views.Controls"
+        x:Class="Hymnal.Views.RunLogbookDialog"
+        x:DataType="vm:RunLogbookViewModel"
+        Title="Logbook"
+        Width="760" Height="720"
+        MinWidth="520" MinHeight="420"
+        Icon="/Assets/hymnal.ico"
+        ShowInTaskbar="False"
+        WindowStartupLocation="CenterOwner"
+        Background="{DynamicResource Cora.Surface.Void}"
+        FontFamily="{DynamicResource Cora.Font.Persona}">
+
+    <!-- Every run in the writer profile: streak, totals, a 12-week heatmap and the list of runs. -->
+    <Window.Styles>
+        <Style Selector="TextBlock.caps">
+            <Setter Property="FontSize" Value="10" />
+            <Setter Property="FontWeight" Value="SemiBold" />
+            <Setter Property="LetterSpacing" Value="1.6" />
+            <Setter Property="Foreground" Value="{DynamicResource Cora.Text.Secondary}" />
+        </Style>
+        <Style Selector="TextBlock.big">
+            <Setter Property="FontFamily" Value="{DynamicResource Cora.Font.Machine}" />
+            <Setter Property="FontSize" Value="22" />
+            <Setter Property="FontWeight" Value="SemiBold" />
+            <Setter Property="Foreground" Value="{DynamicResource Cora.Text}" />
+        </Style>
+        <Style Selector="TextBlock.small">
+            <Setter Property="FontSize" Value="11" />
+            <Setter Property="Foreground" Value="{DynamicResource Cora.Text.Secondary}" />
+        </Style>
+        <Style Selector="Border.tile">
+            <Setter Property="Background" Value="{DynamicResource Cora.Surface.Elevated}" />
+            <Setter Property="BorderBrush" Value="{DynamicResource Cora.Border.Subtle}" />
+            <Setter Property="BorderThickness" Value="1" />
+            <Setter Property="CornerRadius" Value="6" />
+            <Setter Property="Padding" Value="12,10" />
+            <Setter Property="Margin" Value="4" />
+        </Style>
+    </Window.Styles>
+
+    <Grid RowDefinitions="5,*">
+        <Border Grid.Row="0" Height="5">
+            <Border.Background>
+                <LinearGradientBrush StartPoint="0%,0%" EndPoint="100%,0%">
+                    <GradientStop Color="{DynamicResource Cora.Accent.Store.Color}" Offset="0" />
+                    <GradientStop Color="{DynamicResource Cora.Accent.Error.Color}" Offset="1" />
+                </LinearGradientBrush>
+            </Border.Background>
+        </Border>
+
+        <ScrollViewer Grid.Row="1" HorizontalScrollBarVisibility="Disabled">
+            <StackPanel Margin="24,18" Spacing="14">
+                <TextBlock Text="LOGBOOK"
+                           FontFamily="{DynamicResource Cora.Font.Heading}"
+                           FontSize="26" FontWeight="Bold" LetterSpacing="3"
+                           Foreground="{DynamicResource Cora.Accent.Store}" />
+
+                <TextBlock x:Name="ErrorText" Text="{Binding Error}" IsVisible="{Binding HasError}"
+                           TextWrapping="Wrap" Foreground="{DynamicResource Cora.Accent.Error}" />
+                <TextBlock x:Name="EmptyText" IsVisible="{Binding IsEmpty}" TextWrapping="Wrap"
+                           Text="No runs yet. Start one from the NEW RUN button or Run → New Run… and it will show up here."
+                           Foreground="{DynamicResource Cora.Text.Secondary}" />
+
+                <StackPanel Spacing="14" IsVisible="{Binding HasRuns}">
+                    <!-- Streak and totals -->
+                    <UniformGrid Columns="4" Margin="-4,0">
+                        <Border Classes="tile" BorderBrush="{DynamicResource Cora.Accent.Store}">
+                            <StackPanel>
+                                <TextBlock Classes="caps" Text="{Binding CurrentStreakLabel}" />
+                                <TextBlock x:Name="StreakText" Classes="big" Text="{Binding CurrentStreak}"
+                                           Foreground="{DynamicResource Cora.Accent.Store}" />
+                                <TextBlock Classes="small" Text="{Binding BestStreak}" />
+                            </StackPanel>
+                        </Border>
+                        <Border Classes="tile">
+                            <StackPanel>
+                                <TextBlock Classes="caps" Text="RUNS" />
+                                <TextBlock Classes="big" Text="{Binding TotalRuns}" />
+                                <TextBlock Classes="small" Text="{Binding TotalTime}" />
+                            </StackPanel>
+                        </Border>
+                        <Border Classes="tile">
+                            <StackPanel>
+                                <TextBlock Classes="caps" Text="NET WORDS" />
+                                <TextBlock Classes="big" Text="{Binding TotalWords}" />
+                                <TextBlock Classes="small" Text="{Binding TotalWordsDetail}" />
+                            </StackPanel>
+                        </Border>
+                        <Border Classes="tile">
+                            <StackPanel>
+                                <TextBlock Classes="caps" Text="EARNED" />
+                                <TextBlock Classes="big" Text="{Binding TotalXp}"
+                                           Foreground="{DynamicResource Cora.Accent.Store}" />
+                            </StackPanel>
+                        </Border>
+                    </UniformGrid>
+                    <TextBlock Classes="small" Text="{Binding TotalDetail}" />
+
+                    <!-- Heatmap: weeks as columns, Monday at the top -->
+                    <StackPanel Spacing="6">
+                        <DockPanel>
+                            <TextBlock Classes="caps" Text="LAST 12 WEEKS" />
+                            <TextBlock Classes="small" Text="{Binding HeatmapRange}" HorizontalAlignment="Right" />
+                        </DockPanel>
+                        <controls:StreakHeatmap x:Name="Heatmap" Days="{Binding Days}" CellSize="14"
+                                                HorizontalAlignment="Left" />
+                        <TextBlock Classes="small" FontSize="10"
+                                   Text="Your current streak glows in the accent colour; deeper squares are longer days." />
+                    </StackPanel>
+
+                    <!-- Every run, newest first -->
+                    <StackPanel Spacing="6">
+                        <TextBlock Classes="caps" Text="RUNS" />
+                        <ItemsControl x:Name="RunList" ItemsSource="{Binding Rows}">
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate x:DataType="vm:LogbookRow">
+                                    <Border BorderBrush="{DynamicResource Cora.Border.Subtle}" BorderThickness="0,0,0,1"
+                                            Padding="0,8">
+                                        <StackPanel Spacing="3">
+                                            <Grid ColumnDefinitions="130,*,70,70,110,80">
+                                                <StackPanel Grid.Column="0">
+                                                    <TextBlock Text="{Binding Date}" FontSize="12" FontWeight="SemiBold"
+                                                               Foreground="{DynamicResource Cora.Text}" />
+                                                    <TextBlock Classes="small" Text="{Binding Time}" />
+                                                </StackPanel>
+                                                <TextBlock Grid.Column="1" Text="{Binding Project}" FontSize="12"
+                                                           VerticalAlignment="Center" TextTrimming="CharacterEllipsis"
+                                                           Foreground="{DynamicResource Cora.Text}" />
+                                                <TextBlock Grid.Column="2" Text="{Binding Duration}" FontSize="12"
+                                                           VerticalAlignment="Center"
+                                                           Foreground="{DynamicResource Cora.Text.Secondary}" />
+                                                <TextBlock Grid.Column="3" Text="{Binding Net}" FontSize="13"
+                                                           FontFamily="{DynamicResource Cora.Font.Machine}"
+                                                           VerticalAlignment="Center"
+                                                           Foreground="{DynamicResource Cora.Text}" />
+                                                <TextBlock Grid.Column="4" Classes="small" Text="{Binding Detail}"
+                                                           VerticalAlignment="Center" />
+                                                <StackPanel Grid.Column="5" VerticalAlignment="Center">
+                                                    <TextBlock Text="{Binding Xp}" FontSize="12" HorizontalAlignment="Right"
+                                                               Foreground="{DynamicResource Cora.Accent.Store}" />
+                                                    <TextBlock Classes="small" Text="full run" HorizontalAlignment="Right"
+                                                               IsVisible="{Binding Completed}" FontSize="9" />
+                                                </StackPanel>
+                                            </Grid>
+                                            <TextBlock IsVisible="{Binding HasNote}" Text="{Binding Note}"
+                                                       TextWrapping="Wrap" FontStyle="Italic" FontSize="12"
+                                                       Margin="130,0,0,0"
+                                                       Foreground="{DynamicResource Cora.Text.Secondary}" />
+                                        </StackPanel>
+                                    </Border>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+                    </StackPanel>
+                </StackPanel>
+
+                <Button Content="Close" HorizontalAlignment="Right" Padding="16,6" Click="Close_Click" IsCancel="True" />
+            </StackPanel>
+        </ScrollViewer>
+    </Grid>
+</Window>
