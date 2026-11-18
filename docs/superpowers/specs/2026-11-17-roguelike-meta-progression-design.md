@@ -382,5 +382,6 @@ This replaces and extends phases 2–5 of the runs spec:
 
 1. **The app's overall UX.** Runs, the loadout, the character sheet, the Dungeon mode and the shop will crowd the
    current shell (mode rail, menus and right-hand panes). This probably needs its own redesign and rearchitecture
-   spec, alongside the rename to Inkdeep. For now, the map is a new mode on the rail.
+   spec, alongside the rename to Inkdeep. For now, the map is a new mode on the rail. **Drafted:**
+   `2026-11-18-inkdeep-shell-redesign.md`.
 2. Thesaurus source and licence for an offline synonym list.
