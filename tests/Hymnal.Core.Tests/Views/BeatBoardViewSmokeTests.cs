@@ -188,6 +188,68 @@ public sealed class BeatBoardViewSmokeTests
         finally { DeleteFolder(root); }
     }
 
+    [Fact]
+    public async Task BeatBoardView_keeps_a_field_open_while_the_Edit_menu_acts_on_it()
+    {
+        var root = CreateStory();
+        try
+        {
+            await Ui(root, 2, async context =>
+            {
+                context.CreateHost();
+                await PumpUntilAsync(() => context.Board.BoardKey == BeatBoardService.ShortStoryBoardKey);
+                await Within(context.Board.ApplyTemplateCommand
+                    .Execute(new ApplyTemplateRequest("threeAct", TemplateApplyMode.Append, null)).ToTask());
+                context.Board.Selected = context.Board.Beats[0];
+
+                var view = new BeatBoardView { DataContext = context.Board };
+                var editRoot = new MenuItem { Header = "_Edit" };
+                var other = new Button { Content = "Elsewhere" };
+                var panel = new DockPanel();
+                var bar = new Menu { Items = { editRoot } };
+                DockPanel.SetDock(bar, Dock.Top);
+                DockPanel.SetDock(other, Dock.Bottom);
+                panel.Children.Add(bar);
+                panel.Children.Add(other);
+                panel.Children.Add(view);
+                var window = new Window { Width = 1280, Height = 800, Content = panel };
+                using var menu = EditMenu.Attach(editRoot, window);
+                window.Show();
+                try
+                {
+                    window.UpdateLayout();
+                    var noteField = view.FindControl<Border>("NoteDisplay")!;
+                    var noteEditor = view.FindControl<TextBox>("NoteEditor")!;
+                    noteField.RaiseEvent(new Avalonia.Input.KeyEventArgs
+                        { RoutedEvent = Avalonia.Input.InputElement.KeyDownEvent, Key = Avalonia.Input.Key.Enter });
+                    await PumpUntilAsync(() => noteEditor.IsFocused);
+                    noteEditor.Text = "A note";
+                    noteEditor.SelectAll();
+
+                    // Opening the menu moves focus onto it: the note stays open and Select All is offered.
+                    editRoot.Focus();
+                    editRoot.IsSubMenuOpen = true;
+                    await PumpUntilAsync(() => menu.Target == noteEditor);
+                    Assert.True(noteEditor.IsVisible, "the note editor stays open while the menu has focus");
+                    var selectAll = editRoot.Items.OfType<MenuItem>().Single(i => (string?)i.Header == "Select _All");
+                    Assert.True(selectAll.Command!.CanExecute(null));
+
+                    // Closing the menu and moving on ends the edit as a click away does.
+                    editRoot.IsSubMenuOpen = false;
+                    Assert.True(other.Focus());
+                    await PumpUntilAsync(() => !noteEditor.IsVisible);
+                    Assert.False(noteEditor.IsVisible);
+                    Assert.True(noteField.IsVisible);
+                }
+                finally
+                {
+                    window.Close();
+                }
+            });
+        }
+        finally { DeleteFolder(root); }
+    }
+
     private static void LayoutView(Control view)
     {
         view.ApplyTemplate();

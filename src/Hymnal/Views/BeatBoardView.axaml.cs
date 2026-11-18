@@ -214,6 +214,7 @@ public partial class BeatBoardView : UserControl
     /// <param name="refocus">Put the keyboard back on the field (after Enter or Esc, not after clicking away).</param>
     private void EndEdit(bool revert = false, bool refocus = false)
     {
+        StopMenuFocusWatch();
         if (_editing is not { } editor)
             return;
         _editing = null;
@@ -259,7 +260,47 @@ public partial class BeatBoardView : UserControl
 
     private void Editor_LostFocus(object? sender, FocusChangedEventArgs e)
     {
-        if (ReferenceEquals(sender, _editing))
+        if (!ReferenceEquals(sender, _editing))
+            return;
+        // Opening a menu (Edit → Copy, Paste…) takes focus without leaving the field: keep the edit open so the menu
+        // can act on it, and end it only once focus lands somewhere other than the field or a menu.
+        if (EditMenu.IsInMenu(e.NewFocusedElement as Visual) && TopLevel.GetTopLevel(this) is { } top)
+        {
+            WatchFocusWhileInMenu(top);
+            return;
+        }
+        EndEdit();
+    }
+
+    private TopLevel? _menuFocusWatch;
+
+    protected override void OnDetachedFromVisualTree(VisualTreeAttachmentEventArgs e)
+    {
+        StopMenuFocusWatch();
+        base.OnDetachedFromVisualTree(e);
+    }
+
+    private void WatchFocusWhileInMenu(TopLevel top)
+    {
+        if (_menuFocusWatch != null)
+            return;
+        _menuFocusWatch = top;
+        top.AddHandler(InputElement.GotFocusEvent, MenuFocusWatch_GotFocus, RoutingStrategies.Bubble, handledEventsToo: true);
+    }
+
+    private void StopMenuFocusWatch()
+    {
+        _menuFocusWatch?.RemoveHandler(InputElement.GotFocusEvent, MenuFocusWatch_GotFocus);
+        _menuFocusWatch = null;
+    }
+
+    private void MenuFocusWatch_GotFocus(object? sender, FocusChangedEventArgs e)
+    {
+        var focused = e.Source as Visual;
+        if (EditMenu.IsInMenu(focused))
+            return;
+        StopMenuFocusWatch();
+        if (_editing is { } editor && !ReferenceEquals(focused, editor) && focused?.FindAncestorOfType<TextBox>() != editor)
             EndEdit();
     }
 
