@@ -1,6 +1,7 @@
 <Window xmlns="https://github.com/avaloniaui"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:vm="using:Hymnal.ViewModels"
+        xmlns:shell="using:Hymnal.Shell"
         xmlns:views="clr-namespace:Hymnal.Views"
         xmlns:aiviews="using:Hymnal.Views.Ai"
         xmlns:conv="using:Hymnal.Views.Converters"
@@ -378,31 +379,36 @@
                             MinWidth="48">
                         <Panel>
 
-                            <!-- COLLAPSED: 48px icon rail — visible when neither content area is open -->
-                            <StackPanel Width="48"
-                                        IsVisible="{Binding !IsAnyLeftPaneOpen}"
-                                        Margin="0,8,0,0">
-                                <Button Classes="nav-icon"
-                                        Command="{Binding OpenLeftPaneCommand}" CommandParameter="chapters"
-                                        ToolTip.Tip="{Binding WorkspaceViewModel.Profile.UnitPlural, StringFormat='{}{0} (Ctrl+B)'}">
-                                    <Path Data="M3 12h18M3 6h18M3 18h18"
-                                          Stroke="{DynamicResource Cora.Text.Secondary}"
-                                          StrokeThickness="1.5"
-                                          StrokeLineCap="Round"
-                                          Width="18" Height="18"
-                                          Stretch="Uniform" />
-                                </Button>
-                                <Button Classes="nav-icon"
-                                        Command="{Binding OpenLeftPaneCommand}" CommandParameter="docs"
-                                        ToolTip.Tip="Supplemental docs">
-                                    <Path Data="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8zM14 2v6h6M16 13H8M16 17H8M10 9H8"
-                                          Stroke="{DynamicResource Cora.Text.Secondary}"
-                                          StrokeThickness="1.5"
-                                          StrokeLineCap="Round"
-                                          Width="18" Height="18"
-                                          Stretch="Uniform" />
-                                </Button>
-                            </StackPanel>
+                            <!-- COLLAPSED: 48px icon strip, one button per left-rail panel (LeftRail.Panels) -->
+                            <ItemsControl Width="48"
+                                          IsVisible="{Binding !IsAnyLeftPaneOpen}"
+                                          Margin="0,8,0,0"
+                                          ItemsSource="{Binding LeftRail.Panels}">
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate x:DataType="shell:ShellPanel">
+                                        <Button Classes="nav-icon"
+                                                IsVisible="{Binding IsAvailable}"
+                                                Command="{Binding $parent[Window].((vm:MainWindowViewModel)DataContext).OpenLeftPaneCommand}"
+                                                CommandParameter="{Binding Id}"
+                                                ToolTip.Tip="{Binding ToolTip}">
+                                            <Panel>
+                                                <Path Data="{Binding Icon}"
+                                                      IsVisible="{Binding IconIsStroked}"
+                                                      Stroke="{DynamicResource Cora.Text.Secondary}"
+                                                      StrokeThickness="1.5"
+                                                      StrokeLineCap="Round"
+                                                      Width="18" Height="18"
+                                                      Stretch="Uniform" />
+                                                <Path Data="{Binding Icon}"
+                                                      IsVisible="{Binding !IconIsStroked}"
+                                                      Fill="{DynamicResource Cora.Text.Secondary}"
+                                                      Width="18" Height="18"
+                                                      Stretch="Uniform" />
+                                            </Panel>
+                                        </Button>
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
 
                             <!-- EXPANDED: Outlook-style explorer bar.
                                  Both section headers are ALWAYS visible when the pane is expanded.
@@ -566,54 +572,36 @@
                             BorderThickness="1,0,0,0">
                         <Panel>
 
-                            <!-- COLLAPSED: 48px icon strip — visible when neither pane is open -->
-                            <StackPanel Width="48"
-                                        IsVisible="{Binding !IsAnyRightPaneOpen}"
-                                        Margin="0,8,0,0">
-                                <!-- F3: Chapter Info -->
-                                <Button Classes="nav-icon"
-                                        Command="{Binding OpenRightPaneCommand}" CommandParameter="info"
-                                        ToolTip.Tip="{Binding ChapterInfoViewModel.ToggleToolTip}">
-                                    <Path Data="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-6h2v6zm0-8h-2V7h2v2z"
-                                          Fill="{DynamicResource Cora.Text.Secondary}"
-                                          Width="18" Height="18"
-                                          Stretch="Uniform" />
-                                </Button>
-                                <!-- F7: Beats (story/anthology) -->
-                                <Button Classes="nav-icon"
-                                        IsVisible="{Binding IsBeatsSectionAvailable}"
-                                        Command="{Binding OpenRightPaneCommand}" CommandParameter="beats"
-                                        ToolTip.Tip="Beats (F7)">
-                                    <Path Data="M4 6h16M4 12h10M4 18h13"
-                                          Stroke="{DynamicResource Cora.Text.Secondary}"
-                                          StrokeThickness="1.5"
-                                          StrokeLineCap="Round"
-                                          Width="18" Height="18"
-                                          Stretch="Uniform" />
-                                </Button>
-                                <!-- F4: Notes -->
-                                <Button Classes="nav-icon"
-                                        Command="{Binding OpenRightPaneCommand}" CommandParameter="notes"
-                                        ToolTip.Tip="Notes (F4)">
-                                    <Path Data="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8zM14 2v6h6M16 13H8M16 17H8M10 9H8"
-                                          Stroke="{DynamicResource Cora.Text.Secondary}"
-                                          StrokeThickness="1.5"
-                                          StrokeLineCap="Round"
-                                          Width="18" Height="18"
-                                          Stretch="Uniform" />
-                                </Button>
-                                <!-- AI Chat (Ctrl+Shift+A) -->
-                                <Button Classes="nav-icon"
-                                        Command="{Binding OpenRightPaneCommand}" CommandParameter="chat"
-                                        ToolTip.Tip="AI Chat (Ctrl+Shift+A)">
-                                    <Path Data="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z"
-                                          Stroke="{DynamicResource Cora.Text.Secondary}"
-                                          StrokeThickness="1.5"
-                                          StrokeLineCap="Round"
-                                          Width="18" Height="18"
-                                          Stretch="Uniform" />
-                                </Button>
-                            </StackPanel>
+                            <!-- COLLAPSED: 48px icon strip, one button per right-rail panel (RightRail.Panels) -->
+                            <ItemsControl Width="48"
+                                          IsVisible="{Binding !IsAnyRightPaneOpen}"
+                                          Margin="0,8,0,0"
+                                          ItemsSource="{Binding RightRail.Panels}">
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate x:DataType="shell:ShellPanel">
+                                        <Button Classes="nav-icon"
+                                                IsVisible="{Binding IsAvailable}"
+                                                Command="{Binding $parent[Window].((vm:MainWindowViewModel)DataContext).OpenRightPaneCommand}"
+                                                CommandParameter="{Binding Id}"
+                                                ToolTip.Tip="{Binding ToolTip}">
+                                            <Panel>
+                                                <Path Data="{Binding Icon}"
+                                                      IsVisible="{Binding IconIsStroked}"
+                                                      Stroke="{DynamicResource Cora.Text.Secondary}"
+                                                      StrokeThickness="1.5"
+                                                      StrokeLineCap="Round"
+                                                      Width="18" Height="18"
+                                                      Stretch="Uniform" />
+                                                <Path Data="{Binding Icon}"
+                                                      IsVisible="{Binding !IconIsStroked}"
+                                                      Fill="{DynamicResource Cora.Text.Secondary}"
+                                                      Width="18" Height="18"
+                                                      Stretch="Uniform" />
+                                            </Panel>
+                                        </Button>
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
 
                             <!-- EXPANDED: Outlook-style explorer bar.
                                  Both section headers are ALWAYS visible when the pane is expanded.

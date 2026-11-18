@@ -5,6 +5,7 @@ using Hymnal.Core.Models;
 using Hymnal.Infrastructure;
 using Hymnal.ViewModels.Ai;
 using MattEland.HopeLab.Updates.ReactiveUI;
+using Hymnal.Shell;
 using ReactiveUI;
 using System;
 using System.IO;
@@ -367,31 +368,24 @@ public partial class MainWindowViewModel : ViewModelBase
     private void OpenLeftPane(string pane)
     {
         SetLeftRailCollapsed(false);
-        if (pane == "docs")
-            _supplementalDocsVm.IsVisible = true;
-        else
-            _workspaceVm.IsChaptersPaneVisible = true;
+        LeftRail[LeftRail.Contains(pane) ? pane : "chapters"].Open();
     }
 
     private void OpenRightPane(string pane)
     {
         SetRightRailCollapsed(false);
-        switch (pane)
-        {
-            case "info" when !IsChapterPanelOpen:
-                _chapterInfoVm.ToggleCommand.Execute().Subscribe(_ => { }, _ => { });
-                break;
-            case "beats" when WriteBeatsViewModel is { IsVisible: false } beats:
-                beats.ToggleCommand.Execute().Subscribe(_ => { }, _ => { });
-                break;
-            case "notes" when !_notesVm.IsVisible:
-                _notesVm.ToggleCommand.Execute().Subscribe(_ => { }, _ => { });
-                break;
-            case "chat":
-                AiChatViewModel.IsVisible = true;
-                break;
-        }
+        if (RightRail.Contains(pane))
+            RightRail[pane].Open();
     }
+
+    // The outlined page icon Docs and Notes share.
+    private const string DocumentIcon = "M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8zM14 2v6h6M16 13H8M16 17H8M10 9H8";
+
+    /// <summary>The left rail (the project's list, supplemental docs).</summary>
+    public RailViewModel LeftRail { get; }
+
+    /// <summary>The right rail (info or stats, beats, notes, AI chat).</summary>
+    public RailViewModel RightRail { get; }
 
     private async Task SaveRailFlagAsync(string key, bool value)
     {
@@ -605,19 +599,33 @@ public partial class MainWindowViewModel : ViewModelBase
         Disposables.Add(CloseSettingsCommand.ThrownExceptions
             .Subscribe(ex => notificationService.ShowError($"Failed to close settings: {ex.Message}")));
 
-        // A collapsed rail shows its icon strip whatever panes are open, and expanding it brings them back.
-        _isAnyLeftPaneOpen = Observable.CombineLatest(
-                workspaceViewModel.WhenAnyValue(x => x.IsChaptersPaneVisible),
-                supplementalDocsViewModel.WhenAnyValue(x => x.IsVisible),
-                this.WhenAnyValue(x => x.IsLeftRailCollapsed),
-                (chapters, docs, collapsed) => (chapters || docs) && !collapsed)
-            .ToProperty(this, x => x.IsAnyLeftPaneOpen);
+        // The left rail: the project's list, then its supplemental docs. A collapsed rail shows its icon strip
+        // whatever panes are open, and expanding it brings them back.
+        LeftRail = new RailViewModel(RailSide.Left,
+        [
+            new ShellPanel("chapters", RailSide.Left, workspaceViewModel.WhenAnyValue(x => x.IsChaptersPaneVisible),
+                open: () => workspaceViewModel.IsChaptersPaneVisible = true,
+                toggle: () => workspaceViewModel.IsChaptersPaneVisible = !workspaceViewModel.IsChaptersPaneVisible,
+                toolTip: workspaceViewModel.WhenAnyValue(x => x.Profile).Select(p => $"{p.UnitPlural} (Ctrl+B)"))
+            {
+                IconData = "M3 12h18M3 6h18M3 18h18",
+            },
+            new ShellPanel("docs", RailSide.Left, supplementalDocsViewModel.WhenAnyValue(x => x.IsVisible),
+                open: () => supplementalDocsViewModel.IsVisible = true,
+                toggle: () => supplementalDocsViewModel.IsVisible = !supplementalDocsViewModel.IsVisible,
+                toolTip: Observable.Return("Supplemental docs"))
+            {
+                IconData = DocumentIcon,
+            },
+        ], this.WhenAnyValue(x => x.IsLeftRailCollapsed));
+        Disposables.Add(LeftRail);
+        foreach (var panel in LeftRail.Panels)
+            Disposables.Add(panel);
+
+        _isAnyLeftPaneOpen = LeftRail.WhenAnyValue(x => x.IsAnyOpen).ToProperty(this, x => x.IsAnyLeftPaneOpen);
         Disposables.Add(_isAnyLeftPaneOpen);
 
-        _isBothLeftPanesOpen = Observable.CombineLatest(
-                workspaceViewModel.WhenAnyValue(x => x.IsChaptersPaneVisible),
-                supplementalDocsViewModel.WhenAnyValue(x => x.IsVisible),
-                (chapters, docs) => chapters && docs)
+        _isBothLeftPanesOpen = LeftRail.WhenAnyValue(x => x.OpenCount).Select(n => n >= 2)
             .ToProperty(this, x => x.IsBothLeftPanesOpen);
         Disposables.Add(_isBothLeftPanesOpen);
 
@@ -782,14 +790,47 @@ public partial class MainWindowViewModel : ViewModelBase
         _isBeatsPanelOpen = beatsOpenObs.ToProperty(this, x => x.IsBeatsPanelOpen);
         Disposables.Add(_isBeatsPanelOpen);
 
-        _isAnyRightPaneOpen = Observable.CombineLatest(
-                chapterPanelOpenObs,
-                NotesViewModel.WhenAnyValue(x => x.IsVisible),
-                AiChatViewModel.WhenAnyValue(x => x.IsVisible),
-                beatsOpenObs,
-                this.WhenAnyValue(x => x.IsRightRailCollapsed),
-                (chPanel, notes, ai, beats, collapsed) => (chPanel || notes || ai || beats) && !collapsed)
-            .ToProperty(this, x => x.IsAnyRightPaneOpen);
+        // The right rail, top to bottom: the chapter's info (or the book's stats), the story's beats, notes, AI chat.
+        static void Run(ReactiveCommand<System.Reactive.Unit, System.Reactive.Unit> command) =>
+            command.Execute().Subscribe(_ => { }, _ => { });
+        RightRail = new RailViewModel(RailSide.Right,
+        [
+            new ShellPanel("info", RailSide.Right, chapterPanelOpenObs,
+                open: () => Run(chapterInfoViewModel.ToggleCommand),
+                toggle: () => Run(chapterInfoViewModel.ToggleCommand),
+                toolTip: chapterInfoViewModel.WhenAnyValue(x => x.ToggleToolTip))
+            {
+                IconData = "M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-6h2v6zm0-8h-2V7h2v2z",
+                IconIsStroked = false,
+            },
+            new ShellPanel("beats", RailSide.Right, beatsOpenObs,
+                open: () => { if (WriteBeatsViewModel is { IsVisible: false } beats) Run(beats.ToggleCommand); },
+                toggle: () => { if (WriteBeatsViewModel is { } beats) Run(beats.ToggleCommand); },
+                toolTip: Observable.Return("Beats (F7)"),
+                isAvailable: this.WhenAnyValue(x => x.IsBeatsSectionAvailable))
+            {
+                IconData = "M4 6h16M4 12h10M4 18h13",
+            },
+            new ShellPanel("notes", RailSide.Right, NotesViewModel.WhenAnyValue(x => x.IsVisible),
+                open: () => Run(_notesVm.ToggleCommand),
+                toggle: () => Run(_notesVm.ToggleCommand),
+                toolTip: Observable.Return("Notes (F4)"))
+            {
+                IconData = DocumentIcon,
+            },
+            new ShellPanel("chat", RailSide.Right, AiChatViewModel.WhenAnyValue(x => x.IsVisible),
+                open: () => AiChatViewModel.IsVisible = true,
+                toggle: () => AiChatViewModel.IsVisible = !AiChatViewModel.IsVisible,
+                toolTip: Observable.Return("AI Chat (Ctrl+Shift+A)"))
+            {
+                IconData = "M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z",
+            },
+        ], this.WhenAnyValue(x => x.IsRightRailCollapsed));
+        Disposables.Add(RightRail);
+        foreach (var panel in RightRail.Panels)
+            Disposables.Add(panel);
+
+        _isAnyRightPaneOpen = RightRail.WhenAnyValue(x => x.IsAnyOpen).ToProperty(this, x => x.IsAnyRightPaneOpen);
 
         ToggleRightRailCommand = ReactiveCommand.Create(() =>
         {
@@ -803,50 +844,27 @@ public partial class MainWindowViewModel : ViewModelBase
         ToggleRightPaneCommand = ReactiveCommand.Create<string>(pane =>
         {
             if (IsRightRailCollapsed)
-            {
                 OpenRightPane(pane);
-                return;
-            }
-            switch (pane)
-            {
-                case "info": _chapterInfoVm.ToggleCommand.Execute().Subscribe(_ => { }, _ => { }); break;
-                case "beats": WriteBeatsViewModel?.ToggleCommand.Execute().Subscribe(_ => { }, _ => { }); break;
-                case "notes": _notesVm.ToggleCommand.Execute().Subscribe(_ => { }, _ => { }); break;
-                case "chat": AiChatViewModel.IsVisible = !AiChatViewModel.IsVisible; break;
-            }
+            else if (RightRail.Contains(pane))
+                RightRail[pane].Toggle();
         });
 
         // Whatever opens a pane (a shortcut, the Beats panel's own links, a reset) also expands its rail.
-        void ExpandWhenShown(IObservable<bool> shown, Action expand) =>
-            Disposables.Add(shown.Skip(1).Where(v => v).Subscribe(_ => expand()));
-        ExpandWhenShown(workspaceViewModel.WhenAnyValue(x => x.IsChaptersPaneVisible),
-            () => { if (IsLeftRailCollapsed) SetLeftRailCollapsed(false); });
-        ExpandWhenShown(supplementalDocsViewModel.WhenAnyValue(x => x.IsVisible),
-            () => { if (IsLeftRailCollapsed) SetLeftRailCollapsed(false); });
-        foreach (var shown in new[] { chapterInfoViewModel.WhenAnyValue(x => x.IsVisible), NotesViewModel.WhenAnyValue(x => x.IsVisible),
-                     AiChatViewModel.WhenAnyValue(x => x.IsVisible), beatsOpenObs })
-            ExpandWhenShown(shown, () => { if (IsRightRailCollapsed) SetRightRailCollapsed(false); });
+        foreach (var panel in LeftRail.Panels)
+            Disposables.Add(panel.WhenAnyValue(x => x.IsOpen).Skip(1).Where(open => open)
+                .Subscribe(_ => { if (IsLeftRailCollapsed) SetLeftRailCollapsed(false); }));
+        foreach (var panel in RightRail.Panels)
+            Disposables.Add(panel.WhenAnyValue(x => x.IsOpen).Skip(1).Where(open => open)
+                .Subscribe(_ => { if (IsRightRailCollapsed) SetRightRailCollapsed(false); }));
         _ = RestoreRailStateAsync();
         Disposables.Add(_isAnyRightPaneOpen);
 
-        _isInfoBeatsSplitterVisible = Observable.CombineLatest(
-                chapterPanelOpenObs, beatsOpenObs, (chPanel, beats) => chPanel && beats)
-            .ToProperty(this, x => x.IsInfoBeatsSplitterVisible);
+        // A splitter shows below a section when the next one is open and something above it is open too.
+        _isInfoBeatsSplitterVisible = RightRail.SplitterBelow("info").ToProperty(this, x => x.IsInfoBeatsSplitterVisible);
         Disposables.Add(_isInfoBeatsSplitterVisible);
-
-        _isAboveNotesSplitterVisible = Observable.CombineLatest(
-                chapterPanelOpenObs,
-                beatsOpenObs,
-                NotesViewModel.WhenAnyValue(x => x.IsVisible),
-                (chPanel, beats, notes) => notes && (chPanel || beats))
-            .ToProperty(this, x => x.IsAboveNotesSplitterVisible);
+        _isAboveNotesSplitterVisible = RightRail.SplitterBelow("beats").ToProperty(this, x => x.IsAboveNotesSplitterVisible);
         Disposables.Add(_isAboveNotesSplitterVisible);
-
-        _isNotesChatSplitterVisible = Observable.CombineLatest(
-                NotesViewModel.WhenAnyValue(x => x.IsVisible),
-                AiChatViewModel.WhenAnyValue(x => x.IsVisible),
-                (notes, ai) => notes && ai)
-            .ToProperty(this, x => x.IsNotesChatSplitterVisible);
+        _isNotesChatSplitterVisible = RightRail.SplitterBelow("notes").ToProperty(this, x => x.IsNotesChatSplitterVisible);
         Disposables.Add(_isNotesChatSplitterVisible);
 
         _isEditorChapterBarVisible = Observable.CombineLatest(
