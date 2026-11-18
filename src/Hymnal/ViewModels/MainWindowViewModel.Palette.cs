@@ -10,8 +10,8 @@ using ReactiveUI;
 
 namespace Hymnal.ViewModels;
 
-// The command palette's entries: every command the menus, mode tabs and shortcuts offer that can run right
-// now, and every place in the open project the palette can go to.
+// The command palette's entries: every catalog command (MainWindowViewModel.Commands.cs) that can run right now,
+// the themes, and every place in the open project the palette can go to.
 public partial class MainWindowViewModel
 {
     /// <summary>The command palette shown over the window (Ctrl+P / Ctrl+Shift+P).</summary>
@@ -35,6 +35,16 @@ public partial class MainWindowViewModel
         PlanHostViewModel?.ShowDetails();
     }
 
+    private ReactiveCommand<Unit, Unit>? _showCollectionDetailsCommand;
+    private ReactiveCommand<Unit, Unit>? _openBookTxtCommand;
+
+    /// <summary><see cref="ShowCollectionDetails"/> as a command, for the command catalog.</summary>
+    public ReactiveCommand<Unit, Unit> ShowCollectionDetailsCommand =>
+        _showCollectionDetailsCommand ??= ReactiveCommand.Create(ShowCollectionDetails);
+
+    /// <summary><see cref="OpenBookTxt"/> as a command, for the command catalog.</summary>
+    public ReactiveCommand<Unit, Unit> OpenBookTxtCommand => _openBookTxtCommand ??= ReactiveCommand.Create(OpenBookTxt);
+
     /// <summary>Opens Book.txt, the raw list, in Write.</summary>
     public void OpenBookTxt()
     {
@@ -55,89 +65,23 @@ public partial class MainWindowViewModel
 
     private void AddCommandEntries(List<PaletteEntry> entries)
     {
-        // Only what can run now goes in, so the palette never offers a command that would do nothing.
-        void Add(string id, string category, string title, ICommand command, object? parameter = null,
-            string? shortcut = null, string? detail = null)
+        // The catalog's commands that can run now, so the palette never offers a command that would do nothing.
+        foreach (var shell in ShellCommands)
         {
-            if (!command.CanExecute(parameter))
-                return;
-            entries.Add(new PaletteEntry($"command:{id}", PaletteEntryKind.Command, title, category, detail, shortcut,
+            if (!shell.InPalette || !shell.IsAvailable() || shell.IsOfferedInPalette?.Invoke() == false)
+                continue;
+            var command = shell.Command();
+            var parameter = shell.Parameter;
+            if (command == null || !command.CanExecute(parameter))
+                continue;
+            entries.Add(new PaletteEntry($"command:{shell.Id}", PaletteEntryKind.Command, shell.CurrentPaletteTitle,
+                shell.Category, shell.Detail, shell.Shortcut,
                 () =>
                 {
                     command.Execute(parameter);
                     return Task.CompletedTask;
                 }));
         }
-
-        var hasWorkspace = WorkspaceViewModel.HasWorkspace;
-
-        Add("open-workspace", "File", "Open Workspace…", WorkspaceViewModel.OpenWorkspaceCommand);
-        if (hasWorkspace)
-            Add("close-workspace", "File", "Close Workspace", WorkspaceViewModel.CloseWorkspaceCommand);
-        if (EditorViewModel.IsDirty)
-            Add("save", "File", "Save", EditorViewModel.SaveCommand, shortcut: "Ctrl+S");
-        Add("settings", "File", "Settings", OpenSettingsCommand, shortcut: "Ctrl+,");
-        Add("exit", "File", "Exit", ExitCommand);
-
-        Add("mode-research", "Mode", "Go to Research", SelectResearchCommand);
-        if (IsIdeasModeAvailable)
-            Add("mode-ideas", "Mode", "Go to Ideas", SelectIdeasCommand);
-        Add("mode-plan", "Mode", "Go to Plan", SelectPlanCommand);
-        Add("mode-write", "Mode", "Go to Write", SelectWriteCommand);
-        Add("mode-manage", "Mode", "Go to Manage", SelectManageCommand);
-
-        Add("toggle-left-rail", "View", "Toggle Left Sidebar", ToggleSidebarCommand, shortcut: "Ctrl+B");
-        Add("toggle-right-rail", "View", "Toggle Right Sidebar", ToggleRightRailCommand, shortcut: "Ctrl+Alt+B");
-        Add("toggle-info", "View", ChapterInfoViewModel.ToggleMenuHeader.Replace("_", ""), ToggleRightPaneCommand,
-            "info", "F3");
-        Add("toggle-notes", "View", "Toggle Notes", ToggleRightPaneCommand, "notes", "F4");
-        if (IsBeatsSectionAvailable)
-            Add("toggle-beats", "View", "Toggle Beats", ToggleRightPaneCommand, "beats", "F7");
-        Add("toggle-chat", "View", "Toggle AI Chat", ToggleRightPaneCommand, "chat", "Ctrl+Shift+A");
-        Add("toggle-manage", "View", "Toggle Manage View", ToggleGanttCommand, shortcut: "F5");
-        Add("focus-mode", "View", IsFocusMode ? "Leave Focus Mode" : "Focus Mode", ToggleFocusModeCommand,
-            shortcut: "F11");
-        if (WritingRun != null)
-        {
-            Add("run-start", "Run", "New Run…", WritingRun.OpenCommand, shortcut: "Ctrl+Alt+R");
-            Add("run-end", "Run", "End Run", WritingRun.EndCommand);
-            Add("run-logbook", "Run", "Logbook…", WritingRun.ShowLogbookCommand, shortcut: "Ctrl+Alt+L");
-        }
-        if (EditorViewModel.IsPreviewAvailable)
-        {
-            Add("preview-write", "View", "Markua Preview: Write Only", EditorViewModel.SetViewModeCommand,
-                EditorViewMode.Write);
-            Add("preview-split", "View", "Markua Preview: Split Write and Preview", EditorViewModel.SetViewModeCommand,
-                EditorViewMode.Split);
-            Add("preview-only", "View", "Markua Preview: Preview Only", EditorViewModel.SetViewModeCommand,
-                EditorViewMode.Preview);
-            Add("preview-cycle", "View", "Markua Preview: Cycle Mode", EditorViewModel.CycleViewModeCommand,
-                shortcut: "F6");
-        }
-        if (SoundPreferences != null)
-            Add("toggle-sound", "View", SoundPreferences.SoundEnabled ? "Turn Sound Off" : "Turn Sound On",
-                ToggleSoundCommand);
-        Add("reset-write-layout", "View", "Reset Write Layout", ResetWriteLayoutCommand);
-
-        // Insert: the Insert menu's Markua snippets, while an editor's source is on screen.
-        foreach (var snippet in MarkuaSnippets.All)
-            Add($"insert-{snippet.Id}", "Insert", snippet.PaletteTitle, EditorViewModel.InsertSnippetCommand, snippet,
-                snippet.Shortcut?.Display, snippet.Syntax);
-
-        if (WorkspaceViewModel.FocusedStory != null)
-            Add("show-whole-collection", "View", $"Show the Whole {WorkspaceViewModel.Profile.CollectionNoun}",
-                WorkspaceViewModel.ShowWholeCollectionCommand);
-
-        if (IsIdeasModeAvailable)
-            Add("capture-idea", "Ideas", "Capture an Idea…", QuickCaptureIdeaCommand, shortcut: "Ctrl+Shift+I");
-
-        if (hasWorkspace && PlanHostViewModel?.Details != null)
-            entries.Add(Run("collection-details", "Plan",
-                $"{WorkspaceViewModel.Profile.CollectionNoun} Details", ShowCollectionDetails));
-        if (hasWorkspace)
-            entries.Add(Run("open-book-txt", "File", "Open Book.txt", OpenBookTxt));
-
-        Add("about", "Help", "About Hymnal", ShowAboutCommand, shortcut: "F1");
 
         // Themes last: there are many, and the query ("theme", "mordor", "dark") finds them.
         if (_themes != null)
@@ -153,14 +97,6 @@ public partial class MainWindowViewModel
             }
         }
     }
-
-    private static PaletteEntry Run(string id, string category, string title, Action action) =>
-        new($"command:{id}", PaletteEntryKind.Command, title, category, null, null,
-            () =>
-            {
-                action();
-                return Task.CompletedTask;
-            });
 
     private void AddDestinationEntries(List<PaletteEntry> entries)
     {

@@ -134,29 +134,12 @@ public sealed class RunViewsTests
     public void MainWindow_wires_the_run_button_shortcuts_menus_hud_overlay_and_atmosphere()
     {
         var axaml = System.IO.File.ReadAllText(FindRepositoryFile("src/Hymnal/Views/MainWindow.axaml"));
-        Assert.Contains("<KeyBinding Gesture=\"Ctrl+Alt+R\" Command=\"{Binding WritingRun.OpenCommand}\" />", axaml);
-        Assert.Contains("<KeyBinding Gesture=\"Ctrl+Alt+L\" Command=\"{Binding WritingRun.ShowLogbookCommand}\" />", axaml);
         Assert.Contains("x:Name=\"PART_RunButton\"", axaml);
         Assert.Contains("<views:RunHudView", axaml);
         Assert.Contains("<views:RunOverlayView", axaml);
         Assert.Contains("<controls:RunAtmosphereLayer", axaml);
 
-        // The menu bar: File, View, Go, Insert, Run, Tools, Help, and View holds only view toggles.
-        string[] order = ["Header=\"_File\"", "Header=\"_View\"", "Header=\"_Go\"", "x:Name=\"PART_InsertMenu\"",
-            "Header=\"_Run\"", "Header=\"_Tools\"", "Header=\"_Help\""];
-        var positions = order.Select(h => axaml.IndexOf(h, StringComparison.Ordinal)).ToList();
-        Assert.All(positions, p => Assert.True(p >= 0));
-        Assert.Equal(positions.OrderBy(p => p), positions);
-
-        var view = axaml[positions[1]..positions[2]];
-        foreach (var misplaced in new[] { "ShowGoToCommand", "ShowCommandsCommand", "PART_SpellingMenu", "PART_SoundMenuItem", "WritingRun" })
-            Assert.DoesNotContain(misplaced, view);
-        var run = axaml[positions[4]..positions[5]];
-        Assert.Contains("Header=\"_New Run…\"", run);
-        Assert.Contains("Header=\"_Logbook…\"", run);
-        var tools = axaml[positions[5]..positions[6]];
-        Assert.Contains("PART_SpellingMenu", tools);
-        Assert.Contains("PART_SoundMenuItem", tools);
+        // The Run menu, its shortcuts and the menu bar's order come from the command catalog (ShellMenuTests).
     }
 
     [Fact]

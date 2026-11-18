@@ -441,13 +441,6 @@ public partial class MainWindowViewModel : ViewModelBase
     /// <summary>True when either the Notes or the top-right panel is visible.</summary>
     public bool IsAnyRightPaneOpen => _isAnyRightPaneOpen.Value;
 
-    private readonly ObservableAsPropertyHelper<bool> _isBothRightPanesOpen;
-    /// <summary>True when two or more right-rail panels have open content.</summary>
-    public bool IsBothRightPanesOpen => _isBothRightPanesOpen.Value;
-
-    private readonly ObservableAsPropertyHelper<bool> _isInfoNotesSplitterVisible;
-    /// <summary>True when both Info and Notes content areas are open (shows the splitter between them).</summary>
-    public bool IsInfoNotesSplitterVisible => _isInfoNotesSplitterVisible.Value;
 
     private readonly ObservableAsPropertyHelper<bool> _isBeatsSectionAvailable;
     /// <summary>True when the right rail has a Beats section: a story or anthology is open.</summary>
@@ -835,22 +828,6 @@ public partial class MainWindowViewModel : ViewModelBase
             ExpandWhenShown(shown, () => { if (IsRightRailCollapsed) SetRightRailCollapsed(false); });
         _ = RestoreRailStateAsync();
         Disposables.Add(_isAnyRightPaneOpen);
-
-        _isBothRightPanesOpen = Observable.CombineLatest(
-                chapterPanelOpenObs,
-                NotesViewModel.WhenAnyValue(x => x.IsVisible),
-                AiChatViewModel.WhenAnyValue(x => x.IsVisible),
-                beatsOpenObs,
-                (chPanel, notes, ai, beats) => (chPanel ? 1 : 0) + (notes ? 1 : 0) + (ai ? 1 : 0) + (beats ? 1 : 0) >= 2)
-            .ToProperty(this, x => x.IsBothRightPanesOpen);
-        Disposables.Add(_isBothRightPanesOpen);
-
-        _isInfoNotesSplitterVisible = Observable.CombineLatest(
-                chapterPanelOpenObs,
-                NotesViewModel.WhenAnyValue(x => x.IsVisible),
-                (chPanel, notes) => chPanel && notes)
-            .ToProperty(this, x => x.IsInfoNotesSplitterVisible);
-        Disposables.Add(_isInfoNotesSplitterVisible);
 
         _isInfoBeatsSplitterVisible = Observable.CombineLatest(
                 chapterPanelOpenObs, beatsOpenObs, (chPanel, beats) => chPanel && beats)

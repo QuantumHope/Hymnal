@@ -46,14 +46,16 @@ public sealed class EditorPreviewSmokeTests
     public void F6_CyclesPreviewMode_AndIsBoundOnlyOnce()
     {
         var mainWindow = File.ReadAllText(FindRepositoryFile("src/Hymnal/Views/MainWindow.axaml"));
-        Assert.Contains("<KeyBinding Gesture=\"F6\" Command=\"{Binding EditorViewModel.CycleViewModeCommand}\" />", mainWindow);
-        Assert.Contains("Header=\"Markua _Preview\"", mainWindow);
+        var catalog = File.ReadAllText(FindRepositoryFile("src/Hymnal/ViewModels/MainWindowViewModel.Commands.cs"));
+        Assert.Contains("() => EditorViewModel.CycleViewModeCommand)", catalog);
+        Assert.Contains("Submenu = \"Markua _Preview\"", catalog);
+        Assert.Equal(1, Regex.Matches(catalog, "Gesture = \"F6\"").Count);
 
         var views = Path.GetDirectoryName(FindRepositoryFile("src/Hymnal/Views/MainWindow.axaml"))!;
         var count = 0;
         foreach (var file in Directory.EnumerateFiles(views, "*.axaml", SearchOption.AllDirectories))
             count += Regex.Matches(File.ReadAllText(file), "<KeyBinding Gesture=\"F6\"").Count;
-        Assert.Equal(1, count);
+        Assert.Equal(0, count); // the catalog binds it
     }
 
     private static string FindRepositoryFile(string relativePath)

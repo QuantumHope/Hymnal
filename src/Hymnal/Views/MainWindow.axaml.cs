@@ -26,10 +26,42 @@ public partial class MainWindow : Window
     private bool _suppressLayoutCapture;
     private readonly Subject<Unit> _layoutChangedSubject = new();
 
+    // The key bindings generated from the command catalog, removed again when the data context changes.
+    private readonly System.Collections.Generic.List<KeyBinding> _shellKeyBindings = [];
+
+    /// <summary>
+    /// Builds the menu bar and binds the gestures from the view model's command catalog
+    /// (<see cref="MainWindowViewModel.ShellCommands"/>). The Escape stack stays in the AXAML.
+    /// </summary>
+    private void ApplyShellCommands(MainWindowViewModel? vm)
+    {
+        foreach (var binding in _shellKeyBindings)
+            KeyBindings.Remove(binding);
+        _shellKeyBindings.Clear();
+        PART_MainMenu.Items.Clear();
+        if (vm == null)
+            return;
+
+        ShellMenu.Populate(PART_MainMenu, vm.ShellCommands);
+        foreach (var shell in vm.ShellCommands)
+        {
+            if (shell.Gesture == null || !shell.BindsKey)
+                continue;
+            var command = (shell.KeyCommand ?? shell.Command)();
+            if (command == null)
+                continue;
+            var binding = new KeyBinding
+            {
+                Gesture = KeyGesture.Parse(shell.Gesture), Command = command, CommandParameter = shell.Parameter!,
+            };
+            KeyBindings.Add(binding);
+            _shellKeyBindings.Add(binding);
+        }
+    }
+
     public MainWindow()
     {
         InitializeComponent();
-        InsertMenu.Populate(PART_InsertMenu);
 
         Closing += OnClosingFlushPendingEdits;
 
@@ -60,6 +92,7 @@ public partial class MainWindow : Window
         DataContextChanged += (_, _) =>
         {
             _layoutDisposables.Clear();
+            ApplyShellCommands(DataContext as MainWindowViewModel);
 
             if (DataContext is MainWindowViewModel vm)
             {

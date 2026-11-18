@@ -180,8 +180,9 @@ public sealed class TypingSoundHookTests
 
         Assert.Contains("PlaysTypingSounds=\"True\"", mainWindow);
         Assert.DoesNotContain("PlaysTypingSounds", research);
-        Assert.Contains("Command=\"{Binding ToggleSoundCommand}\"", mainWindow);
-        Assert.Contains("IsChecked=\"{Binding SoundPreferences.SoundEnabled, Mode=OneWay}\"", mainWindow);
+        var catalog = File.ReadAllText(FindRepositoryFile("src/Hymnal/ViewModels/MainWindowViewModel.Commands.cs"));
+        Assert.Contains("() => ToggleSoundCommand)", catalog);
+        Assert.Contains("IsChecked = () => SoundPreferences?.SoundEnabled == true", catalog);
     }
 
     [Fact]

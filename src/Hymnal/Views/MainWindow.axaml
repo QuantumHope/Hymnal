@@ -173,32 +173,12 @@
     </Window.Styles>
 
     <Window.KeyBindings>
-        <!-- Ctrl+B is bold while the editor has focus: this command stands down then, so the key reaches it. -->
-        <KeyBinding Gesture="Ctrl+B" Command="{Binding ToggleSidebarShortcutCommand}" />
-        <KeyBinding Gesture="Ctrl+Alt+B" Command="{Binding ToggleRightRailCommand}" />
-        <KeyBinding Gesture="Ctrl+OemComma" Command="{Binding OpenSettingsCommand}" />
-        <KeyBinding Gesture="Ctrl+Shift+A" Command="{Binding ToggleRightPaneCommand}" CommandParameter="chat" />
-        <KeyBinding Gesture="F1" Command="{Binding ShowAboutCommand}" />
-        <KeyBinding Gesture="F3" Command="{Binding ToggleRightPaneCommand}" CommandParameter="info" />
-        <KeyBinding Gesture="F4" Command="{Binding ToggleRightPaneCommand}" CommandParameter="notes" />
-        <KeyBinding Gesture="F5" Command="{Binding ToggleGanttCommand}" />
-        <KeyBinding Gesture="F6" Command="{Binding EditorViewModel.CycleViewModeCommand}" />
-        <KeyBinding Gesture="F7" Command="{Binding ToggleRightPaneCommand}" CommandParameter="beats" />
-        <KeyBinding Gesture="Shift+F7" Command="{Binding EditorViewModel.Spelling.CheckSpellingCommand}" />
-        <KeyBinding Gesture="F8" Command="{Binding EditorViewModel.Spelling.NextIssueCommand}" />
-        <KeyBinding Gesture="Shift+F8" Command="{Binding EditorViewModel.Spelling.PreviousIssueCommand}" />
-        <KeyBinding Gesture="F11" Command="{Binding ToggleFocusModeCommand}" />
-        <KeyBinding Gesture="Ctrl+Alt+R" Command="{Binding WritingRun.OpenCommand}" />
-        <KeyBinding Gesture="Ctrl+Alt+L" Command="{Binding WritingRun.ShowLogbookCommand}" />
-        <!-- Esc closes the command palette or a run's start card or recap first; ExitFocusModeCommand can't run
-             while any of them is open. -->
+        <!-- Every other binding comes from the command catalog (MainWindowViewModel.ShellCommands),
+             added by MainWindow.ApplyShellCommands. Escape closes the topmost thing that is open. -->
         <KeyBinding Gesture="Escape" Command="{Binding CommandPalette.CloseCommand}" />
         <KeyBinding Gesture="Escape" Command="{Binding WritingRun.CancelCommand}" />
         <KeyBinding Gesture="Escape" Command="{Binding WritingRun.DoneCommand}" />
         <KeyBinding Gesture="Escape" Command="{Binding ExitFocusModeCommand}" />
-        <KeyBinding Gesture="Ctrl+Shift+I" Command="{Binding QuickCaptureIdeaCommand}" />
-        <KeyBinding Gesture="Ctrl+P" Command="{Binding ShowGoToCommand}" />
-        <KeyBinding Gesture="Ctrl+Shift+P" Command="{Binding ShowCommandsCommand}" />
     </Window.KeyBindings>
 
     <!-- Row 0 is Auto (its bar is 48 high) so focus mode, which hides the bar, gives the text the whole window. -->
@@ -214,150 +194,13 @@
                 BorderThickness="0,0,0,1">
             <Grid ColumnDefinitions="Auto,*,Auto">
                 <!-- Left: application menu -->
-                <Menu Grid.Column="0"
+                <!-- The menu bar; ShellMenu.Populate fills it from the command catalog. -->
+                <Menu x:Name="PART_MainMenu"
+                      Grid.Column="0"
                       Background="Transparent"
                       Foreground="{DynamicResource Cora.Text}"
                       Padding="4,2"
-                      VerticalAlignment="Center">
-                    <MenuItem Header="_File" Foreground="{DynamicResource Cora.Text}">
-                        <MenuItem Header="_Open Workspace…"
-                                  Command="{Binding WorkspaceViewModel.OpenWorkspaceCommand}" />
-                        <MenuItem Header="_Close Workspace"
-                                  Command="{Binding WorkspaceViewModel.CloseWorkspaceCommand}" />
-                        <Separator />
-                        <MenuItem Header="_Save"
-                                  Command="{Binding EditorViewModel.SaveCommand}"
-                                  InputGesture="Ctrl+S" />
-                        <MenuItem Header="New _Idea…"
-                                  IsVisible="{Binding IsIdeasModeAvailable}"
-                                  Command="{Binding QuickCaptureIdeaCommand}"
-                                  InputGesture="Ctrl+Shift+I" />
-                        <Separator />
-                        <MenuItem Header="E_xit"
-                                  Command="{Binding ExitCommand}" />
-                    </MenuItem>
-                    <MenuItem Header="_View" Foreground="{DynamicResource Cora.Text}">
-                        <MenuItem Header="Toggle _Left Sidebar"
-                                  Command="{Binding ToggleSidebarCommand}"
-                                  InputGesture="Ctrl+B" />
-                        <MenuItem Header="Toggle _Right Sidebar"
-                                  Command="{Binding ToggleRightRailCommand}"
-                                  InputGesture="Ctrl+Alt+B" />
-                        <MenuItem Header="{Binding ChapterInfoViewModel.ToggleMenuHeader}"
-                                  Command="{Binding ToggleRightPaneCommand}" CommandParameter="info"
-                                  InputGesture="F3" />
-                        <MenuItem Header="Toggle _Notes"
-                                  Command="{Binding ToggleRightPaneCommand}" CommandParameter="notes"
-                                  InputGesture="F4" />
-                        <MenuItem Header="Toggle _Manage View"
-                                  Command="{Binding ToggleGanttCommand}"
-                                  InputGesture="F5" />
-                        <MenuItem Header="Toggle _Beats"
-                                  IsVisible="{Binding IsBeatsSectionAvailable}"
-                                  Command="{Binding ToggleRightPaneCommand}" CommandParameter="beats"
-                                  InputGesture="F7" />
-                        <MenuItem Header="Toggle _AI Chat"
-                                  Command="{Binding ToggleRightPaneCommand}" CommandParameter="chat"
-                                  InputGesture="Ctrl+Shift+A" />
-                        <Separator />
-                        <MenuItem Header="_Focus Mode"
-                                  Command="{Binding ToggleFocusModeCommand}"
-                                  InputGesture="F11" />
-                        <MenuItem Header="Markua _Preview">
-                            <MenuItem Header="_Write Only"
-                                      Command="{Binding EditorViewModel.SetViewModeCommand}"
-                                      CommandParameter="{x:Static vm:EditorViewMode.Write}" />
-                            <MenuItem Header="_Split: Write and Preview"
-                                      Command="{Binding EditorViewModel.SetViewModeCommand}"
-                                      CommandParameter="{x:Static vm:EditorViewMode.Split}" />
-                            <MenuItem Header="_Preview Only"
-                                      Command="{Binding EditorViewModel.SetViewModeCommand}"
-                                      CommandParameter="{x:Static vm:EditorViewMode.Preview}" />
-                            <Separator />
-                            <MenuItem Header="_Cycle Mode"
-                                      Command="{Binding EditorViewModel.CycleViewModeCommand}"
-                                      InputGesture="F6" />
-                        </MenuItem>
-                        <Separator />
-                        <MenuItem Header="_Reset Write Layout"
-                                  Command="{Binding ResetWriteLayoutCommand}" />
-                    </MenuItem>
-                    <MenuItem Header="_Go" Foreground="{DynamicResource Cora.Text}">
-                        <MenuItem Header="_Go To…"
-                                  Command="{Binding ShowGoToCommand}"
-                                  InputGesture="Ctrl+P" />
-                        <MenuItem Header="_Command Palette…"
-                                  Command="{Binding ShowCommandsCommand}"
-                                  InputGesture="Ctrl+Shift+P" />
-                        <Separator />
-                        <MenuItem Header="_Research" Command="{Binding SelectResearchCommand}" />
-                        <MenuItem Header="_Ideas" Command="{Binding SelectIdeasCommand}"
-                                  IsVisible="{Binding IsIdeasModeAvailable}" />
-                        <MenuItem Header="_Plan" Command="{Binding SelectPlanCommand}" />
-                        <MenuItem Header="_Write" Command="{Binding SelectWriteCommand}" />
-                        <MenuItem Header="_Manage" Command="{Binding SelectManageCommand}" />
-                    </MenuItem>
-                    <!-- Markua snippets; InsertMenu.Populate fills it from MarkuaSnippets. -->
-                    <MenuItem x:Name="PART_InsertMenu" Header="_Insert" Foreground="{DynamicResource Cora.Text}" />
-                    <MenuItem Header="_Run" Foreground="{DynamicResource Cora.Text}">
-                        <MenuItem Header="_New Run…"
-                                  Command="{Binding WritingRun.OpenCommand}"
-                                  InputGesture="Ctrl+Alt+R" />
-                        <MenuItem Header="_End Run"
-                                  IsVisible="{Binding WritingRun.IsRunning, FallbackValue=False}"
-                                  Command="{Binding WritingRun.EndCommand}" />
-                        <Separator />
-                        <MenuItem Header="_Logbook…"
-                                  Command="{Binding WritingRun.ShowLogbookCommand}"
-                                  InputGesture="Ctrl+Alt+L" />
-                    </MenuItem>
-                    <MenuItem Header="_Tools" Foreground="{DynamicResource Cora.Text}">
-                        <MenuItem x:Name="PART_SpellingMenu"
-                                  Header="S_pelling"
-                                  IsVisible="{Binding EditorViewModel.Spelling.IsAvailable}">
-                            <MenuItem Header="_Check Spelling"
-                                      Command="{Binding EditorViewModel.Spelling.CheckSpellingCommand}"
-                                      InputGesture="Shift+F7" />
-                            <MenuItem x:Name="PART_CheckAsYouTypeMenuItem"
-                                      Header="Check As You _Type"
-                                      ToggleType="CheckBox"
-                                      Command="{Binding EditorViewModel.Spelling.ToggleCheckAsYouTypeCommand}"
-                                      IsChecked="{Binding EditorViewModel.Spelling.Service.Preferences.CheckAsYouType, Mode=OneWay, FallbackValue=False}" />
-                            <Separator />
-                            <MenuItem Header="_Next Issue"
-                                      Command="{Binding EditorViewModel.Spelling.NextIssueCommand}"
-                                      InputGesture="F8" />
-                            <MenuItem Header="_Previous Issue"
-                                      Command="{Binding EditorViewModel.Spelling.PreviousIssueCommand}"
-                                      InputGesture="Shift+F8" />
-                            <MenuItem Header="C_lear Spelling Marks"
-                                      Command="{Binding EditorViewModel.Spelling.ClearCommand}" />
-                            <Separator />
-                            <MenuItem Header="Spelling _Settings and Project Dictionary…"
-                                      Command="{Binding OpenSpellingSettingsCommand}" />
-                        </MenuItem>
-                        <MenuItem x:Name="PART_SoundMenuItem"
-                                  Header="S_ound"
-                                  ToggleType="CheckBox"
-                                  Command="{Binding ToggleSoundCommand}"
-                                  IsChecked="{Binding SoundPreferences.SoundEnabled, Mode=OneWay}"
-                                  IsVisible="{Binding SoundPreferences, Converter={x:Static ObjectConverters.IsNotNull}}"
-                                  Foreground="{DynamicResource Cora.Text}" />
-                        <Separator />
-                        <MenuItem Header="_Settings…"
-                                  Command="{Binding OpenSettingsCommand}"
-                                  InputGesture="Ctrl+OemComma" />
-                    </MenuItem>
-                    <MenuItem Header="_Help" Foreground="{DynamicResource Cora.Text}">
-                        <MenuItem Header="Check for _Updates"
-                                  Command="{Binding Updates.CheckCommand}"
-                                  IsVisible="{Binding Updates, Converter={x:Static ObjectConverters.IsNotNull}}" />
-                        <Separator IsVisible="{Binding Updates, Converter={x:Static ObjectConverters.IsNotNull}}" />
-                        <MenuItem Header="_About Hymnal"
-                                  Command="{Binding ShowAboutCommand}"
-                                  InputGesture="F1" />
-                    </MenuItem>
-                </Menu>
+                      VerticalAlignment="Center" />
 
                 <!-- Centre: mode tabs — RESEARCH / IDEAS (story/anthology) / PLAN / WRITE / MANAGE / EDIT -->
                 <StackPanel Grid.Column="1"

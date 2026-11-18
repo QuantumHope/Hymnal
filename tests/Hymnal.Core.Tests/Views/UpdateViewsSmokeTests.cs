@@ -20,7 +20,7 @@ public sealed class UpdateViewsSmokeTests
         var main = File.ReadAllText(HymnalUpdatesTests.RepositoryFile("src/Hymnal/Views/MainWindow.axaml"));
         Assert.Contains("<views:UpdateBannerView DataContext=\"{Binding Updates}\"", main);
         Assert.Contains("DataContext=\"{Binding Updates}\"", main);
-        Assert.Contains("Command=\"{Binding Updates.CheckCommand}\"", main);
+        Assert.Contains("() => Updates?.CheckCommand)", File.ReadAllText(HymnalUpdatesTests.RepositoryFile("src/Hymnal/ViewModels/MainWindowViewModel.Commands.cs")));
         // The banner sits above the shell, below the accent stripe.
         Assert.True(main.IndexOf("UpdateBannerView", StringComparison.Ordinal) > main.IndexOf("Accent band (Row 1", StringComparison.Ordinal));
 

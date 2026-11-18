@@ -16,7 +16,9 @@ public sealed class IdeasViewSmokeTests
         Assert.Contains("Command=\"{Binding SelectIdeasCommand}\"", axaml);
         Assert.Contains("IsVisible=\"{Binding IsIdeasModeAvailable}\"", axaml);
         Assert.Contains("ConverterParameter=Ideas}", axaml);
-        Assert.Contains("<KeyBinding Gesture=\"Ctrl+Shift+I\" Command=\"{Binding QuickCaptureIdeaCommand}\" />", axaml);
+        // The shortcut is a command-catalog entry; MainWindow binds catalog gestures.
+        var catalog = File.ReadAllText(FindRepositoryFile("src/Hymnal/ViewModels/MainWindowViewModel.Commands.cs"));
+        Assert.Contains("() => QuickCaptureIdeaCommand)", catalog);
 
         // IDEAS sits between RESEARCH and PLAN.
         var research = axaml.IndexOf("Content=\"RESEARCH\"", StringComparison.Ordinal);
@@ -28,13 +30,16 @@ public sealed class IdeasViewSmokeTests
     [Fact]
     public void QuickCaptureShortcut_IsBoundOnlyOnce()
     {
+        // Bound once: by the command catalog, never by hand in a view (ShellMenuTests checks that no two catalog
+        // commands bind the same gesture).
         var views = Path.GetDirectoryName(FindRepositoryFile("src/Hymnal/Views/MainWindow.axaml"))!;
         var count = 0;
         foreach (var file in Directory.EnumerateFiles(views, "*.axaml", SearchOption.AllDirectories))
-            // A menu item's InputGesture only displays the shortcut; count the key bindings that act on it.
             count += Regex.Matches(File.ReadAllText(file), "<KeyBinding Gesture=\"Ctrl\\+Shift\\+I\"").Count;
+        Assert.Equal(0, count);
 
-        Assert.Equal(1, count);
+        var catalog = File.ReadAllText(FindRepositoryFile("src/Hymnal/ViewModels/MainWindowViewModel.Commands.cs"));
+        Assert.Equal(1, Regex.Matches(catalog, "Gesture = \"Ctrl\\+Shift\\+I\"").Count);
     }
 
     [Fact]
