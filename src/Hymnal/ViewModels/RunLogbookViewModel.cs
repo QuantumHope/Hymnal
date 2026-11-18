@@ -9,15 +9,6 @@ using Hymnal.Core.Services.Runs;
 
 namespace Hymnal.ViewModels;
 
-/// <summary>One square of the Logbook heatmap.</summary>
-public sealed record LogbookCell(int Level, bool IsFuture, bool IsToday, string Tip)
-{
-    public bool IsL1 => Level == 1;
-    public bool IsL2 => Level == 2;
-    public bool IsL3 => Level == 3;
-    public bool IsL4 => Level == 4;
-}
-
 /// <summary>One run in the Logbook list, already formatted.</summary>
 public sealed record LogbookRow(
     string Date,
@@ -45,29 +36,23 @@ public sealed class RunLogbookViewModel
         Error = error;
         if (summary == null)
         {
-            Cells = [];
+            Days = [];
             Rows = [];
             return;
         }
 
         CurrentStreak = summary.CurrentStreak.ToString(CultureInfo.CurrentCulture);
         CurrentStreakLabel = summary.CurrentStreak == 1 ? "DAY STREAK" : "DAYS STREAK";
-        BestStreak = $"Best: {Days(summary.BestStreak)}";
+        BestStreak = $"Best: {DayCount(summary.BestStreak)}";
         var t = summary.Totals;
         TotalRuns = t.Runs.ToString("N0");
         TotalTime = t.Minutes >= 60 ? $"{t.Minutes / 60} h {t.Minutes % 60} min" : $"{t.Minutes} min";
         TotalWords = Signed(t.WordsNet);
         TotalWordsDetail = $"+{t.WordsAdded:N0} added · −{t.WordsCut:N0} cut";
         TotalXp = $"{t.Xp:N0} XP";
-        TotalDetail = $"{t.Completed:N0} of {t.Runs:N0} runs went the distance · {Days(t.DaysWritten)} written";
+        TotalDetail = $"{t.Completed:N0} of {t.Runs:N0} runs went the distance · {DayCount(t.DaysWritten)} written";
 
-        Cells = summary.Heatmap
-            .Select(d => new LogbookCell(d.Level, d.IsFuture, d.Date == today, d.IsFuture
-                ? ""
-                : d.Runs == 0
-                    ? $"{d.Date:ddd MMM d}: no runs"
-                    : $"{d.Date:ddd MMM d}: {d.Runs} {(d.Runs == 1 ? "run" : "runs")}, {d.Minutes} min, {Signed(d.NetWords)} words"))
-            .ToList();
+        Days = summary.Heatmap;
         var first = summary.Heatmap.Count > 0 ? summary.Heatmap[0].Date : today;
         HeatmapRange = $"{first:MMM d} – {today:MMM d}";
 
@@ -107,8 +92,8 @@ public sealed class RunLogbookViewModel
     public string TotalDetail { get; } = "";
     public string HeatmapRange { get; } = "";
 
-    /// <summary>Heatmap days, Monday-first weeks in order (fill a 7-tall column layout).</summary>
-    public IReadOnlyList<LogbookCell> Cells { get; }
+    /// <summary>Heatmap days, Monday-first weeks in order, the current streak marked (for <c>StreakHeatmap</c>).</summary>
+    public IReadOnlyList<LogbookDay> Days { get; }
 
     /// <summary>Runs, newest first.</summary>
     public IReadOnlyList<LogbookRow> Rows { get; }
@@ -144,5 +129,5 @@ public sealed class RunLogbookViewModel
 
     private static string Signed(int n) => n > 0 ? $"+{n:N0}" : n < 0 ? $"−{-n:N0}" : "±0";
 
-    private static string Days(int n) => n == 1 ? "1 day" : $"{n:N0} days";
+    private static string DayCount(int n) => n == 1 ? "1 day" : $"{n:N0} days";
 }

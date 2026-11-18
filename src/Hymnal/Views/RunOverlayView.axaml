@@ -7,7 +7,7 @@
              IsVisible="{Binding IsOverlayOpen}"
              FontFamily="{DynamicResource Cora.Font.Persona}">
 
-    <!-- The writing run's screens: the start card, the recap and the note to Future You. -->
+    <!-- The writing run's screens: the start card, and the recap with its note to Future You. -->
     <UserControl.Styles>
         <Style Selector="TextBlock.run-caps">
             <Setter Property="FontSize" Value="10" />
@@ -325,60 +325,62 @@
                             </StackPanel>
                         </Border>
 
-                        <!-- Streak -->
+                        <!-- Streak: the last 12 weeks, the current streak in the accent colour -->
                         <Border Classes="run-section">
-                            <StackPanel Spacing="2">
-                                <TextBlock Classes="run-caps" Text="STREAK" />
-                                <TextBlock Text="{Binding Recap.Streak, FallbackValue=''}" FontSize="15" FontWeight="SemiBold"
-                                           IsVisible="{Binding Recap.HasStreak, FallbackValue=False}"
-                                           Foreground="{DynamicResource Cora.Accent.Store}" />
-                                <TextBlock Text="{Binding Recap.BestStreak, FallbackValue=''}" FontSize="11"
-                                           IsVisible="{Binding Recap.HasStreak, FallbackValue=False}"
+                            <Grid ColumnDefinitions="*,Auto" ColumnSpacing="16">
+                                <StackPanel Grid.Column="0" Spacing="2" VerticalAlignment="Center">
+                                    <TextBlock Classes="run-caps" Text="STREAK" />
+                                    <TextBlock Text="{Binding Recap.Streak, FallbackValue=''}" FontSize="15" FontWeight="SemiBold"
+                                               TextWrapping="Wrap"
+                                               IsVisible="{Binding Recap.HasStreak, FallbackValue=False}"
+                                               Foreground="{DynamicResource Cora.Accent.Store}" />
+                                    <TextBlock Text="{Binding Recap.BestStreak, FallbackValue=''}" FontSize="11"
+                                               IsVisible="{Binding Recap.HasStreak, FallbackValue=False}"
+                                               Foreground="{DynamicResource Cora.Text.Secondary}" />
+                                    <TextBlock Text="{Binding Recap.ProfileError, FallbackValue=''}" FontSize="11"
+                                               TextWrapping="Wrap"
+                                               IsVisible="{Binding Recap.HasProfileError, FallbackValue=False}"
+                                               Foreground="{DynamicResource Cora.Accent.Error}" />
+                                </StackPanel>
+                                <controls:StreakHeatmap x:Name="StreakCalendar" Grid.Column="1" CellSize="11"
+                                                        VerticalAlignment="Center"
+                                                        Days="{Binding Recap.StreakDays, FallbackValue={x:Null}}"
+                                                        IsVisible="{Binding Recap.HasStreakDays, FallbackValue=False}" />
+                            </Grid>
+                        </Border>
+
+                        <!-- Note to Future You: optional; Done saves it -->
+                        <Border Classes="run-section">
+                            <StackPanel Spacing="8">
+                                <TextBlock Classes="run-caps" Text="NOTE TO FUTURE YOU" />
+                                <TextBlock Text="Tomorrow's first minute is the hardest. Tell Future You exactly where to start."
+                                           FontSize="12" TextWrapping="Wrap"
                                            Foreground="{DynamicResource Cora.Text.Secondary}" />
-                                <TextBlock Text="{Binding Recap.ProfileError, FallbackValue=''}" FontSize="11"
-                                           TextWrapping="Wrap"
-                                           IsVisible="{Binding Recap.HasProfileError, FallbackValue=False}"
-                                           Foreground="{DynamicResource Cora.Accent.Error}" />
+                                <Border Classes="run-tile" Margin="0" IsVisible="{Binding HasLeftOff}">
+                                    <StackPanel Spacing="4">
+                                        <TextBlock Classes="run-caps" Text="WHERE YOU LEFT OFF" />
+                                        <TextBlock Text="{Binding LeftOffChapter}" FontWeight="SemiBold" FontSize="13"
+                                                   Foreground="{DynamicResource Cora.Text}" />
+                                        <TextBlock Text="{Binding LeftOffLine}" FontStyle="Italic" FontSize="12"
+                                                   TextWrapping="Wrap"
+                                                   Foreground="{DynamicResource Cora.Text.Secondary}" />
+                                    </StackPanel>
+                                </Border>
+                                <TextBox x:Name="FutureYouInput"
+                                         Text="{Binding FutureYouText}"
+                                         PlaceholderText="What happens next? e.g. Mara opens the letter and recognises the handwriting."
+                                         AcceptsReturn="True"
+                                         TextWrapping="Wrap"
+                                         MinHeight="72"
+                                         FontSize="14" />
                             </StackPanel>
                         </Border>
 
-                        <StackPanel Orientation="Horizontal" HorizontalAlignment="Center" Spacing="10" Margin="0,16,0,0">
-                            <Button Classes="run-secondary" Content="Done" Command="{Binding DoneCommand}" />
-                            <Button x:Name="FutureYouButton" Classes="run-primary"
-                                    Content="LEAVE A NOTE FOR FUTURE YOU →"
-                                    Command="{Binding ToFutureYouCommand}" IsDefault="True" />
-                        </StackPanel>
-                    </StackPanel>
-
-                    <!-- ── Note to Future You ─────────────────────────────────── -->
-                    <StackPanel x:Name="FutureYouCard" IsVisible="{Binding IsFutureYou}" Spacing="12">
-                        <TextBlock Classes="run-caps" Text="NOTE TO FUTURE YOU" HorizontalAlignment="Center" />
-                        <TextBlock Classes="run-sub"
-                                   Text="Tomorrow's first minute is the hardest. Tell Future You exactly where to start." />
-
-                        <Border Classes="run-tile" IsVisible="{Binding HasLeftOff}">
-                            <StackPanel Spacing="4">
-                                <TextBlock Classes="run-caps" Text="WHERE YOU LEFT OFF" />
-                                <TextBlock Text="{Binding LeftOffChapter}" FontWeight="SemiBold" FontSize="13"
-                                           Foreground="{DynamicResource Cora.Text}" />
-                                <TextBlock Text="{Binding LeftOffLine}" FontStyle="Italic" FontSize="12"
-                                           TextWrapping="Wrap"
-                                           Foreground="{DynamicResource Cora.Text.Secondary}" />
-                            </StackPanel>
-                        </Border>
-
-                        <TextBox x:Name="FutureYouInput"
-                                 Text="{Binding FutureYouText}"
-                                 Watermark="What happens next? e.g. Mara opens the letter and recognises the handwriting."
-                                 AcceptsReturn="True"
-                                 TextWrapping="Wrap"
-                                 MinHeight="96"
-                                 FontSize="14" />
-
-                        <StackPanel Orientation="Horizontal" HorizontalAlignment="Center" Spacing="10">
-                            <Button Classes="run-secondary" Content="Skip" Command="{Binding DoneCommand}" />
-                            <Button Classes="run-primary" Content="SAVE NOTE" Command="{Binding SaveNoteCommand}" />
-                        </StackPanel>
+                        <Button x:Name="DoneButton" Classes="run-primary" Content="DONE"
+                                HorizontalAlignment="Center" Margin="0,16,0,0" MinWidth="140"
+                                HorizontalContentAlignment="Center"
+                                ToolTip.Tip="Close the recap (saves your note, if you wrote one). Ctrl+Enter from the note."
+                                Command="{Binding DoneCommand}" IsDefault="True" />
                     </StackPanel>
 
                 </Panel>

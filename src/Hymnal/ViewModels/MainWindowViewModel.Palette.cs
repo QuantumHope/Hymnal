@@ -99,7 +99,7 @@ public partial class MainWindowViewModel
             shortcut: "F11");
         if (WritingRun != null)
         {
-            Add("run-start", "Run", "Start a Run…", WritingRun.OpenCommand, shortcut: "Ctrl+Alt+R");
+            Add("run-start", "Run", "New Run…", WritingRun.OpenCommand, shortcut: "Ctrl+Alt+R");
             Add("run-end", "Run", "End Run", WritingRun.EndCommand);
             Add("run-logbook", "Run", "Logbook…", WritingRun.ShowLogbookCommand, shortcut: "Ctrl+Alt+L");
         }

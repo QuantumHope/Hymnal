@@ -155,6 +155,26 @@ public class RunLogbookTests
     }
 
     [Fact]
+    public void The_current_streak_days_are_marked()
+    {
+        var summary = RunLogbook.Build(
+        [
+            Run("2026-11-10", 10, 100), // an older streak, already broken
+            Run("2026-11-15", 10, 100),
+            Run("2026-11-16", 10, 100),
+            Run("2026-11-17", 10, 100),
+        ], Today);
+
+        Assert.Equal(3, summary.CurrentStreak);
+        Assert.Equal(
+            [new DateOnly(2026, 11, 15), new DateOnly(2026, 11, 16), new DateOnly(2026, 11, 17)],
+            summary.Heatmap.Where(d => d.InStreak).Select(d => d.Date));
+
+        var broken = RunLogbook.Build([Run("2026-11-10", 10, 100)], Today);
+        Assert.DoesNotContain(broken.Heatmap, d => d.InStreak);
+    }
+
+    [Fact]
     public void No_runs_is_an_empty_logbook()
     {
         var summary = RunLogbook.Build([], Today);
@@ -193,6 +213,31 @@ public class RunAmbienceBankTests
             Assert.True(clip.Max(Math.Abs) > 0.3f);
         }
     }
+
+    [Theory]
+    [InlineData("heartbeat")]
+    [InlineData("bed")]
+    public void Small_speakers_can_play_it(string clip)
+    {
+        // Laptop speakers drop almost everything under ~120 Hz; a heartbeat made only of 50–60 Hz thumps is silent
+        // on them. Enough of each sound must survive a 120 Hz high-pass.
+        var samples = clip == "heartbeat" ? Bank.Heartbeat : Bank.Bed;
+        var filtered = HighPass(HighPass(samples, 120, Bank.SampleRate), 120, Bank.SampleRate);
+        var ratio = Rms(filtered) / Rms(samples);
+        Assert.True(ratio > 0.45, $"{clip}: only {ratio:P0} of its level is above 120 Hz");
+    }
+
+    private static float[] HighPass(float[] x, double cutoff, int rate)
+    {
+        var rc = 1 / (2 * Math.PI * cutoff);
+        var a = rc / (rc + 1.0 / rate);
+        var y = new float[x.Length];
+        for (var i = 1; i < x.Length; i++)
+            y[i] = (float)(a * (y[i - 1] + x[i] - x[i - 1]));
+        return y;
+    }
+
+    private static double Rms(float[] x) => Math.Sqrt(x.Sum(s => (double)s * s) / x.Length);
 
     [Fact]
     public void Renders_the_same_every_time()

@@ -413,7 +413,8 @@ public partial class App : Application
                 sp.GetRequiredService<IThemeService>(),
                 sp.GetRequiredService<SpellingService>(),
                 _updates,
-                sp.GetRequiredService<RunAtmospherePreferences>()));
+                sp.GetRequiredService<RunAtmospherePreferences>(),
+                sp.GetRequiredService<IRunSoundscape>()));
 
         services.AddSingleton<RunViewModel>(sp =>
             new RunViewModel(

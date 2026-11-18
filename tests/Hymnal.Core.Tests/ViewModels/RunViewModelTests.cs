@@ -220,15 +220,15 @@ public sealed class RunViewModelTests
 
                 context.Editor.Text += "\nThe envelope was still warm.\n";
                 await Within(run.EndCommand.Execute().ToTask());
-                await Within(run.ToFutureYouCommand.Execute().ToTask());
 
-                Assert.Equal(RunStage.FutureYou, run.Stage);
+                // The note is part of the recap; Done saves it.
+                Assert.Equal(RunStage.Recap, run.Stage);
+                Assert.Equal("", run.FutureYouText);
                 Assert.Equal("The Letter", run.LeftOffChapter);
                 Assert.Equal("The envelope was still warm.", run.LeftOffLine);
-                Assert.False(await run.SaveNoteCommand.CanExecute.FirstAsync());
 
                 run.FutureYouText = "Mara opens the letter and knows the handwriting.";
-                await Within(run.SaveNoteCommand.Execute().ToTask());
+                await Within(run.DoneCommand.Execute().ToTask());
                 Assert.Equal(RunStage.Idle, run.Stage);
 
                 var saved = await new FutureYouNotesService(new MetadataStore()).LatestAsync(root);
@@ -259,6 +259,7 @@ public sealed class RunViewModelTests
             Intensities.Add(intensity);
         }
         public void Finish(bool completed) => FinishedCompleted = completed;
+        public void Preview() { }
     }
 
     [Fact]
@@ -408,6 +409,36 @@ public sealed class RunViewModelTests
     }
 
     [Fact]
+    public async Task Done_without_a_note_saves_nothing_and_the_recap_shows_the_streak_calendar()
+    {
+        var root = CreateWorkspace(NovelJson, ("a.md", "# A\n\nText.\n"));
+        try
+        {
+            await Ui(root, 1, async context =>
+            {
+                var run = context.CreateRun();
+                context.CreateMainWindow(context.CreateHost(), run: run);
+                await OpenChapterAsync(context, "a.md");
+                await StartAsync(context, run, 10);
+
+                context.Editor.Text += "Rain on the glass.\n";
+                await Within(run.EndCommand.Execute().ToTask());
+
+                var days = run.Recap!.StreakDays;
+                Assert.Equal(84, days.Count);
+                var today = Assert.Single(days, d => d.InStreak);
+                Assert.True(today.Runs == 1 && today.Level >= 1);
+
+                run.FutureYouText = "   ";
+                await Within(run.DoneCommand.Execute().ToTask());
+                Assert.Equal(RunStage.Idle, run.Stage);
+                Assert.Null(await new FutureYouNotesService(new MetadataStore()).LatestAsync(root));
+            });
+        }
+        finally { DeleteFolder(root); }
+    }
+
+    [Fact]
     public async Task The_Logbook_lists_each_run_with_the_note_left_after_it()
     {
         var root = CreateWorkspace(NovelJson, ("a.md", "# A\n\nText.\n"));
@@ -422,9 +453,8 @@ public sealed class RunViewModelTests
 
                 context.Editor.Text += "Rain on the glass.\n";
                 await Within(run.EndCommand.Execute().ToTask());
-                await Within(run.ToFutureYouCommand.Execute().ToTask());
                 run.FutureYouText = "Open with the knock at the door.";
-                await Within(run.SaveNoteCommand.Execute().ToTask());
+                await Within(run.DoneCommand.Execute().ToTask());
 
                 var recorded = Assert.Single((await new WriterProfileStore(new MetadataStore(), ProfilePath(root)).LoadRunsAsync()).Value!);
                 Assert.Equal(root, recorded.WorkspacePath);
@@ -435,7 +465,8 @@ public sealed class RunViewModelTests
                 var row = Assert.Single(logbook.Rows);
                 Assert.Equal("+4", row.Net);
                 Assert.Equal("Open with the knock at the door.", row.Note);
-                Assert.Equal(84, logbook.Cells.Count);
+                Assert.Equal(84, logbook.Days.Count);
+                Assert.Single(logbook.Days, d => d.InStreak);
             });
         }
         finally { DeleteFolder(root); }

@@ -7,7 +7,7 @@ namespace Hymnal.Core.Models.Runs;
 public sealed record RunAtmosphereSettings
 {
     public const string StoreKey = "run.atmosphere";
-    public const double DefaultAmbienceVolume = 0.5;
+    public const double DefaultAmbienceVolume = 0.8;
 
     /// <summary>Embers and flames rising from the bottom corners.</summary>
     public bool Flames { get; init; } = true;

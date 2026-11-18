@@ -297,7 +297,7 @@
                     <!-- Markua snippets; InsertMenu.Populate fills it from MarkuaSnippets. -->
                     <MenuItem x:Name="PART_InsertMenu" Header="_Insert" Foreground="{DynamicResource Cora.Text}" />
                     <MenuItem Header="_Run" Foreground="{DynamicResource Cora.Text}">
-                        <MenuItem Header="_Start a Run…"
+                        <MenuItem Header="_New Run…"
                                   Command="{Binding WritingRun.OpenCommand}"
                                   InputGesture="Ctrl+Alt+R" />
                         <MenuItem Header="_End Run"
@@ -460,19 +460,25 @@
                                  Classes="run-launch"
                                  Command="{Binding WritingRun.OpenCommand}"
                                  IsVisible="{Binding WritingRun, Converter={x:Static ObjectConverters.IsNotNull}}"
-                                 ToolTip.Tip="Start a writing run (Ctrl+Alt+R)"
+                                 ToolTip.Tip="Start a new writing run (Ctrl+Alt+R)"
                                  Margin="0,0,4,0"
                                  Padding="12,5">
                         <StackPanel Orientation="Horizontal" Spacing="6">
-                            <Path Data="M13.5 0.67s.74 2.65.74 4.8c0 2.06-1.35 3.73-3.41 3.73-2.07 0-3.63-1.67-3.63-3.73l.03-.36C5.21 7.51 4 10.62 4 14c0 4.42 3.58 8 8 8s8-3.58 8-8C20 8.61 17.41 3.8 13.5.67zM11.71 19c-1.78 0-3.22-1.4-3.22-3.14 0-1.62 1.05-2.76 2.81-3.12 1.77-.36 3.6-1.21 4.62-2.58.39 1.29.59 2.65.59 4.04 0 2.65-2.15 4.8-4.8 4.8z"
-                                  Fill="{DynamicResource Cora.Accent.Store}"
-                                  Width="14" Height="14" Stretch="Uniform" VerticalAlignment="Center" />
-                            <TextBlock Text="RUN" FontWeight="Bold" LetterSpacing="1.5" FontSize="12"
+                            <!-- An open dungeon door: an arched frame, the door swung in, light spilling through -->
+                            <Viewbox x:Name="PART_RunDoorIcon" Width="16" Height="16" VerticalAlignment="Center">
+                                <Canvas Width="24" Height="24">
+                                    <Path Data="M6 21V9a6 6 0 0 1 12 0v12z"
+                                          Fill="{DynamicResource Cora.Accent.Store}" Opacity="0.35" />
+                                    <Path Data="F1 M4 21V9a8 8 0 0 1 16 0v12h-2V9a6 6 0 0 0-12 0v12z M2 21h20v2H2z M6.5 21V10.2l5.5-2.4v11.6z M10.4 14.6a.9.9 0 1 0 0.01 0z"
+                                          Fill="{DynamicResource Cora.Accent.Store}" />
+                                </Canvas>
+                            </Viewbox>
+                            <TextBlock Text="NEW RUN" FontWeight="Bold" LetterSpacing="1.5" FontSize="12"
                                        VerticalAlignment="Center" />
                         </StackPanel>
                         <SplitButton.Flyout>
                             <MenuFlyout Placement="BottomEdgeAlignedRight">
-                                <MenuItem Header="Start a Run…" InputGesture="Ctrl+Alt+R"
+                                <MenuItem Header="New Run…" InputGesture="Ctrl+Alt+R"
                                           Command="{Binding WritingRun.OpenCommand}" />
                                 <MenuItem Header="Logbook…" InputGesture="Ctrl+Alt+L"
                                           Command="{Binding WritingRun.ShowLogbookCommand}" />

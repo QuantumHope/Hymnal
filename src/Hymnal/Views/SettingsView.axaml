@@ -298,11 +298,11 @@
                                FontSize="18"
                                FontWeight="SemiBold"
                                Foreground="{DynamicResource Cora.Text}" />
-                    <TextBlock Text="A run is a timed burst of writing in focus mode (Run → Start a Run…, or the RUN button). These layers build up through its last minute. Turn off any you find distracting."
+                    <TextBlock Text="A run is a timed burst of writing in focus mode (Run → New Run…, or the NEW RUN button). These layers build up through it and peak in its last minute. Turn off any you find distracting."
                                FontSize="12"
                                TextWrapping="Wrap"
                                Foreground="{DynamicResource Cora.Text.Secondary}" />
-                    <CheckBox Content="Flames and embers in the bottom corners"
+                    <CheckBox Content="Flames and embers along the bottom of the window"
                               IsChecked="{Binding RunAtmosphere.Flames, FallbackValue=False}"
                               Foreground="{DynamicResource Cora.Text}" />
                     <CheckBox Content="Glow around the window edge, and a vignette that closes in"
@@ -312,7 +312,7 @@
                               IsChecked="{Binding RunAtmosphere.Sparks, FallbackValue=False}"
                               Foreground="{DynamicResource Cora.Text}" />
                     <StackPanel Spacing="4">
-                        <CheckBox Content="Ambience: a low drone and crackling fire, a heartbeat in the last minute, and a chime at the end"
+                        <CheckBox Content="Ambience: a drone and crackling fire, a heartbeat that quickens through the run, and a chime at the end"
                                   IsChecked="{Binding RunAtmosphere.Ambience, FallbackValue=False}"
                                   Foreground="{DynamicResource Cora.Text}" />
                         <TextBlock Text="Plays only while Sound → Play sounds is on."
@@ -330,6 +330,11 @@
                         <TextBlock Text="{Binding RunAtmosphere.AmbienceVolume, StringFormat={}{0:P0}, FallbackValue=''}"
                                    VerticalAlignment="Center" MinWidth="44"
                                    Foreground="{DynamicResource Cora.Text.Secondary}" />
+                        <Button x:Name="PART_PreviewRunSound" Content="Play a sample"
+                                Command="{Binding PreviewRunSoundCommand}"
+                                IsEnabled="{Binding RunAtmosphere.Ambience, FallbackValue=False}"
+                                ToolTip.Tip="A few seconds of fire, a quickening heartbeat and the finish chime"
+                                Padding="10,4" />
                     </StackPanel>
                 </StackPanel>
 

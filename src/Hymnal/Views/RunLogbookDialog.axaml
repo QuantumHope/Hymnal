@@ -1,6 +1,7 @@
 <Window xmlns="https://github.com/avaloniaui"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:vm="using:Hymnal.ViewModels"
+        xmlns:controls="using:Hymnal.Views.Controls"
         x:Class="Hymnal.Views.RunLogbookDialog"
         x:DataType="vm:RunLogbookViewModel"
         Title="Logbook"
@@ -38,38 +39,6 @@
             <Setter Property="Padding" Value="12,10" />
             <Setter Property="Margin" Value="4" />
         </Style>
-        <!-- Heatmap squares: empty, then four steps of the accent by minutes written that day. -->
-        <Style Selector="Border.cell">
-            <Setter Property="Width" Value="14" />
-            <Setter Property="Height" Value="14" />
-            <Setter Property="Margin" Value="2" />
-            <Setter Property="CornerRadius" Value="3" />
-            <Setter Property="Background" Value="{DynamicResource Cora.Surface.Elevated}" />
-            <Setter Property="BorderBrush" Value="{DynamicResource Cora.Border.Subtle}" />
-            <Setter Property="BorderThickness" Value="1" />
-        </Style>
-        <Style Selector="Border.cell.l1">
-            <Setter Property="Background" Value="{DynamicResource Cora.Accent.Store}" />
-            <Setter Property="Opacity" Value="0.3" />
-        </Style>
-        <Style Selector="Border.cell.l2">
-            <Setter Property="Background" Value="{DynamicResource Cora.Accent.Store}" />
-            <Setter Property="Opacity" Value="0.55" />
-        </Style>
-        <Style Selector="Border.cell.l3">
-            <Setter Property="Background" Value="{DynamicResource Cora.Accent.Store}" />
-            <Setter Property="Opacity" Value="0.8" />
-        </Style>
-        <Style Selector="Border.cell.l4">
-            <Setter Property="Background" Value="{DynamicResource Cora.Accent.Store}" />
-        </Style>
-        <Style Selector="Border.cell.future">
-            <Setter Property="Opacity" Value="0.25" />
-        </Style>
-        <Style Selector="Border.cell.today">
-            <Setter Property="BorderBrush" Value="{DynamicResource Cora.Text}" />
-            <Setter Property="BorderThickness" Value="1.5" />
-        </Style>
     </Window.Styles>
 
     <Grid RowDefinitions="5,*">
@@ -92,7 +61,7 @@
                 <TextBlock x:Name="ErrorText" Text="{Binding Error}" IsVisible="{Binding HasError}"
                            TextWrapping="Wrap" Foreground="{DynamicResource Cora.Accent.Error}" />
                 <TextBlock x:Name="EmptyText" IsVisible="{Binding IsEmpty}" TextWrapping="Wrap"
-                           Text="No runs yet. Start one from the RUN button or Run → Start a Run… and it will show up here."
+                           Text="No runs yet. Start one from the NEW RUN button or Run → New Run… and it will show up here."
                            Foreground="{DynamicResource Cora.Text.Secondary}" />
 
                 <StackPanel Spacing="14" IsVisible="{Binding HasRuns}">
@@ -136,36 +105,10 @@
                             <TextBlock Classes="caps" Text="LAST 12 WEEKS" />
                             <TextBlock Classes="small" Text="{Binding HeatmapRange}" HorizontalAlignment="Right" />
                         </DockPanel>
-                        <StackPanel Orientation="Horizontal" Spacing="6">
-                            <StackPanel Spacing="0">
-                                <TextBlock Classes="small" Text="Mon" Height="18" FontSize="9" VerticalAlignment="Center" />
-                                <TextBlock Classes="small" Text="" Height="18" />
-                                <TextBlock Classes="small" Text="Wed" Height="18" FontSize="9" />
-                                <TextBlock Classes="small" Text="" Height="18" />
-                                <TextBlock Classes="small" Text="Fri" Height="18" FontSize="9" />
-                                <TextBlock Classes="small" Text="" Height="18" />
-                                <TextBlock Classes="small" Text="Sun" Height="18" FontSize="9" />
-                            </StackPanel>
-                            <ItemsControl x:Name="Heatmap" ItemsSource="{Binding Cells}">
-                                <ItemsControl.ItemsPanel>
-                                    <ItemsPanelTemplate>
-                                        <WrapPanel Orientation="Vertical" Height="126" />
-                                    </ItemsPanelTemplate>
-                                </ItemsControl.ItemsPanel>
-                                <ItemsControl.ItemTemplate>
-                                    <DataTemplate x:DataType="vm:LogbookCell">
-                                        <Border Classes="cell"
-                                                Classes.l1="{Binding IsL1}"
-                                                Classes.l2="{Binding IsL2}"
-                                                Classes.l3="{Binding IsL3}"
-                                                Classes.l4="{Binding IsL4}"
-                                                Classes.future="{Binding IsFuture}"
-                                                Classes.today="{Binding IsToday}"
-                                                ToolTip.Tip="{Binding Tip}" />
-                                    </DataTemplate>
-                                </ItemsControl.ItemTemplate>
-                            </ItemsControl>
-                        </StackPanel>
+                        <controls:StreakHeatmap x:Name="Heatmap" Days="{Binding Days}" CellSize="14"
+                                                HorizontalAlignment="Left" />
+                        <TextBlock Classes="small" FontSize="10"
+                                   Text="Your current streak glows in the accent colour; deeper squares are longer days." />
                     </StackPanel>
 
                     <!-- Every run, newest first -->

@@ -22,6 +22,9 @@ public interface IRunSoundscape
 
     /// <summary>The run is over. When the timer ran out, <paramref name="completed"/> plays the finish chime.</summary>
     void Finish(bool completed);
+
+    /// <summary>A few seconds of what a run sounds like (Settings → Runs), so the volume can be checked.</summary>
+    void Preview();
 }
 
 /// <summary>No sound (tests, and hosts without audio).</summary>
@@ -30,6 +33,7 @@ public sealed class SilentRunSoundscape : IRunSoundscape
     public void Start() { }
     public void Update(double progress, double intensity) { }
     public void Finish(bool completed) { }
+    public void Preview() { }
 }
 
 /// <summary>
@@ -109,6 +113,34 @@ public sealed class RunAmbiencePlayer : IRunSoundscape, IDisposable
         });
     }
 
+    public void Preview()
+    {
+        Enqueue(() =>
+        {
+            if (!_sound.SoundEnabled || (!_engine.IsRunning && !_engine.TryStart()))
+                return;
+            _bank ??= RunAmbienceBank.Render();
+            var heart = _engine.CreateClip(_bank.Heartbeat, _bank.SampleRate);
+            var bed = _engine.CreateClip(_bank.Bed, _bank.SampleRate);
+            var chime = _engine.CreateClip(_bank.Chime, _bank.SampleRate);
+            if (heart == null || bed == null || chime == null)
+                return;
+
+            // The fire and drone under four beats that quicken, then the chime.
+            _engine.SetBusGain(AudioBus.Ambience, BusGain(_atmosphere.AmbienceVolume, 1));
+            var loop = _engine.Play(bed, new PlaybackOptions(AudioBus.Ambience, 1f));
+            foreach (var bpm in new[] { 60.0, 80, 110, 140 })
+            {
+                _engine.Play(heart, new PlaybackOptions(AudioBus.Ambience, HeartbeatGain(1)));
+                Thread.Sleep(TimeSpan.FromSeconds(60 / bpm));
+            }
+            loop?.Stop();
+            _engine.Play(chime, new PlaybackOptions(AudioBus.Ambience, 0.9f));
+            Thread.Sleep(TimeSpan.FromSeconds(3.3));
+            ReleaseEngine();
+        });
+    }
+
     public void Dispose()
     {
         lock (_gate)
@@ -153,9 +185,8 @@ public sealed class RunAmbiencePlayer : IRunSoundscape, IDisposable
             _bed = _engine.Play(_bedClip, new PlaybackOptions(AudioBus.Ambience, 1f, Loop: true));
         }
 
-        // The loop swells from a murmur to full volume as the run nears its end.
-        var volume = TypingSoundPlayer.PerceivedGain(_atmosphere.AmbienceVolume);
-        _engine.SetBusGain(AudioBus.Ambience, volume * (float)(0.35 + 0.65 * intensity));
+        // The loop swells to full volume as the run nears its end.
+        _engine.SetBusGain(AudioBus.Ambience, BusGain(_atmosphere.AmbienceVolume, intensity));
 
         lock (_gate)
         {
@@ -176,12 +207,19 @@ public sealed class RunAmbiencePlayer : IRunSoundscape, IDisposable
 
         // A quiet, steady beat under the whole run that grows louder as it races at the end.
         if (Wanted && _heartClip != null)
-            _engine.Play(_heartClip, new PlaybackOptions(AudioBus.Ambience, (float)(0.45 + 0.55 * intensity)));
+            _engine.Play(_heartClip, new PlaybackOptions(AudioBus.Ambience, HeartbeatGain(intensity)));
 
         var interval = TimeSpan.FromSeconds(60 / RunIntensity.PulseBpm(progress, intensity));
         lock (_gate)
             _heartbeat?.Change(interval, Timeout.InfiniteTimeSpan);
     }
+
+    /// <summary>The ambience bus volume: the Settings slider, from about two thirds at the start to full at the end.</summary>
+    internal static float BusGain(double volume, double intensity) =>
+        TypingSoundPlayer.PerceivedGain(volume) * (float)(0.65 + 0.35 * Math.Clamp(intensity, 0, 1));
+
+    /// <summary>Each beat's volume on that bus: steady under the run, full in the last seconds.</summary>
+    internal static float HeartbeatGain(double intensity) => (float)(0.8 + 0.2 * Math.Clamp(intensity, 0, 1));
 
     private void StopVoices()
     {

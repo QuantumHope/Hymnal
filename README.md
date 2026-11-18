@@ -115,24 +115,26 @@ If a file contains the marker {class: part} in its first non-blank lines, Hymnal
 
 ### Writing runs
 
-A run is a timed burst of writing. Start one with the **RUN** button in the toolbar, **Run → Start a Run…** or
-Ctrl+Alt+R. Set the timer on the dial: drag round it (one turn is an hour, and you can keep going for up to three),
+A run is a timed burst of writing. Start one with the **NEW RUN** button (the open door) in the toolbar,
+**Run → New Run…** or Ctrl+Alt+R. Set the timer on the dial: drag round it (one turn is an hour, and you can keep going for up to three),
 scroll, use the arrow keys, type the minutes, or pick a preset. Hymnal remembers your last length. The run drops
 you into focus mode with a small timer. Write anywhere in the book.
 
-While you write, embers rise from the bottom corners, the window edge glows, and sparks fly off the word count, with
-a callout at 50, 100, 250, 500, 1,000 and 2,000 words. With sound on, a low drone and a crackling fire play
-underneath. In the last minute (the last quarter of a short run) it all builds: the flames climb, the vignette closes
-in, the timer runs hot and a heartbeat quickens. A run that goes the full distance ends with a chime and a burst.
-Turn any layer off in **Settings → Runs**.
+While you write, flames burn along the bottom of the window, the window edge glows, and sparks fly off the word count,
+with a callout at 50, 100, 250, 500, 1,000 and 2,000 words. With sound on, a drone and a crackling fire play
+underneath, over a heartbeat that slowly quickens through the run. In the last minute (the last quarter of a short
+run) it all builds: the flames climb, the vignette closes in, the timer runs hot and the heartbeat races. A run that
+goes the full distance ends with a chime and a burst. Turn any layer off, set the ambience volume, or play a sample
+in **Settings → Runs**.
 
 When time is up, or you press **End**, the recap shows what you did: words added, cut and net, words per minute,
 XP, how much was fresh drafting versus revision, the chapters you touched, the project's progress toward its targets
-(with milestones at 10/25/50/75/100%), and your daily streak. Then leave a **note for Future You**, a line about what
-to write next, and the next run opens with it.
+(with milestones at 10/25/50/75/100%), a minute-by-minute chart, and your streak on a 12-week calendar (the current
+streak in the accent colour). At the bottom, leave a **note for Future You**, a line about what to write next, and
+press **Done** (or Ctrl+Enter): the note is saved and the next run opens with it.
 
-**Run → Logbook…** (Ctrl+Alt+L, or the arrow beside RUN) shows every run: your streak, lifetime totals, a 12-week
-heatmap and each run with the note you left after it.
+**Run → Logbook…** (Ctrl+Alt+L, or the arrow beside NEW RUN) shows every run: your streak, lifetime totals, the
+12-week calendar and each run with the note you left after it.
 
 Runs from every project feed one streak, kept in `writer-profile.json` beside `settings.json`. Notes stay with the
 project in `.hymnal-data/future-you.json`.

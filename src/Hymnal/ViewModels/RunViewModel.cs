@@ -24,7 +24,6 @@ public enum RunStage
     Choosing,
     Running,
     Recap,
-    FutureYou,
 }
 
 /// <summary>A run length on the start card.</summary>
@@ -91,13 +90,17 @@ public sealed record RunRecap
     public string? Streak { get; init; }
     public string? BestStreak { get; init; }
     public bool HasStreak => Streak != null;
+
+    /// <summary>The last 12 weeks with the current streak marked, for the recap's calendar.</summary>
+    public IReadOnlyList<LogbookDay> StreakDays { get; init; } = [];
+    public bool HasStreakDays => StreakDays.Count > 0;
     public string? ProfileError { get; init; }
     public bool HasProfileError => ProfileError != null;
 }
 
 /// <summary>
-/// One-click writing runs: the start card, the running timer (shown as a HUD over focus mode), the recap and the
-/// "note to Future You" screen. Edits are attributed to chapters through <see cref="EditorViewModel.ProseEdited"/>;
+/// One-click writing runs: the start card, the running timer (shown as a HUD over focus mode), and the recap, which
+/// ends with an optional note to Future You. Edits are attributed to chapters through <see cref="EditorViewModel.ProseEdited"/>;
 /// finished runs go to the global writer profile and notes to the workspace.
 /// </summary>
 public sealed class RunViewModel : ViewModelBase, IDisposable
@@ -166,9 +169,8 @@ public sealed class RunViewModel : ViewModelBase, IDisposable
         Disposables.Add(_isRunning = stage.Select(s => s == RunStage.Running).ToProperty(this, x => x.IsRunning));
         Disposables.Add(_isChoosing = stage.Select(s => s == RunStage.Choosing).ToProperty(this, x => x.IsChoosing));
         Disposables.Add(_isRecap = stage.Select(s => s == RunStage.Recap).ToProperty(this, x => x.IsRecap));
-        Disposables.Add(_isFutureYou = stage.Select(s => s == RunStage.FutureYou).ToProperty(this, x => x.IsFutureYou));
         Disposables.Add(_isOverlayOpen = stage
-            .Select(s => s is RunStage.Choosing or RunStage.Recap or RunStage.FutureYou)
+            .Select(s => s is RunStage.Choosing or RunStage.Recap)
             .ToProperty(this, x => x.IsOverlayOpen));
 
         var canOpen = Observable.CombineLatest(
@@ -184,18 +186,13 @@ public sealed class RunViewModel : ViewModelBase, IDisposable
             stage.Select(s => s == RunStage.Choosing), ui);
         EndCommand = ReactiveCommand.CreateFromTask(() => FinishAsync(completed: false),
             stage.Select(s => s == RunStage.Running), ui);
-        ToFutureYouCommand = ReactiveCommand.Create(ShowFutureYou, stage.Select(s => s == RunStage.Recap), ui);
-        DoneCommand = ReactiveCommand.Create(() => { Stage = RunStage.Idle; },
-            stage.Select(s => s is RunStage.Recap or RunStage.FutureYou), ui);
-        SaveNoteCommand = ReactiveCommand.CreateFromTask(SaveNoteAsync,
-            Observable.CombineLatest(stage, this.WhenAnyValue(x => x.FutureYouText),
-                (s, text) => s == RunStage.FutureYou && !string.IsNullOrWhiteSpace(text)), ui);
+        DoneCommand = ReactiveCommand.CreateFromTask(DoneAsync, stage.Select(s => s == RunStage.Recap), ui);
         NudgeMinutesCommand = ReactiveCommand.Create<int>(delta => SelectedMinutes += delta, outputScheduler: ui);
         ShowLogbookCommand = ReactiveCommand.CreateFromTask(
             () => RunLogbookViewModel.LoadAsync(_profile, _notes, DateOnly.FromDateTime(_scheduler.Now.ToLocalTime().DateTime)),
             outputScheduler: ui);
 
-        foreach (var command in new IHandleObservableErrors[] { OpenCommand, EndCommand, SaveNoteCommand, ShowLogbookCommand })
+        foreach (var command in new IHandleObservableErrors[] { OpenCommand, EndCommand, DoneCommand, ShowLogbookCommand })
             Disposables.Add(command.ThrownExceptions.Subscribe(ex => _notifications.ShowError($"Run: {ex.Message}")));
 
         // Attribute every edit to the chapter it was made in.
@@ -246,9 +243,6 @@ public sealed class RunViewModel : ViewModelBase, IDisposable
 
     private readonly ObservableAsPropertyHelper<bool> _isRecap;
     public bool IsRecap => _isRecap.Value;
-
-    private readonly ObservableAsPropertyHelper<bool> _isFutureYou;
-    public bool IsFutureYou => _isFutureYou.Value;
 
     private readonly ObservableAsPropertyHelper<bool> _isOverlayOpen;
     public bool IsOverlayOpen => _isOverlayOpen.Value;
@@ -428,9 +422,8 @@ public sealed class RunViewModel : ViewModelBase, IDisposable
     public ReactiveCommand<Unit, Unit> BeginCommand { get; }
     public ReactiveCommand<Unit, Unit> CancelCommand { get; }
     public ReactiveCommand<Unit, Unit> EndCommand { get; }
-    public ReactiveCommand<Unit, Unit> ToFutureYouCommand { get; }
+    /// <summary>Closes the recap, first saving the note to Future You when one was written.</summary>
     public ReactiveCommand<Unit, Unit> DoneCommand { get; }
-    public ReactiveCommand<Unit, Unit> SaveNoteCommand { get; }
 
     /// <summary>Moves the dial by a number of minutes (the − and + buttons).</summary>
     public ReactiveCommand<int, Unit> NudgeMinutesCommand { get; }
@@ -588,13 +581,18 @@ public sealed class RunViewModel : ViewModelBase, IDisposable
 
         _lastRunId = session.Id;
         StreakOutcome? streak = null;
+        IReadOnlyList<LogbookDay> streakDays = [];
         string? profileError = null;
         var earlier = await _profile.LoadRunsAsync();
         if (earlier.IsSuccess)
         {
             var saved = await _profile.AppendRunAsync(session);
             if (saved.IsSuccess)
+            {
                 streak = StreakCalculator.Apply(earlier.Value!.Select(s => DateOnly.Parse(s.LocalDate)), localDate);
+                var today = DateOnly.FromDateTime(_scheduler.Now.ToLocalTime().DateTime);
+                streakDays = RunLogbook.Build(earlier.Value!.Append(session), today).Heatmap;
+            }
             else
                 profileError = $"This run wasn't recorded: {saved.Error}";
         }
@@ -605,8 +603,9 @@ public sealed class RunViewModel : ViewModelBase, IDisposable
 
         await OnUiAsync(() =>
         {
-            Recap = BuildRecap(summary, seconds, completed, streak, profileError);
+            Recap = BuildRecap(summary, seconds, completed, streak, profileError) with { StreakDays = streakDays };
             CaptureLeftOff(tracker);
+            FutureYouText = "";
             Intensity = completed ? 1 : RunIntensity.Idle;
             IsFinalStretch = false;
             Stage = RunStage.Recap;
@@ -697,14 +696,14 @@ public sealed class RunViewModel : ViewModelBase, IDisposable
         LeftOffLine = key == null ? null : RunTracker.LastLine(tracker.LatestText(key) ?? _editor.Text);
     }
 
-    private void ShowFutureYou()
+    private async Task DoneAsync()
     {
-        FutureYouText = "";
-        Stage = RunStage.FutureYou;
-    }
+        if (string.IsNullOrWhiteSpace(FutureYouText))
+        {
+            Stage = RunStage.Idle;
+            return;
+        }
 
-    private async Task SaveNoteAsync()
-    {
         var note = new FutureYouNote
         {
             CreatedAt = _scheduler.Now,

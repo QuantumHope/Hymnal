@@ -178,6 +178,15 @@ The run duration preference uses `IAppSettingsStore` key `run.lastMinutes`.
   timer completes the run, the session is recorded with the right streak outcome, the note is saved, an empty short
   run is discarded.
 
+### 3.10 Third feedback round (2026-11-17)
+
+| Feedback | Decision |
+|---|---|
+| No audio at any point | The sound was playing but far too quiet and too low to hear: the bus sat near 11% against typing at full volume, and the drone and heartbeat were 50–110 Hz sines that laptop speakers can't reproduce. The ambience default is now 80%, the bus starts at about two thirds of the slider's level instead of a third, each beat plays near full volume, the drone gains its octave and fifth (110/165/220 Hz), and the heartbeat gains harmonics and a soft knock. A test checks that most of each sound survives a 120 Hz high-pass. **Settings → Runs → Play a sample** plays fire, four quickening beats and the chime. |
+| The streak as GitHub-style boxes, the current streak coloured differently; two scales, pale for light days and saturated for dense ones | `StreakHeatmap`: 12 weeks of squares, Monday at the top, months along the top, today outlined. Current-streak days use the theme accent; other days a neutral (secondary text) colour. Within each scale, the four levels climb from pale and washed out to the full, saturated colour. It replaces the Logbook's square grid and appears in the recap's streak section. |
+| Fold "Leave a note for Future You" into the run-complete dialog, with a primary **Done** | The FutureYou stage is gone. The recap ends with the note (where you left off, and the box) and one primary **DONE** button, which saves the note if one was typed and closes. Ctrl+Enter in the note is Done; Esc is Done too, so a typed note is never lost. |
+| The toolbar button should say "New Run", maybe with an open dungeon door | **NEW RUN**, with an open-door icon: an arched frame, the door swung in and light spilling through. The menu item and palette entry are **New Run…** too. |
+
 ### 3.9 Second feedback round (2026-11-17)
 
 | Feedback | Decision |
@@ -194,7 +203,7 @@ After trying phase 1, the author asked for the following. All of it is built on 
 |---|---|
 | "Sprint" carries agile baggage | Call it a **run**, roguelike-style ("Start a Run", "RUN COMPLETE", "Logbook"). A theme-dependent name ("Run" in arcade themes, "Session" in quieter ones) is a possible later touch. |
 | Non-view items in the View menu | A full tidy of the menu bar: **File** (workspace, save, new idea) / **View** (sidebars, panels, focus mode, Markua preview, layout) / **Go** (Go To, command palette, modes) / **Insert** / **Run** (start, end, Logbook) / **Tools** (spelling, sound, Settings) / **Help**. There is no Edit menu, because Hymnal has no app-level edit commands; undo and the clipboard live in the editor. |
-| A visible way to start | A **RUN** split button in the toolbar, with Start a Run and Logbook in its menu. Ctrl+Alt+R starts a run and Ctrl+Alt+L opens the Logbook. |
+| A visible way to start | A **RUN** split button (renamed **NEW RUN** in §3.10) in the toolbar, with Start a Run and Logbook in its menu. Ctrl+Alt+R starts a run and Ctrl+Alt+L opens the Logbook. |
 | Custom lengths | A **minute dial** (kitchen timer: one turn is an hour, extra turns are inner rings, 1–180 minutes) with ±5 buttons and presets of 10/15/25/45/60. Drag, scroll, arrow keys or typed digits all work; the last length is remembered. |
 | Seeing past runs | The **Logbook** window: current and best streak, lifetime totals (runs, time, net words, XP, full runs), a 12-week Monday-first heatmap (levels by minutes that day), and every run, newest first, with the note left after it. This pulls the heatmap forward from phase 3. |
 | "Something to make it feel epic", ramping up at the end | Four layers, each switchable in Settings → Runs: **flames and embers** in the bottom corners, an **edge glow and vignette**, **sparks** off the word count with **combo callouts** (50/100/250/500/1,000/2,000 net words), and an **ambient sound bed** (synthesised drone and crackling fire). Through the **final stretch** (the last 60 s, or the last quarter of a run under four minutes), intensity eases in from 0.15 to 1: more and taller flames, a tighter vignette, a pulsing edge, a hot HUD timer, the loop swelling, and a heartbeat rising from 60 to 132 bpm. A run that goes the distance ends with a **chime and a burst**. |

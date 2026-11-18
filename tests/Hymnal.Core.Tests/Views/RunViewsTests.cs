@@ -77,12 +77,14 @@ public sealed class RunViewsTests
                 await context.SettleAsync();
                 Assert.Equal("+2 words", hud.FindControl<TextBlock>("LiveNetText")!.Text);
 
-                // Recap, then the note screen with its box focused.
+                // The recap, with Done focused and the note box and streak calendar on it.
                 await Within(run.EndCommand.Execute().ToTask());
                 await context.SettleAsync();
                 Assert.False(hud.IsVisible);
                 Assert.True(overlay.FindControl<StackPanel>("RecapCard")!.IsVisible);
-                Assert.True(overlay.FindControl<Button>("FutureYouButton")!.IsFocused);
+                Assert.True(overlay.FindControl<Button>("DoneButton")!.IsFocused);
+                Assert.True(overlay.FindControl<TextBox>("FutureYouInput")!.IsEffectivelyVisible);
+                Assert.True(overlay.FindControl<StreakHeatmap>("StreakCalendar")!.IsEffectivelyVisible);
                 var chart = overlay.FindControl<RunMinuteChart>("MinuteChart")!;
                 Assert.True(chart.IsEffectivelyVisible);
                 Assert.Single(chart.Items!);
@@ -90,11 +92,6 @@ public sealed class RunViewsTests
                 overlay.FindControl<RadioButton>("CumulativeToggle")!.IsChecked = true;
                 Assert.True(run.ShowCumulative);
                 Assert.True(chart.Cumulative);
-
-                await Within(run.ToFutureYouCommand.Execute().ToTask());
-                await context.SettleAsync();
-                Assert.True(overlay.FindControl<StackPanel>("FutureYouCard")!.IsVisible);
-                Assert.True(overlay.FindControl<TextBox>("FutureYouInput")!.IsFocused);
 
                 Press(window, Key.Escape);
                 Assert.Equal(RunStage.Idle, run.Stage);
@@ -129,7 +126,7 @@ public sealed class RunViewsTests
         foreach (var misplaced in new[] { "ShowGoToCommand", "ShowCommandsCommand", "PART_SpellingMenu", "PART_SoundMenuItem", "WritingRun" })
             Assert.DoesNotContain(misplaced, view);
         var run = axaml[positions[4]..positions[5]];
-        Assert.Contains("Header=\"_Start a Run…\"", run);
+        Assert.Contains("Header=\"_New Run…\"", run);
         Assert.Contains("Header=\"_Logbook…\"", run);
         var tools = axaml[positions[5]..positions[6]];
         Assert.Contains("PART_SpellingMenu", tools);
@@ -199,7 +196,9 @@ public sealed class RunViewsTests
                 await context.SettleAsync();
 
                 Assert.Equal("1", dialog.FindControl<TextBlock>("StreakText")!.Text);
-                Assert.Equal(84, dialog.FindControl<ItemsControl>("Heatmap")!.ItemCount);
+                var heatmap = dialog.FindControl<StreakHeatmap>("Heatmap")!;
+                Assert.Equal(84, heatmap.Days!.Count);
+                Assert.Equal(12 * 17 + 26, heatmap.DesiredSize.Width); // twelve weeks of 14 px squares and gaps, plus day names
                 Assert.Equal(1, dialog.FindControl<ItemsControl>("RunList")!.ItemCount);
                 Assert.False(dialog.FindControl<TextBlock>("EmptyText")!.IsVisible);
                 dialog.Close();

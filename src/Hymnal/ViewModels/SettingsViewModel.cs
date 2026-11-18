@@ -172,6 +172,9 @@ public class SettingsViewModel : ViewModelBase
     public RunAtmospherePreferences? RunAtmosphere { get; }
 
     public bool HasRuns => RunAtmosphere is not null;
+
+    /// <summary>Plays a few seconds of a run's ambience (Settings → Runs).</summary>
+    public ReactiveCommand<Unit, Unit> PreviewRunSoundCommand { get; }
     public bool IsSpellingSection => Section == SettingsSection.Spelling;
     public bool IsUpdatesSection => Section == SettingsSection.Updates;
 
@@ -236,9 +239,12 @@ public class SettingsViewModel : ViewModelBase
         IThemeService? themes = null,
         SpellingService? spelling = null,
         UpdatesViewModel? updates = null,
-        RunAtmospherePreferences? runAtmosphere = null)
+        RunAtmospherePreferences? runAtmosphere = null,
+        IRunSoundscape? runSoundscape = null)
     {
         RunAtmosphere = runAtmosphere;
+        var soundscape = runSoundscape ?? new SilentRunSoundscape();
+        PreviewRunSoundCommand = ReactiveCommand.Create(soundscape.Preview);
         _themes = themes;
         ThemeSections = BuildThemeSections(themes);
         ShowSectionCommand = ReactiveCommand.Create<SettingsSection>(section => Section = section);

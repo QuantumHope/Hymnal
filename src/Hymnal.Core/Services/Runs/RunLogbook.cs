@@ -4,7 +4,9 @@ namespace Hymnal.Core.Services.Runs;
 
 /// <summary>One day in the Logbook heatmap.</summary>
 /// <param name="Level">0 for no run; 1–4 by minutes written that day (under 15, under 30, under 60, 60 or more).</param>
-public sealed record LogbookDay(DateOnly Date, int Runs, int Minutes, int NetWords, int Level, bool IsFuture);
+/// <param name="InStreak">The day is part of the current streak.</param>
+public sealed record LogbookDay(DateOnly Date, int Runs, int Minutes, int NetWords, int Level, bool IsFuture,
+    bool InStreak = false);
 
 /// <summary>Lifetime totals over every recorded run.</summary>
 public sealed record LogbookTotals(int Runs, int Minutes, int WordsAdded, int WordsCut, int WordsNet, int Xp,
@@ -52,6 +54,11 @@ public static class RunLogbook
             .ToDictionary(g => g.Key, g => (Runs: g.Count(), Seconds: g.Sum(x => x.Run.ActualSeconds),
                 Net: g.Sum(x => x.Run.WordsNet)));
 
+        // The current streak ends today, or yesterday while today has no run yet.
+        var current = StreakCalculator.Current(dates, today);
+        var streakEnd = dates.Contains(today) ? today : today.AddDays(-1);
+        var streakStart = streakEnd.AddDays(1 - current);
+
         // Columns are weeks starting Monday; the last column holds today.
         var mondayOffset = ((int)today.DayOfWeek + 6) % 7;
         var start = today.AddDays(-mondayOffset - 7 * (Weeks - 1));
@@ -62,11 +69,12 @@ public static class RunLogbook
             byDay.TryGetValue(date, out var day);
             var minutes = day.Seconds / 60;
             var level = day.Runs == 0 ? 0 : minutes switch { < 15 => 1, < 30 => 2, < 60 => 3, _ => 4 };
-            heatmap.Add(new LogbookDay(date, day.Runs, minutes, day.Net, level, date > today));
+            heatmap.Add(new LogbookDay(date, day.Runs, minutes, day.Net, level, date > today,
+                current > 0 && date >= streakStart && date <= streakEnd));
         }
 
         return new LogbookSummary(
-            StreakCalculator.Current(dates, today),
+            current,
             StreakCalculator.Best(dates),
             totals,
             heatmap,

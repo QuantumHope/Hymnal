@@ -9,8 +9,10 @@ using Hymnal.ViewModels;
 namespace Hymnal.Views;
 
 /// <summary>
-/// The writing run's screens (start card, recap, note to Future You). Only focus and Esc live here: each screen's
-/// main control takes focus when it appears (the dial, so arrows and typed minutes work at once), and Esc cancels the start card or closes the recap and note screens.
+/// The writing run's screens (the start card, and the recap with its note to Future You). Only focus and keys live
+/// here: each screen's main control takes focus when it appears (the dial, so arrows and typed minutes work at
+/// once; Done on the recap), Esc cancels the start card or closes the recap (Done, which keeps a typed note), and
+/// Ctrl+Enter in the note is Done.
 /// </summary>
 public partial class RunOverlayView : UserControl
 {
@@ -19,8 +21,7 @@ public partial class RunOverlayView : UserControl
         InitializeComponent();
         AddHandler(KeyDownEvent, OnPreviewKeyDown, RoutingStrategies.Tunnel);
         StartCard.PropertyChanged += (_, args) => FocusWhenShown(args, Dial);
-        RecapCard.PropertyChanged += (_, args) => FocusWhenShown(args, FutureYouButton);
-        FutureYouCard.PropertyChanged += (_, args) => FocusWhenShown(args, FutureYouInput);
+        RecapCard.PropertyChanged += (_, args) => FocusWhenShown(args, DoneButton);
     }
 
     private RunViewModel? ViewModel => DataContext as RunViewModel;
@@ -33,7 +34,15 @@ public partial class RunOverlayView : UserControl
 
     private void OnPreviewKeyDown(object? sender, KeyEventArgs e)
     {
-        if (e.Key != Key.Escape || ViewModel is not { } vm)
+        if (ViewModel is not { } vm)
+            return;
+        if (e.Key == Key.Enter && e.KeyModifiers.HasFlag(KeyModifiers.Control) && ((ICommand)vm.DoneCommand).CanExecute(null))
+        {
+            ((ICommand)vm.DoneCommand).Execute(null);
+            e.Handled = true;
+            return;
+        }
+        if (e.Key != Key.Escape)
             return;
 
         foreach (ICommand command in new ICommand[] { vm.CancelCommand, vm.DoneCommand })

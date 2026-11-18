@@ -2,7 +2,7 @@ namespace Hymnal.Core.Audio;
 
 /// <summary>
 /// The sounds of a writing run, synthesised (no audio files): a seamless background loop of a low drone and a
-/// crackling fire, a heartbeat for the final stretch, and a chime when the timer runs out. Mono, at
+/// crackling fire, a heartbeat for the whole run, and a chime when the timer runs out. Mono, at
 /// <see cref="SoundVoice.SampleRate"/>. Renders the same on every launch; takes a moment, so call it off the UI
 /// thread.
 /// </summary>
@@ -63,38 +63,46 @@ public sealed class RunAmbienceBank
             bed[i] = raw[i] * Math.Sin(t * Math.PI / 2) + raw[length + i] * Math.Cos(t * Math.PI / 2);
         }
 
-        // Drone: whole numbers of cycles in the loop (55, 82.5, 110 Hz over 8 s), breathing every four seconds.
+        // Drone: whole numbers of cycles in the loop, breathing every four seconds. The sub (55 Hz) is felt on big
+        // speakers; the octave and fifth above it (110, 165, 220 Hz) carry it on laptop speakers, which drop
+        // almost everything below about 120 Hz.
         for (var i = 0; i < length; i++)
         {
             var t = (double)i / rate;
             var breath = 0.75 + 0.25 * Math.Sin(2 * Math.PI * 0.25 * t);
-            var drone = Math.Sin(2 * Math.PI * 55 * t) * 0.5
-                        + Math.Sin(2 * Math.PI * 82.5 * t) * 0.22
-                        + Math.Sin(2 * Math.PI * 110 * t) * 0.12;
-            bed[i] += drone * 0.35 * breath;
+            var drone = Math.Sin(2 * Math.PI * 55 * t) * 0.3
+                        + Math.Sin(2 * Math.PI * 110 * t) * 0.45
+                        + Math.Sin(2 * Math.PI * 165 * t) * 0.22
+                        + Math.Sin(2 * Math.PI * 220 * t) * 0.12;
+            bed[i] += drone * 0.4 * breath;
         }
 
-        return Normalize(bed, 0.55);
+        return Normalize(bed, 0.75);
     }
 
     private static float[] RenderHeartbeat()
     {
         const int rate = SoundVoice.SampleRate;
         var samples = new double[(int)(0.55 * rate)];
-        Thump(samples, 0.0, 62, 0.11, 1.0);
-        Thump(samples, Services.Runs.RunIntensity.DubDelaySeconds, 52, 0.15, 0.7);
-        return Normalize(samples, 0.9);
+        var random = new Random(0xBEA7);
+        Thump(samples, 0.0, 62, 0.11, 1.0, random);
+        Thump(samples, Services.Runs.RunIntensity.DubDelaySeconds, 52, 0.15, 0.7, random);
+        return Normalize(samples, 0.95);
 
-        static void Thump(double[] buffer, double startSeconds, double hz, double decaySeconds, double gain)
+        static void Thump(double[] buffer, double startSeconds, double hz, double decaySeconds, double gain, Random random)
         {
             var start = (int)(startSeconds * rate);
+            // A soft knock on top of the body: it is what laptop speakers, which can't play the low body, let through.
+            var knock = Biquad.BandPass(180, 0.9, rate);
             for (var i = start; i < buffer.Length; i++)
             {
                 var t = (double)(i - start) / rate;
                 var attack = Math.Min(1, t / 0.004);
-                // A slight downward pitch bend makes it a thump rather than a tone.
+                // A slight downward pitch bend makes it a thump rather than a tone; the harmonics give it body.
                 var phase = 2 * Math.PI * (hz * t + 18 * (1 - Math.Exp(-t / 0.03)) * 0.03);
-                buffer[i] += Math.Sin(phase) * attack * Math.Exp(-t / decaySeconds) * gain;
+                var body = Math.Sin(phase) * 0.8 + Math.Sin(2 * phase) * 0.9 + Math.Sin(3 * phase) * 0.5;
+                var noise = knock.Process(random.NextDouble() * 2 - 1) * Math.Exp(-t / 0.03) * 3;
+                buffer[i] += (body * Math.Exp(-t / decaySeconds) + noise) * attack * gain;
             }
         }
     }
