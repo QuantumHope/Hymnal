@@ -160,10 +160,11 @@ public partial class EditorView : UserControl, IEditorTextSurface
 
     private void ApplyDistractionFree(bool on)
     {
+        // Stretch, not Center: a stretched control capped by MaxWidth is always the full column (or the whole pane
+        // when that is narrower) and is centred in the pane. Centred, the editor would be only as wide as its
+        // longest line, so the column would grow and shift as the writer typed.
         PART_Editor.MaxWidth = on ? FocusColumnWidth : double.PositiveInfinity;
-        PART_Editor.HorizontalAlignment = on
-            ? Avalonia.Layout.HorizontalAlignment.Center
-            : Avalonia.Layout.HorizontalAlignment.Stretch;
+        PART_Editor.HorizontalAlignment = Avalonia.Layout.HorizontalAlignment.Stretch;
         PART_Editor.Padding = on ? new Thickness(24, 40, 24, 56) : new Thickness(16, 12);
         PART_Editor.FontSize = on ? 16 : 14;
         PART_FocusStatus.IsVisible = on;
