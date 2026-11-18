@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Globalization;
 using System.Linq;
 using System.Reactive;
 using System.Reactive.Concurrency;
@@ -137,6 +138,8 @@ public sealed class RunViewModel : ViewModelBase, IDisposable
     private string _workspaceName = "";
     private bool _finishing;
     private int _lastNet;
+    /// <summary>The highest net count this run, so a combo is called out once, not again after a cut and retype.</summary>
+    private int _peakNet;
     private readonly List<RunRecapMinute> _timeline = [];
     private DateTimeOffset _comboUntil;
     private string? _lastRunId;
@@ -163,6 +166,8 @@ public sealed class RunViewModel : ViewModelBase, IDisposable
         _scheduler = scheduler ?? AvaloniaScheduler.Instance;
         Atmosphere = atmosphere ?? new RunAtmospherePreferences();
         _soundscape = soundscape ?? new SilentRunSoundscape();
+        // Turning Sparks off mid-run also takes down a callout already showing.
+        Disposables.Add(Atmosphere.WhenAnyValue(a => a.Sparks).Where(on => !on).Subscribe(_ => ComboText = null));
 
         DurationOptions = Presets.Select(m => new RunDurationOption(m)).ToList();
         SelectMinutes(DefaultMinutes);
@@ -220,13 +225,23 @@ public sealed class RunViewModel : ViewModelBase, IDisposable
         // Closing the workspace abandons a running run and closes the screens.
         Disposables.Add(workspace.WhenAnyValue(x => x.HasWorkspace)
             .Where(has => !has && Stage != RunStage.Idle)
-            .Subscribe(_ =>
-            {
-                if (Stage == RunStage.Running)
-                    _soundscape.Finish(completed: false);
-                _running.Disposable = null;
-                Stage = RunStage.Idle;
-            }));
+            .Subscribe(_ => Abandon()));
+
+        // Opening another workspace (HasWorkspace stays true) abandons the run too: chapters are tracked by their
+        // workspace-relative path, so the new workspace's files would be diffed against the old one's. The recap
+        // stays: its note belongs to the run's workspace, which DoneAsync still writes to.
+        Disposables.Add(workspace.WorkspaceChanged
+            .Where(_ => Stage is RunStage.Choosing or RunStage.Running
+                        && !string.Equals(workspace.WorkspaceRoot, _workspaceRoot, StringComparison.Ordinal))
+            .Subscribe(_ => Abandon()));
+    }
+
+    private void Abandon()
+    {
+        if (Stage == RunStage.Running)
+            _soundscape.Finish(completed: false);
+        _running.Disposable = null;
+        Stage = RunStage.Idle;
     }
 
     // ── State ──────────────────────────────────────────────────────────────
@@ -443,6 +458,7 @@ public sealed class RunViewModel : ViewModelBase, IDisposable
         var note = string.IsNullOrEmpty(root) ? null : await _notes.LatestAsync(root);
         await OnUiAsync(() =>
         {
+            _workspaceRoot = root;
             SelectMinutes(last is >= MinMinutes and <= MaxMinutes ? last.Value : DefaultMinutes);
             PastYouNote = note;
             Stage = RunStage.Choosing;
@@ -468,6 +484,7 @@ public sealed class RunViewModel : ViewModelBase, IDisposable
         _workspaceName = _workspace.WorkspaceName ?? "";
         _finishing = false;
         _lastNet = 0;
+        _peakNet = 0;
         _timeline.Clear();
         _comboUntil = DateTimeOffset.MinValue;
         ComboText = null;
@@ -520,18 +537,23 @@ public sealed class RunViewModel : ViewModelBase, IDisposable
         if (net > _lastNet)
         {
             Sparks += net - _lastNet;
-            if (RunCombos.Crossed(_lastNet, net) is { } combo)
+            // Combo callouts belong to the Sparks layer: turned off in Settings → Runs, they don't show.
+            if (Atmosphere.Sparks && RunCombos.Crossed(_peakNet, net) is { } combo)
             {
                 ComboText = RunCombos.Callout(combo);
                 _comboUntil = _scheduler.Now + ComboShown;
             }
+            _peakNet = Math.Max(_peakNet, net);
         }
         _lastNet = net;
     }
 
     private void ObserveActive()
     {
-        if (_editor.ActiveNode is { Kind: NodeKind.Chapter } node && !_editor.IsBookSelected)
+        // A chapter ActiveNode means the buffer holds that chapter: Book.txt clears ActiveNode before it loads.
+        // IsBookSelected is not checked, because it is still true when ActiveNode changes on the way from
+        // Book.txt to a chapter, and the chapter would then get no baseline until its first edit.
+        if (_editor.ActiveNode is { Kind: NodeKind.Chapter } node)
             Observe(node, _editor.Text);
     }
 
@@ -554,6 +576,8 @@ public sealed class RunViewModel : ViewModelBase, IDisposable
         var tail = seconds - _timeline.Count * 60;
         if (tail > 0 || _timeline.Count == 0)
             CloseMinute(Math.Max(0, tail));
+        else
+            FoldIntoLastMinute(); // edits in the fraction of a second after the last tick's minute closed
 
         if (summary.Total.Touched == 0 && seconds < 60)
         {
@@ -568,7 +592,7 @@ public sealed class RunViewModel : ViewModelBase, IDisposable
         {
             Id = Guid.NewGuid().ToString("N"),
             StartedAt = _startedAt,
-            LocalDate = localDate.ToString("yyyy-MM-dd"),
+            LocalDate = localDate.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture),
             PlannedSeconds = (int)_planned.TotalSeconds,
             ActualSeconds = seconds,
             Completed = completed,
@@ -586,26 +610,39 @@ public sealed class RunViewModel : ViewModelBase, IDisposable
         StreakOutcome? streak = null;
         IReadOnlyList<LogbookDay> streakDays = [];
         string? profileError = null;
-        var earlier = await _profile.LoadRunsAsync();
-        if (earlier.IsSuccess)
+        // Anything thrown here must still reach the recap: the run is already finishing (_finishing is set and the
+        // timer stopped), so an escaped exception would leave it stuck in Running with End doing nothing.
+        try
         {
-            var saved = await _profile.AppendRunAsync(session);
-            if (saved.IsSuccess)
+            var earlier = await _profile.LoadRunsAsync();
+            if (earlier.IsSuccess)
             {
-                streak = StreakCalculator.Apply(earlier.Value!.Select(s => DateOnly.Parse(s.LocalDate)), localDate);
-                var today = DateOnly.FromDateTime(_scheduler.Now.ToLocalTime().DateTime);
-                streakDays = RunLogbook.Build(earlier.Value!.Append(session), today).Heatmap;
+                var saved = await _profile.AppendRunAsync(session);
+                if (saved.IsSuccess)
+                {
+                    streak = StreakCalculator.Apply(
+                        earlier.Value!.Select(s => DateOnly.Parse(s.LocalDate, CultureInfo.InvariantCulture)), localDate);
+                    var today = DateOnly.FromDateTime(_scheduler.Now.ToLocalTime().DateTime);
+                    streakDays = RunLogbook.Build(earlier.Value!.Append(session), today).Heatmap;
+                }
+                else
+                    profileError = $"This run wasn't recorded: {saved.Error}";
             }
             else
-                profileError = $"This run wasn't recorded: {saved.Error}";
+            {
+                profileError = $"This run wasn't recorded: {earlier.Error}";
+            }
         }
-        else
+        catch (Exception ex)
         {
-            profileError = $"This run wasn't recorded: {earlier.Error}";
+            profileError = $"This run wasn't recorded: {ex.Message}";
         }
 
         await OnUiAsync(() =>
         {
+            // The workspace was closed or switched while the profile was being written: the run is abandoned.
+            if (Stage != RunStage.Running)
+                return;
             Recap = BuildRecap(summary, seconds, completed, streak, profileError) with { StreakDays = streakDays };
             CaptureLeftOff(tracker);
             FutureYouText = "";
@@ -628,6 +665,25 @@ public sealed class RunViewModel : ViewModelBase, IDisposable
         var totalCut = (previous?.TotalCut ?? 0) + delta.Cut;
         _timeline.Add(new RunRecapMinute(_timeline.Count + 1, seconds, delta.Added, delta.Cut, totalAdded, totalCut,
             totalAdded - totalCut));
+    }
+
+    /// <summary>Adds any words changed since the last minute closed to that minute.</summary>
+    private void FoldIntoLastMinute()
+    {
+        if (_tracker == null || _timeline.Count == 0)
+            return;
+        var delta = _tracker.TakeInterval();
+        if (delta.Touched == 0)
+            return;
+        var last = _timeline[^1];
+        _timeline[^1] = last with
+        {
+            Added = last.Added + delta.Added,
+            Cut = last.Cut + delta.Cut,
+            TotalAdded = last.TotalAdded + delta.Added,
+            TotalCut = last.TotalCut + delta.Cut,
+            TotalNet = last.TotalNet + delta.Net,
+        };
     }
 
     private RunRecap BuildRecap(RunSummary summary, int seconds, bool completed, StreakOutcome? streak,
@@ -699,6 +755,23 @@ public sealed class RunViewModel : ViewModelBase, IDisposable
         LeftOffLine = key == null ? null : RunTracker.LastLine(tracker.LatestText(key) ?? _editor.Text);
     }
 
+    /// <summary>A note typed on the recap that Done hasn't saved yet (the window asks before closing over it).</summary>
+    public bool HasPendingNote => Stage == RunStage.Recap && !string.IsNullOrWhiteSpace(FutureYouText);
+
+    /// <summary>
+    /// Saves a note typed on the recap but not yet saved, as when the window closes or the app restarts. True when
+    /// there was nothing to save or it was saved; false (the text kept) when it couldn't be.
+    /// </summary>
+    public async Task<bool> FlushNoteAsync()
+    {
+        if (!HasPendingNote)
+            return true;
+        var result = await SaveNoteAsync();
+        if (result.IsSuccess)
+            await OnUiAsync(() => FutureYouText = "");
+        return result.IsSuccess;
+    }
+
     private async Task DoneAsync()
     {
         if (string.IsNullOrWhiteSpace(FutureYouText))
@@ -707,6 +780,22 @@ public sealed class RunViewModel : ViewModelBase, IDisposable
             return;
         }
 
+        var result = await SaveNoteAsync();
+        await OnUiAsync(() =>
+        {
+            if (!result.IsSuccess)
+            {
+                _notifications.ShowError($"Your note wasn't saved: {result.Error}");
+                return;
+            }
+            FutureYouText = "";
+            Stage = RunStage.Idle;
+            _notifications.ShowInfo("Note saved. Future You will see it when the next run starts.");
+        });
+    }
+
+    private Task<Hymnal.Core.Common.Result<Hymnal.Core.Common.Unit>> SaveNoteAsync()
+    {
         var note = new FutureYouNote
         {
             CreatedAt = _scheduler.Now,
@@ -716,17 +805,7 @@ public sealed class RunViewModel : ViewModelBase, IDisposable
             ChapterTitle = LeftOffChapter,
             LastLine = LeftOffLine,
         };
-        var result = await _notes.AddAsync(_workspaceRoot, note);
-        await OnUiAsync(() =>
-        {
-            if (!result.IsSuccess)
-            {
-                _notifications.ShowError($"Your note wasn't saved: {result.Error}");
-                return;
-            }
-            Stage = RunStage.Idle;
-            _notifications.ShowInfo("Note saved. Future You will see it when the next run starts.");
-        });
+        return _notes.AddAsync(_workspaceRoot, note);
     }
 
     public void Dispose() => Disposables.Dispose();

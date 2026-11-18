@@ -687,9 +687,11 @@ public partial class EditorViewModel : ViewModelBase, IDisposable, IOpenStoryBuf
         _chapterOpen = false;
         HasConflict = false;
         ConflictMessage = null;
-        ActiveNode = node;
-        ActiveFilePath = null;
+        // Buffer before node, as when a chapter opens: observers of ActiveNode (writing runs take a chapter's
+        // baseline from Text then) must not see the previous chapter's text under this node.
         SetBufferContent(string.Empty);
+        ActiveFilePath = null;
+        ActiveNode = node;
         ShowMissingChapterPrompt = true;
         IsBookSelected = false;
     }

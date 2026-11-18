@@ -190,8 +190,11 @@
         <KeyBinding Gesture="F11" Command="{Binding ToggleFocusModeCommand}" />
         <KeyBinding Gesture="Ctrl+Alt+R" Command="{Binding WritingRun.OpenCommand}" />
         <KeyBinding Gesture="Ctrl+Alt+L" Command="{Binding WritingRun.ShowLogbookCommand}" />
-        <!-- Esc closes the command palette first; ExitFocusModeCommand can't run while it is open. -->
+        <!-- Esc closes the command palette or a run's start card or recap first; ExitFocusModeCommand can't run
+             while any of them is open. -->
         <KeyBinding Gesture="Escape" Command="{Binding CommandPalette.CloseCommand}" />
+        <KeyBinding Gesture="Escape" Command="{Binding WritingRun.CancelCommand}" />
+        <KeyBinding Gesture="Escape" Command="{Binding WritingRun.DoneCommand}" />
         <KeyBinding Gesture="Escape" Command="{Binding ExitFocusModeCommand}" />
         <KeyBinding Gesture="Ctrl+Shift+I" Command="{Binding QuickCaptureIdeaCommand}" />
         <KeyBinding Gesture="Ctrl+P" Command="{Binding ShowGoToCommand}" />

@@ -1,4 +1,5 @@
 using System.Text.Json;
+using Hymnal.Core.Infrastructure;
 using Hymnal.Core.Common;
 using Hymnal.Core.Interfaces;
 using Hymnal.Core.Models.Runs;
@@ -67,8 +68,12 @@ public sealed class FutureYouNotesService(IMetadataStore store) : IFutureYouNote
     public async Task<Result<Unit>> AddAsync(string workspaceRoot, FutureYouNote note)
     {
         await _lock.WaitAsync().ConfigureAwait(false);
+        IDisposable? fileLock = null;
         try
         {
+            // Two Hymnals can have the same workspace open: the read-append-write holds the cross-process lock so
+            // neither note is lost.
+            fileLock = await CrossProcessFileLock.AcquireAsync(NotesFilePath(workspaceRoot)).ConfigureAwait(false);
             var loaded = await LoadAsync(workspaceRoot).ConfigureAwait(false);
             if (!loaded.IsSuccess)
                 return Result<Unit>.Fail(loaded.Error!);
@@ -92,6 +97,7 @@ public sealed class FutureYouNotesService(IMetadataStore store) : IFutureYouNote
         }
         finally
         {
+            fileLock?.Dispose();
             _lock.Release();
         }
     }

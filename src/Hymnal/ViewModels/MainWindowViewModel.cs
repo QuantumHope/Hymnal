@@ -81,9 +81,13 @@ public partial class MainWindowViewModel : ViewModelBase
         private set => this.RaiseAndSetIfChanged(ref _isRestarting, value);
     }
 
-    /// <summary>True while anything typed hasn't been written: the editor, notes, schedule, ideas or beats.</summary>
+    /// <summary>
+    /// True while anything typed hasn't been written: the editor, notes, schedule, ideas, beats or a note to Future
+    /// You on the run recap.
+    /// </summary>
     public bool HasUnsavedWork =>
         EditorViewModel.IsDirty
+        || WritingRun?.HasPendingNote == true
         || NotesViewModel.HasPendingChanges
         || ChapterInfoViewModel.HasPendingSchedule
         || IdeasViewModel?.HasPendingChanges == true
@@ -702,10 +706,14 @@ public partial class MainWindowViewModel : ViewModelBase
             ActiveMode = ShellMode.Write;
             IsFocusMode = true;
         });
+        // Esc leaves focus mode only when nothing on top of it wants the key: the command palette or a run's start
+        // card or recap (Esc cancels or closes those first).
+        var runScreenOpen = run?.WhenAnyValue(x => x.IsOverlayOpen) ?? Observable.Return(false);
         ExitFocusModeCommand = ReactiveCommand.Create(
             () => { IsFocusMode = false; },
             this.WhenAnyValue(x => x.IsFocusMode)
-                .CombineLatest(CommandPalette.WhenAnyValue(x => x.IsOpen), (focus, palette) => focus && !palette));
+                .CombineLatest(CommandPalette.WhenAnyValue(x => x.IsOpen), runScreenOpen,
+                    (focus, palette, runScreen) => focus && !palette && !runScreen));
 
         // A run runs in Write's focus mode; finishing it (recap) leaves focus mode. Leaving focus mode by hand
         // during a run keeps the run running, with its HUD over the normal layout.
@@ -1117,7 +1125,10 @@ public partial class MainWindowViewModel : ViewModelBase
         return text && !EditorViewModel.IsDirty && saved;
     }
 
-    /// <summary>Writes the edits waiting on a debounced save: notes, the schedule, ideas and beats.</summary>
+    /// <summary>
+    /// Writes the edits waiting to be saved: notes, the schedule, ideas and beats (debounced), and a note to Future
+    /// You typed on the run recap.
+    /// </summary>
     private async Task<bool> FlushDebouncedEditsAsync()
     {
         var notes = _notesVm.FlushAsync();
@@ -1125,7 +1136,8 @@ public partial class MainWindowViewModel : ViewModelBase
         var ideas = IdeasViewModel == null ? Task.FromResult(true) : FlushAfterPromoteAsync(IdeasViewModel);
         var beats = PlanHostViewModel == null ? Task.FromResult(true) : PlanHostViewModel.FlushAsync();
         var writeBeats = WriteBeatsViewModel == null ? Task.FromResult(true) : WriteBeatsViewModel.FlushAsync();
-        var results = await Task.WhenAll(notes, schedule, ideas, beats, writeBeats);
+        var runNote = WritingRun == null ? Task.FromResult(true) : WritingRun.FlushNoteAsync();
+        var results = await Task.WhenAll(notes, schedule, ideas, beats, writeBeats, runNote);
         return results.All(ok => ok);
     }
 
@@ -1143,7 +1155,7 @@ public partial class MainWindowViewModel : ViewModelBase
                        + "Closing now loses your edits. Close anyway? (Cancel, then in Write mode choose Keep my edits or Reload from disk.)";
             if (editor.IsDirty)
                 return "Your unsaved text couldn't be saved. Closing now loses it. Close anyway?";
-            return "Some notes, schedule, idea or beat edits couldn't be saved. Close anyway?";
+            return "Some notes, schedule, idea, beat or Future You edits couldn't be saved. Close anyway?";
         }
     }
 

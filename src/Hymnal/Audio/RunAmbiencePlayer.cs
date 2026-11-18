@@ -61,6 +61,7 @@ public sealed class RunAmbiencePlayer : IRunSoundscape, IDisposable
     private double _progress;
     private Timer? _heartbeat;
     private bool _disposed;
+    private CancellationTokenSource? _preview;
 
     public RunAmbiencePlayer(IAudioEngine engine, SoundPreferences sound, RunAtmospherePreferences atmosphere,
         Func<bool> typingUsesEngine)
@@ -75,6 +76,7 @@ public sealed class RunAmbiencePlayer : IRunSoundscape, IDisposable
 
     public void Start()
     {
+        CancelPreview();
         lock (_gate)
         {
             _active = true;
@@ -98,6 +100,7 @@ public sealed class RunAmbiencePlayer : IRunSoundscape, IDisposable
 
     public void Finish(bool completed)
     {
+        CancelPreview();
         lock (_gate)
             _active = false;
         Enqueue(() =>
@@ -113,36 +116,85 @@ public sealed class RunAmbiencePlayer : IRunSoundscape, IDisposable
         });
     }
 
+    /// <summary>
+    /// Plays the sample once. Clicks while one is queued or playing are ignored, and starting or ending a run (or
+    /// disposing) cuts it short, so samples never hold up a run's own sounds.
+    /// </summary>
     public void Preview()
     {
+        CancellationToken token;
+        lock (_gate)
+        {
+            if (_preview != null || _disposed)
+                return;
+            _preview = new CancellationTokenSource();
+            token = _preview.Token;
+        }
+
         Enqueue(() =>
         {
-            if (!_sound.SoundEnabled || (!_engine.IsRunning && !_engine.TryStart()))
-                return;
-            _bank ??= RunAmbienceBank.Render();
-            var heart = _engine.CreateClip(_bank.Heartbeat, _bank.SampleRate);
-            var bed = _engine.CreateClip(_bank.Bed, _bank.SampleRate);
-            var chime = _engine.CreateClip(_bank.Chime, _bank.SampleRate);
-            if (heart == null || bed == null || chime == null)
+            try
+            {
+                PlayPreview(token);
+            }
+            finally
+            {
+                lock (_gate)
+                {
+                    _preview?.Dispose();
+                    _preview = null;
+                }
+            }
+        });
+    }
+
+    private void CancelPreview()
+    {
+        lock (_gate)
+            _preview?.Cancel();
+    }
+
+    private void PlayPreview(CancellationToken token)
+    {
+        {
+            if (token.IsCancellationRequested || !_sound.SoundEnabled || (!_engine.IsRunning && !_engine.TryStart()))
                 return;
 
             // The fire and drone under four beats that quicken, then the chime.
             _engine.SetBusGain(AudioBus.Ambience, BusGain(_atmosphere.AmbienceVolume, 1));
-            var loop = _engine.Play(bed, new PlaybackOptions(AudioBus.Ambience, 1f));
+            var bedOnce = new PlaybackOptions(AudioBus.Ambience, 1f);
+            var loop = _bedClip == null ? null : _engine.Play(_bedClip, bedOnce);
+            if (loop == null)
+            {
+                if (!UploadClips())
+                    return;
+                loop = _engine.Play(_bedClip!, bedOnce);
+            }
+            if (_heartClip is not { } heart || _chimeClip is not { } chime)
+                return;
             foreach (var bpm in new[] { 60.0, 80, 110, 140 })
             {
                 _engine.Play(heart, new PlaybackOptions(AudioBus.Ambience, HeartbeatGain(1)));
-                Thread.Sleep(TimeSpan.FromSeconds(60 / bpm));
+                if (token.WaitHandle.WaitOne(TimeSpan.FromSeconds(60 / bpm)))
+                {
+                    loop?.Stop();
+                    return; // a run started or ended: its sounds take over
+                }
             }
             loop?.Stop();
-            _engine.Play(chime, new PlaybackOptions(AudioBus.Ambience, 0.9f));
-            Thread.Sleep(TimeSpan.FromSeconds(3.3));
+            var ring = _engine.Play(chime, new PlaybackOptions(AudioBus.Ambience, 0.9f));
+            if (token.WaitHandle.WaitOne(TimeSpan.FromSeconds(3.3)))
+            {
+                ring?.Stop();
+                return;
+            }
             ReleaseEngine();
-        });
+        }
     }
 
     public void Dispose()
     {
+        CancelPreview();
         lock (_gate)
         {
             if (_disposed)
@@ -175,14 +227,17 @@ public sealed class RunAmbiencePlayer : IRunSoundscape, IDisposable
 
         if (_bed is not { IsPlaying: true })
         {
-            _bank ??= RunAmbienceBank.Render();
-            // Clips die with an engine restart, so upload them again whenever the loop has to restart.
-            _bedClip = _engine.CreateClip(_bank.Bed, _bank.SampleRate);
-            _heartClip = _engine.CreateClip(_bank.Heartbeat, _bank.SampleRate);
-            _chimeClip = _engine.CreateClip(_bank.Chime, _bank.SampleRate);
-            if (_bedClip == null)
-                return;
-            _bed = _engine.Play(_bedClip, new PlaybackOptions(AudioBus.Ambience, 1f, Loop: true));
+            var loop = new PlaybackOptions(AudioBus.Ambience, 1f, Loop: true);
+            // Reuse the uploaded clips while they are valid: the engine keeps every clip until it stops, so
+            // uploading afresh for each run would pile up buffers while typing sounds keep the engine open.
+            _bed = _bedClip == null ? null : _engine.Play(_bedClip, loop);
+            if (_bed == null)
+            {
+                // Clips die with an engine restart, so upload them again.
+                if (!UploadClips())
+                    return;
+                _bed = _engine.Play(_bedClip!, loop);
+            }
         }
 
         // The loop swells to full volume as the run nears its end.
@@ -220,6 +275,16 @@ public sealed class RunAmbiencePlayer : IRunSoundscape, IDisposable
 
     /// <summary>Each beat's volume on that bus: steady under the run, full in the last seconds.</summary>
     internal static float HeartbeatGain(double intensity) => (float)(0.8 + 0.2 * Math.Clamp(intensity, 0, 1));
+
+    /// <summary>Uploads the bed, heartbeat and chime. False when the bed couldn't be uploaded. Runs on the work queue.</summary>
+    private bool UploadClips()
+    {
+        _bank ??= RunAmbienceBank.Render();
+        _bedClip = _engine.CreateClip(_bank.Bed, _bank.SampleRate);
+        _heartClip = _engine.CreateClip(_bank.Heartbeat, _bank.SampleRate);
+        _chimeClip = _engine.CreateClip(_bank.Chime, _bank.SampleRate);
+        return _bedClip != null;
+    }
 
     private void StopVoices()
     {

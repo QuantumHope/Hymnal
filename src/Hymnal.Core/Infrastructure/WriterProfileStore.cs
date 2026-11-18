@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using Hymnal.Core.Common;
@@ -47,8 +48,12 @@ public sealed class WriterProfileStore : IWriterProfileStore
     public async Task<Result<Unit>> AppendRunAsync(RunRecord session)
     {
         await _lock.WaitAsync().ConfigureAwait(false);
+        IDisposable? fileLock = null;
         try
         {
+            // The profile is global: another running Hymnal may be appending too, so the whole read-append-write
+            // holds the cross-process lock, or one of the two runs would be lost.
+            fileLock = await CrossProcessFileLock.AcquireAsync(_path).ConfigureAwait(false);
             var loaded = await LoadDocumentAsync().ConfigureAwait(false);
             if (!loaded.IsSuccess)
                 return Result<Unit>.Fail(loaded.Error!);
@@ -75,6 +80,7 @@ public sealed class WriterProfileStore : IWriterProfileStore
         }
         finally
         {
+            fileLock?.Dispose();
             _lock.Release();
         }
     }
@@ -123,7 +129,7 @@ public sealed class WriterProfileStore : IWriterProfileStore
                 return Result<IReadOnlyList<RunRecord>>.Fail("writer-profile.json: 'sessions' is not a list.");
 
             var list = node.Deserialize<List<RunRecord?>>(JsonOptions) ?? [];
-            if (list.Any(s => s is null || string.IsNullOrEmpty(s.LocalDate) || !DateOnly.TryParse(s.LocalDate, out _)))
+            if (list.Any(s => s is null || string.IsNullOrEmpty(s.LocalDate) || !DateOnly.TryParse(s.LocalDate, CultureInfo.InvariantCulture, DateTimeStyles.None, out _)))
                 return Result<IReadOnlyList<RunRecord>>.Fail(
                     "writer-profile.json contains a session without a valid localDate.");
             return Result<IReadOnlyList<RunRecord>>.Ok(list!);

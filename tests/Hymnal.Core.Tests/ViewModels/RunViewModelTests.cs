@@ -403,6 +403,10 @@ public sealed class RunViewModelTests
 
                 context.Scheduler.AdvanceBy(TimeSpan.FromSeconds(4));
                 Assert.False(run.HasCombo);
+
+                // Climbing back past 50 after the cut is not a new combo.
+                context.Editor.Text += string.Join(" ", Enumerable.Repeat("word", 50)) + "\n";
+                Assert.False(run.HasCombo);
             });
         }
         finally { DeleteFolder(root); }
@@ -433,6 +437,62 @@ public sealed class RunViewModelTests
                 await Within(run.DoneCommand.Execute().ToTask());
                 Assert.Equal(RunStage.Idle, run.Stage);
                 Assert.Null(await new FutureYouNotesService(new MetadataStore()).LatestAsync(root));
+            });
+        }
+        finally { DeleteFolder(root); }
+    }
+
+    [Fact]
+    public async Task Closing_the_window_saves_a_note_typed_on_the_recap()
+    {
+        var root = CreateWorkspace(NovelJson, ("a.md", "# A\n\nText.\n"));
+        try
+        {
+            await Ui(root, 1, async context =>
+            {
+                var run = context.CreateRun();
+                var window = context.CreateMainWindow(context.CreateHost(), run: run);
+                await OpenChapterAsync(context, "a.md");
+                await StartAsync(context, run, 10);
+                context.Editor.Text += "Rain on the glass.\n";
+                await Within(run.EndCommand.Execute().ToTask());
+                await Within(context.Editor.SaveCommand.Execute().ToTask());
+
+                Assert.False(window.HasUnsavedWork);
+                run.FutureYouText = "Open with the knock at the door.";
+                Assert.True(run.HasPendingNote);
+                Assert.True(window.HasUnsavedWork); // the window asks rather than lose it
+
+                Assert.True(await window.FlushPendingEditsBeforeCloseAsync(TimeSpan.FromSeconds(10)));
+                Assert.False(window.HasUnsavedWork);
+                var saved = await new FutureYouNotesService(new MetadataStore()).LatestAsync(root);
+                Assert.Equal("Open with the knock at the door.", saved!.Text);
+            });
+        }
+        finally { DeleteFolder(root); }
+    }
+
+    [Fact]
+    public async Task With_sparks_turned_off_there_are_no_combo_callouts()
+    {
+        var root = CreateWorkspace(NovelJson, ("a.md", "# A\n\nStart.\n"));
+        try
+        {
+            await Ui(root, 1, async context =>
+            {
+                var run = context.CreateRun();
+                context.CreateMainWindow(context.CreateHost(), run: run);
+                await OpenChapterAsync(context, "a.md");
+                await StartAsync(context, run, 10);
+
+                context.Editor.Text += string.Join(' ', Enumerable.Repeat("word", 55)) + "\n";
+                Assert.True(run.HasCombo);
+
+                run.Atmosphere.Sparks = false;
+                Assert.False(run.HasCombo); // turning the layer off takes the callout down
+
+                context.Editor.Text += string.Join(' ', Enumerable.Repeat("more", 60)) + "\n";
+                Assert.False(run.HasCombo);
             });
         }
         finally { DeleteFolder(root); }
