@@ -2,7 +2,7 @@
 
 - **Date:** 2026-11-18
 - **Branch:** `feat/roguelike-meta-design`
-- **Status:** Direction agreed with the author on 2026-11-18 (§8). The menu-bar question is still open.
+- **Status:** Direction agreed with the author on 2026-11-18 (§8).
 - **Builds on:** `2026-11-17-writing-runs-and-gamification-design.md` (runs, built) and
   `2026-11-17-roguelike-meta-progression-design.md` (character sheet, loadout, Dungeon map, classes, economy, the
   rename to Inkdeep).
@@ -227,4 +227,4 @@ Steps 1–2 are pure refactoring and can start at once. Steps 3–6 interleave w
 | An Edit / Revise place | **No.** Editing and revising are classes chosen when a run starts. Their tools are Write panels and skills. This also brought in untimed runs and bonus time (meta spec, §4) |
 | Vocabulary | **Proudly game-only.** No plain twin, no *Adventure off* |
 | The app's purpose | Gamify the start of a session and the flow within it, **and** help the writer see and explore the project's overall shape and status |
-| Menu bar | **Open:** keep it (generated from the command catalog), or replace it with the palette plus the top bar? |
+| Menu bar | **Kept**, generated from the command catalog, so the menu, the palette and the keys stay in sync |
