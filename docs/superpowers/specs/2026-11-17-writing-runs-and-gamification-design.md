@@ -47,6 +47,8 @@ time."* Later phases should be judged against this frame:
   a double-length final stretch); relics from achievements; the streak as the torch you keep lit; and the unlock web
   as what the loot is spent on.
 
+> **Superseded for phases 2 onward:** `2026-11-17-roguelike-meta-progression-design.md` adds the author's character sheet, the run loadout (class, theme, goal), paragraph rooms on a dungeon map, AI summaries, skills and the gold economy, and re-phases the work below.
+
 ## 2. Phases
 
 | Phase | Contents | Status |
