@@ -30,8 +30,8 @@ The research shapes three guardrails:
 |---|---|
 | Author identity | The author has a **character sheet** of their own: level, a **background**, the **perks** taken, **class levels** (multiclassing allowed), achievements, titles, relics and inventory. It lives in the global writer profile. **No attributes** (Might, Stamina and the like): the background and perks change how the editor behaves, and class levels unlock and improve editor features. |
 | Before a run | Pick a **class** and a **theme**, then a **goal** from an offered set (usually three). Rerolling the offer costs currency. |
-| The dungeon | Shown as **tiles**. A **room is a paragraph**, a floor is a chapter (or scene file), the dungeon is the book, and a series is a world of dungeons. |
-| Room types | Each paragraph is given a **family** (dialogue, action, description…), and the family picks its tile graphic. Families come from a classifier: instant heuristics first, then a cheap model, run when the paragraph is changed or after the caret leaves it. |
+| The dungeon | **Scenes are rooms**, and paragraphs are the features inside them. A floor is a chapter, the dungeon is the book, and a series is a world. For now the map is a new **mode on the rail**. |
+| Room types | Each paragraph is given a **family** (dialogue, action, description…), and the family picks the feature drawn for it. A room's type comes from its mix of features. Families come from a classifier: instant heuristics first, then a cheap model, run when the paragraph is changed or after the caret leaves it. |
 | AI | Cheap models (local Ollama, or a small hosted model, through the existing `ChatClientFactory`) **summarise the run** on the recap and, when cast as a spell, **give feedback on a paragraph**. AI never rewrites prose by itself. |
 | Classes | Some classes are built for **drafting** and others for **editing**, and each has its own **skills**. AI analysis is a spell. Repeated-word search, synonyms and spell check are skills. |
 | Currencies | Runs earn **XP** (levels, never spent) and **gold** (spent), and goals pay bonus gold. Spend it on cosmetics, real editor improvements (new skills, skill slots, classes, goal types) and rerolls. |
@@ -53,8 +53,30 @@ and later for gold.
 ### Level
 
 Level comes from lifetime XP. Use the curve from the runs spec, phase 3 (about weekly level-ups at first for a
-15-minute daily habit). Each level-up grants **one class level**, to put into any class you've unlocked (§5). Every
-few levels (for example 3, 6, 9…) also grants a **perk pick**.
+15-minute daily habit). Levelling never ends.
+
+**Rule: every level-up grants something concrete.**
+
+- **Every level** grants one **class level**, to put into any class you've unlocked (§5). Every class level unlocks
+  or ranks up a real editor feature, so no level is empty.
+- **Every 3 levels** (3, 6, 9…) also grants a **perk pick**.
+- When every unlocked class is at its cap, a level-up instead grants a **prestige** option (below), or a new class
+  to unlock, chosen from those you don't have yet.
+
+### Class caps and prestige
+
+Each class is capped at **level 5**, its capstone. Character level is endless. There are always more classes to
+take, and a capped class can be **prestiged**:
+
+- **Prestiging a class** resets it to level 1 and adds a **prestige star** to it (★, ★★…). Its skills relock and
+  come back as it re-levels.
+- What each star grants:
+  - a **prestige perk pick**, from a pool open only to prestiged classes: stronger editor behaviours, such as
+    *Echo sight* covering the whole book or a third skill-bar slot
+  - a prestige title ("Delver ★★")
+  - a cosmetic for the class: a portrait frame, or a tile-set variant for its theme
+- Prestige is optional and never forced. A writer who would rather keep a capped class goes on taking levels in
+  other classes, or banks them as gold.
 
 ### Background
 
@@ -153,12 +175,14 @@ Each character level grants one **class level**, which goes into any unlocked cl
 writer who drafts and revises might be *Delver 5 / Mason 3*. A class's levels **unlock** its skills, then **improve**
 them (rank II, rank III). Each rank is a real step up in the editor feature, not a bigger number on a goal.
 
-| Class | Leaning | Lv 1 | Lv 2 | Lv 3 | Lv 5 (capstone) |
-|---|---|---|---|---|---|
-| **Delver** | Drafting | *Tunnel vision*: spelling squiggles hidden, focus mode on | *Second wind*: adds 5 minutes, once per run | *Prompt card*: a random prompt for the stuck moment | *Momentum*: combo multiplier for unbroken typing; *Tunnel vision II* also hides the word count until the run ends |
-| **Cartographer** | Planning and drafting | *Survey*: the next beat and the chapter outline pinned above the editor | *Waypoint*: drop a TODO marker and keep writing | *Beat link*: link the scene being drafted to its beat | *Survey II*: the whole floor's beats as a strip, with the drafted ones ticked |
-| **Mason** | Editing | *Spellward*: spell check, with a sweep through issues one by one | *Echo sight*: repeated words within a paragraph | *Thesaurus*: synonyms for the word at the caret | *Echo sight II*: repeated phrases across the chapter; *Trim*: filler words and adverbs |
-| **Seer** | Editing with AI | *Read the room*: AI names the paragraph's family and mood | *Scry*: AI feedback on one paragraph | *Echoes of the past*: AI continuity check against earlier chapters | *Oracle*: a pacing read of the whole chapter; *Scry II* compares two versions of a paragraph |
+Every level of every class grants something:
+
+| Class | Leaning | Lv 1 | Lv 2 | Lv 3 | Lv 4 | Lv 5 (capstone) |
+|---|---|---|---|---|---|---|
+| **Delver** | Drafting | *Tunnel vision*: spelling squiggles hidden, focus mode on | *Second wind*: adds 5 minutes, once per run | *Prompt card*: a random prompt for the stuck moment | *Tunnel vision II*: the word count is also hidden until the run ends, and you drop past paragraphs from view | *Momentum*: combo multiplier for unbroken typing |
+| **Cartographer** | Planning and drafting | *Survey*: the next beat and the chapter outline pinned above the editor | *Waypoint*: drop a TODO marker and keep writing | *Beat link*: link the scene being drafted to its beat | *Waypoint II*: a list of waypoints across the book, to jump between them | *Survey II*: the whole floor's beats as a strip, with the drafted ones ticked |
+| **Mason** | Editing | *Spellward*: spell check, with a sweep through issues one by one | *Echo sight*: repeated words within a paragraph | *Thesaurus*: synonyms for the word at the caret | *Trim*: filler words and adverbs flagged | *Echo sight II*: repeated phrases across the chapter |
+| **Seer** | Editing with AI | *Read the room*: AI names the paragraph's family and mood | *Scry*: AI feedback on one paragraph | *Echoes of the past*: AI continuity check against earlier chapters | *Scry II*: compares two versions of a paragraph | *Oracle*: a pacing read of the whole chapter |
 
 - The class you **play** in a run is the one whose skills sit on the skill bar. With multiclassing, the loadout can
   also slot one skill from a second class. The *Deep pockets* perk adds a slot.
@@ -173,8 +197,9 @@ them (rank II, rank III). Each rank is a real step up in the editor feature, not
 
 ## 6. The dungeon map
 
-A new view (Plan → **Dungeon**, or a mode of its own once the name and the mode rail settle) draws the manuscript as
-tiles.
+A new **Dungeon mode** on the mode rail, beside Plan, Write and Manage, draws the manuscript as tiles. The launch pad
+and the run recap show a mini-map taken from it. This placement is for now only: all of this will probably need an
+overall UX redesign (§12).
 
 ### Scale
 
@@ -182,47 +207,58 @@ tiles.
 |---|---|---|
 | World | Series (several books / collections) | An overworld of dungeon entrances |
 | Dungeon | Book / collection (Book.txt) | Floors stacked in order |
-| Floor | Chapter, scene file or story | A grid of rooms |
-| Room | **Paragraph** | One tile (larger paragraphs take more cells) |
+| Floor | Chapter, or a story in an anthology | A grid of rooms |
+| Room | **Scene**: the text between scene breaks, or a whole scene file | A tile, sized by word count |
+| Feature | **Paragraph** inside the scene | A piece of furniture or a prop drawn inside the room |
 
-Short stories become a single compact floor, and an anthology is a cluster of small side dungeons. Headings and
-scene breaks are doors and stairs. Planned chapters with no words are **unexcavated rock** with a dotted outline,
-sized by their target.
+Short stories become a single compact floor, and an anthology is a cluster of small side dungeons. Scene breaks are
+doorways and chapter headings are stairs. Planned chapters with no words are **unexcavated rock** with a dotted
+outline, sized by their target. A chapter with no scene breaks is one large room.
+
+Scenes as rooms keep the map readable: a dialogue-heavy chapter doesn't turn into a hundred tiny tiles. The
+paragraphs still show, as the furnishing of each room.
 
 ### What a room shows
 
-- **Family** picks its graphic (the theme's tile set supplies the art):
+- **Features (paragraphs).** Each paragraph is classified into a **family**, and the family picks the prop the
+  theme's tile set draws for it:
 
-  | Family | Tile | Detected by |
+  | Family | Feature | Detected by |
   |---|---|---|
-  | Dialogue | Tavern / hall of voices | Mostly quoted speech |
-  | Action | Arena | Short sentences, motion verbs |
-  | Description | Vista / gallery | Concrete nouns and modifiers, few verbs of motion |
-  | Interiority | Shrine | First-person or close-third thought, cognition verbs |
-  | Exposition / lore | Library | Long sentences, few named actors |
-  | Transition | Corridor | Short paragraph that moves time or place |
-  | Break / heading | Stairs, door | Markua structure |
+  | Dialogue | A table with mugs, a speaking-stone | Mostly quoted speech |
+  | Action | A weapon rack, scorch marks | Short sentences, motion verbs |
+  | Description | A window, a tapestry | Concrete nouns and modifiers, few verbs of motion |
+  | Interiority | Candles at a small shrine | First-person or close-third thought, cognition verbs |
+  | Exposition / lore | A bookshelf | Long sentences, few named actors |
+  | Transition | An archway | A short paragraph that moves time or place |
 
+- **Room type** comes from the mix of its features, weighted by words. A room is a **tavern** when dialogue
+  dominates, an **arena** for action, a **gallery** for description, a **shrine** for interiority and a **library**
+  for exposition. A room with no dominant family is a **hall** with zones.
 - **Condition** follows renovation: rough (drafted, never revised) → dug → renovated (edited in a later run or
   pass) → polished (the chapter is Done). It shows as wear on the tile.
 - **Freshness** shows how recently the room was touched, and **heat** shows how much it changed in the last run.
   The recap can show the run's path through the rooms.
-- **Notes and beats** pinned to the room appear as small markers.
+- **Notes and beats** pinned to the scene appear as markers. A beat linked to a scene names its room.
 
-Selecting a room opens the paragraph in Write. Hovering shows its first line, family, word count and condition.
+Selecting a room opens its scene in Write. Hovering shows the first line, the room type, its feature mix, word count
+and condition. Zooming into a room lists its features, one per paragraph, and clicking a feature jumps to that
+paragraph.
 
-### Paragraph identity
+### Identity: scenes and paragraphs
 
-Paragraphs have no IDs, and adding them to the prose is out of the question. Rooms are matched between versions
-instead:
+Neither scenes nor paragraphs have IDs, and adding IDs to the prose is out of the question. They are matched between
+versions instead:
 
 - Each paragraph's **fingerprint** is a hash of its normalised text.
-- On each save, the new paragraph list is aligned with the stored one. Use exact hash matches first, then
+- On each save, the new paragraph list is aligned with the stored one. Exact hash matches come first. Then comes
   similarity between neighbours (word-level `WordDiff` similarity above a threshold), so an edited paragraph keeps
-  its room, family and history.
+  its family and history.
+- A **scene** keeps its room id when most of its paragraphs come through the alignment (the best overlap wins), so
+  splitting, merging or moving scenes keeps their history as far as possible.
 - The data lives in a sidecar per chapter, `.hymnal-data/rooms/{chapterUuid}.json`:
-  `{ schemaVersion, rooms: [{ id, fingerprint, family, familySource: heuristic|model, condition, firstSeen, lastEdited, edits }] }`.
-  Writes use `IMetadataStore` (atomic), and the usual rules apply: a malformed file is read-only and never
+  `{ schemaVersion, rooms: [{ id, condition, firstSeen, lastEdited, edits, features: [{ fingerprint, family, familySource: heuristic|model }] }] }`.
+  Writes go through `IMetadataStore` (atomic), and the usual rules apply: a malformed file is read-only and is never
   overwritten.
 
 ### Classification
@@ -277,7 +313,7 @@ purchases, so the balance is recomputed and a formula change can be applied to h
     `equipped { title, relics[], skillBar }`, `achievements[]`
 
   The format keeps its rule of only gaining fields, and old runs read as "no class, no goal".
-- `.hymnal-data/rooms/{chapterUuid}.json`: the paragraph rooms (§6).
+- `.hymnal-data/rooms/{chapterUuid}.json`: scene rooms and their paragraph features (§6).
 - `.hymnal-data/project.json` gains `ai.allowManuscript`.
 - App settings gain `run.loadout` (the last class, theme and goal family), `ai.classifier`, `ai.summary` and
   `ai.budget`.
@@ -312,7 +348,7 @@ This replaces and extends phases 2–5 of the runs spec:
 |---|---|
 | 2. Launch pad + loadout | Launch pad (Future You note, last room, **Enter**). Loadout with the class (Delver and Mason to start), the theme and the goal deck (Excavate, Break ground, Renovate, Clear rubble). Missed-goal recap. `goal` stored on runs. |
 | 3. Character sheet + progression | Character creation (background), level, class levels with multiclassing, perk picks and the first perks, achievements shelf, titles and relics, the free first respec. The skill bar with the Delver and Mason level 1–2 skills (Tunnel vision, Second wind, Spellward, Echo sight). |
-| 4. Dungeon map | Paragraph rooms and fingerprints, the heuristic classifier, the tile view (floors, doors, rock), condition and freshness, and the run path on the recap. |
+| 4. Dungeon map | The Dungeon mode on the rail, scene rooms with paragraph features and fingerprints, the heuristic classifier, the tile view (floors, doors, rock), condition and freshness, and the run path on the recap. |
 | 5. Economy + shop | Gold, the shop (the old unlock web) with cosmetics, editor improvements and rerolls, and the Cartographer class. |
 | 6. AI layer | Provider opt-in per project, the model classifier, run summaries, the Seer class (Scry, Read the room) and the token budget. |
 | 7. Rename to Inkdeep | Its own spec, after the trademark search. Can happen at any point. |
@@ -320,10 +356,8 @@ This replaces and extends phases 2–5 of the runs spec:
 
 ## 12. Open questions
 
-1. How often are perk picks granted, and is there a level cap, or does levelling go on for ever with class levels
-   beyond each class's capstone giving cosmetic ranks?
-2. Is a paragraph the right room for very short paragraphs, such as a line of dialogue? Merge consecutive
-   same-family paragraphs under N words into one room?
-3. Where does the dungeon map live: Plan, its own mode, or the launch pad?
-4. Is the theme separate from the class, or does each class have a default biome?
-5. Thesaurus source and licence for an offline synonym list.
+1. **The app's overall UX.** Runs, the loadout, the character sheet, the Dungeon mode and the shop will crowd the
+   current shell (mode rail, menus and right-hand panes). This probably needs its own redesign and rearchitecture
+   spec, alongside the rename to Inkdeep. For now, the map is a new mode on the rail.
+2. Is the theme separate from the class, or does each class have a default biome?
+3. Thesaurus source and licence for an offline synonym list.
