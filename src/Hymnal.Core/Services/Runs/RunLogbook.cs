@@ -1,3 +1,4 @@
+using System.Globalization;
 using Hymnal.Core.Models.Runs;
 
 namespace Hymnal.Core.Services.Runs;
@@ -34,7 +35,7 @@ public static class RunLogbook
     {
         var list = runs.ToList();
         var dated = list
-            .Select(r => (Run: r, Ok: DateOnly.TryParse(r.LocalDate, out var d), Date: d))
+            .Select(r => (Run: r, Ok: DateOnly.TryParse(r.LocalDate, CultureInfo.InvariantCulture, DateTimeStyles.None, out var d), Date: d))
             .Where(x => x.Ok)
             .ToList();
         var dates = dated.Select(x => x.Date).ToHashSet();

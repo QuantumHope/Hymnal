@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using Hymnal.Core.Common;
@@ -123,7 +124,7 @@ public sealed class WriterProfileStore : IWriterProfileStore
                 return Result<IReadOnlyList<RunRecord>>.Fail("writer-profile.json: 'sessions' is not a list.");
 
             var list = node.Deserialize<List<RunRecord?>>(JsonOptions) ?? [];
-            if (list.Any(s => s is null || string.IsNullOrEmpty(s.LocalDate) || !DateOnly.TryParse(s.LocalDate, out _)))
+            if (list.Any(s => s is null || string.IsNullOrEmpty(s.LocalDate) || !DateOnly.TryParse(s.LocalDate, CultureInfo.InvariantCulture, DateTimeStyles.None, out _)))
                 return Result<IReadOnlyList<RunRecord>>.Fail(
                     "writer-profile.json contains a session without a valid localDate.");
             return Result<IReadOnlyList<RunRecord>>.Ok(list!);

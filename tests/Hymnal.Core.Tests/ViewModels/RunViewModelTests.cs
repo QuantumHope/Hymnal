@@ -403,6 +403,10 @@ public sealed class RunViewModelTests
 
                 context.Scheduler.AdvanceBy(TimeSpan.FromSeconds(4));
                 Assert.False(run.HasCombo);
+
+                // Climbing back past 50 after the cut is not a new combo.
+                context.Editor.Text += string.Join(" ", Enumerable.Repeat("word", 50)) + "\n";
+                Assert.False(run.HasCombo);
             });
         }
         finally { DeleteFolder(root); }
