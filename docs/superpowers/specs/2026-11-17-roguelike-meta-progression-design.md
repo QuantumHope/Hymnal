@@ -29,7 +29,8 @@ The research shapes three guardrails:
 | Topic | Decision |
 |---|---|
 | Author identity | The author has a **character sheet** of their own: level, a **background**, the **perks** taken, **class levels** (multiclassing allowed), achievements, titles, relics and inventory. It lives in the global writer profile. **No attributes** (Might, Stamina and the like): the background and perks change how the editor behaves, and class levels unlock and improve editor features. |
-| Before a run | Pick a **class** and a **theme**, then a **goal** from an offered set (usually three). Rerolling the offer costs currency. |
+| Before a run | Pick a **class**, which also sets the editor's style (colours, atmosphere, sound), then a **goal** from an offered set (usually three). Rerolling the offer costs currency. |
+| Dungeon look | The **story** decides the tile set, not the character: the project's genre and setting, overridable per chapter. AI-generated tiles from scenes get a feature design of their own. |
 | The dungeon | **Scenes are rooms**, and paragraphs are the features inside them. A floor is a chapter, the dungeon is the book, and a series is a world. For now the map is a new **mode on the rail**. |
 | Room types | Each paragraph is given a **family** (dialogue, action, description…), and the family picks the feature drawn for it. A room's type comes from its mix of features. Families come from a classifier: instant heuristics first, then a cheap model, run when the paragraph is changed or after the caret leaves it. |
 | AI | Cheap models (local Ollama, or a small hosted model, through the existing `ChatClientFactory`) **summarise the run** on the recap and, when cast as a spell, **give feedback on a paragraph**. AI never rewrites prose by itself. |
@@ -74,7 +75,7 @@ take, and a capped class can be **prestiged**:
   - a **prestige perk pick**, from a pool open only to prestiged classes: stronger editor behaviours, such as
     *Echo sight* covering the whole book or a third skill-bar slot
   - a prestige title ("Delver ★★")
-  - a cosmetic for the class: a portrait frame, or a tile-set variant for its theme
+  - a cosmetic for the class: a portrait frame, or a variant of its editor style
 - Prestige is optional and never forced. A writer who would rather keep a capped class goes on taking levels in
   other classes, or banks them as gold.
 
@@ -116,7 +117,7 @@ anyone. Examples:
 - **Inventory** holds owned cosmetics, unlocked classes, skills and goal types.
 
 The sheet is a view of its own (Run → Character, plus a palette command). It shows:
-- the portrait (the background plus the equipped theme)
+- the portrait (the background plus the equipped class's style)
 - the level and XP bar
 - the class levels as a split bar (for example "Delver 4 / Mason 2")
 - the perks taken
@@ -125,14 +126,20 @@ The sheet is a view of its own (Run → Character, plus a palette command). It s
 
 ## 4. The run loadout
 
-The run card (phase 1's Choosing state) becomes a three-step **loadout**. Each step remembers the last pick, so the
+The run card (phase 1's Choosing state) becomes a two-step **loadout**. Each step remembers the last pick, so the
 loadout is one click once you've chosen:
 
-1. **Class.** A drafting or editing class (§5). It decides which skills are on hand during the run.
-2. **Theme.** The biome: the dungeon's tile set, the colour theme, the atmosphere and the soundscape. Themes reuse
-   `ThemeCatalog`, the run atmosphere and `IRunSoundscape`. A theme is cosmetic.
-3. **Goal.** Usually three goals, drawn from a deck and built from the manuscript's state, plus the run length (the
+1. **Class.** A drafting or editing class (§5). It decides:
+   - which skills are on hand during the run
+   - the **style of the editor**: its colour theme, the run atmosphere and the soundscape. Each class has a signature
+     style, for example torchlit amber for the Delver, cool stone for the Mason and violet starlight for the Seer.
+     Owned variants of that style (bought, or earned through prestige) can be swapped in on this step. Styles reuse
+     `ThemeCatalog`, the run atmosphere and `IRunSoundscape`.
+2. **Goal.** Usually three goals, drawn from a deck and built from the manuscript's state, plus the run length (the
    minute dial). **Reroll** swaps the offer for gold. A "no goal" free run is always allowed.
+
+The **dungeon's look is not part of the loadout.** Room textures and tile sets belong to the *story*, not the
+character, so a book looks the same whichever class you play (§6, "Tile sets").
 
 ### Goal deck (first draft)
 
@@ -221,7 +228,7 @@ paragraphs still show, as the furnishing of each room.
 ### What a room shows
 
 - **Features (paragraphs).** Each paragraph is classified into a **family**, and the family picks the prop the
-  theme's tile set draws for it:
+  story's tile set draws for it:
 
   | Family | Feature | Detected by |
   |---|---|---|
@@ -244,6 +251,23 @@ paragraphs still show, as the furnishing of each room.
 Selecting a room opens its scene in Write. Hovering shows the first line, the room type, its feature mix, word count
 and condition. Zooming into a room lists its features, one per paragraph, and clicking a feature jumps to that
 paragraph.
+
+### Tile sets
+
+The dungeon's look belongs to the **story**, so it stays the same whichever class the author plays:
+
+- The **project** has a genre and setting in `project.json`, for example fantasy, sci-fi, horror, contemporary,
+  historical, noir or romance. That picks the default **tile set**, which supplies the floor, wall, door and
+  feature art. A fantasy book gets stone halls and a tavern with mugs. A sci-fi book gets corridors and a mess deck.
+- A **chapter** (or a story in an anthology) can override the setting, for example a dream sequence, a flashback or
+  the one story in an anthology set on a ship. The override is stored with the chapter's metadata through
+  `IStoryMetadataStore`.
+- A series can set the world's default, and each book can override it.
+- Tile sets are cosmetics. A few ship built in, one per common genre, and more can be bought. They are kept separate
+  from the editor styles that classes carry.
+- **Later, in its own feature design:** generated tiles. A cheap image model would turn a scene's setting
+  (classified or summarised) into its own room texture, cached per scene fingerprint. It needs its own spec for cost,
+  privacy, consistency within a book and moderation.
 
 ### Identity: scenes and paragraphs
 
@@ -279,7 +303,7 @@ AI is off until the author turns it on and chooses a provider. With AI off, the 
 
 - **Run summary (recap).** After a run, the run's diff is sent as text: each touched chapter with its added and
   removed passages, cut down to a budget. The model returns a short "what you did" summary, in the delve-log voice of
-  the chosen theme, plus up to three observations. It is stored with the run in the Logbook. If the model call fails,
+  the chosen class, plus up to three observations. It is stored with the run in the Logbook. If the model call fails,
   the recap stays as it is.
 - **Paragraph feedback (Scry).** A spell cast on the paragraph at the caret. It returns notes in a side panel and
   never edits text. Each cast uses mana or a charge.
@@ -295,7 +319,7 @@ AI is off until the author turns it on and chooses a provider. With AI off, the 
 
 The shop is phase 4's unlock web, extended:
 
-- **Cosmetics:** themes, tile sets, portraits, titles, sound schemes, the editor companion (zen garden).
+- **Cosmetics:** editor-style variants for classes, story tile sets, portraits, titles, sound schemes, the editor companion (zen garden).
 - **Editor improvements:** unlock a new class so it can take levels, extra spell charges, new goal types for the
   deck. Skills themselves come from class levels, and perks come from perk picks. These add options and don't loosen
   goals.
@@ -308,14 +332,14 @@ purchases, so the balance is recomputed and a formula change can be applied to h
 ## 9. Storage additions (all additive)
 
 - `writer-profile.json` gains:
-  - per run: `classId`, `themeId`, `goal { id, target, met }`, `goldEarned`, `summary`
+  - per run: `classId`, `styleId`, `goal { id, target, met }`, `goldEarned`, `summary`
   - at the top level: `character { background, perks[], classLevels { classId: n }, respecs }`, `purchases[]`,
     `equipped { title, relics[], skillBar }`, `achievements[]`
 
   The format keeps its rule of only gaining fields, and old runs read as "no class, no goal".
 - `.hymnal-data/rooms/{chapterUuid}.json`: scene rooms and their paragraph features (§6).
-- `.hymnal-data/project.json` gains `ai.allowManuscript`.
-- App settings gain `run.loadout` (the last class, theme and goal family), `ai.classifier`, `ai.summary` and
+- `.hymnal-data/project.json` gains `ai.allowManuscript`, `genre` and `setting` (the default tile set). Chapter metadata gains an optional `setting` override.
+- App settings gain `run.loadout` (the last class, style and goal family), `ai.classifier`, `ai.summary` and
   `ai.budget`.
 
 ## 10. The name
@@ -346,7 +370,7 @@ This replaces and extends phases 2–5 of the runs spec:
 
 | Phase | Contents |
 |---|---|
-| 2. Launch pad + loadout | Launch pad (Future You note, last room, **Enter**). Loadout with the class (Delver and Mason to start), the theme and the goal deck (Excavate, Break ground, Renovate, Clear rubble). Missed-goal recap. `goal` stored on runs. |
+| 2. Launch pad + loadout | Launch pad (Future You note, last room, **Enter**). Loadout with the class and its editor style (Delver and Mason to start) and the goal deck (Excavate, Break ground, Renovate, Clear rubble). Missed-goal recap. `goal` stored on runs. |
 | 3. Character sheet + progression | Character creation (background), level, class levels with multiclassing, perk picks and the first perks, achievements shelf, titles and relics, the free first respec. The skill bar with the Delver and Mason level 1–2 skills (Tunnel vision, Second wind, Spellward, Echo sight). |
 | 4. Dungeon map | The Dungeon mode on the rail, scene rooms with paragraph features and fingerprints, the heuristic classifier, the tile view (floors, doors, rock), condition and freshness, and the run path on the recap. |
 | 5. Economy + shop | Gold, the shop (the old unlock web) with cosmetics, editor improvements and rerolls, and the Cartographer class. |
@@ -359,5 +383,4 @@ This replaces and extends phases 2–5 of the runs spec:
 1. **The app's overall UX.** Runs, the loadout, the character sheet, the Dungeon mode and the shop will crowd the
    current shell (mode rail, menus and right-hand panes). This probably needs its own redesign and rearchitecture
    spec, alongside the rename to Inkdeep. For now, the map is a new mode on the rail.
-2. Is the theme separate from the class, or does each class have a default biome?
-3. Thesaurus source and licence for an offline synonym list.
+2. Thesaurus source and licence for an offline synonym list.
