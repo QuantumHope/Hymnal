@@ -106,24 +106,58 @@
             <Setter Property="Background" Value="{DynamicResource Cora.Wash.Selected}" />
             <Setter Property="BorderBrush" Value="{DynamicResource Cora.Accent.Store}" />
         </Style>
+        <!-- The card: the start screen is a 600 px card near the top; the recap is a screen of its own. -->
+        <Style Selector="Border#Card">
+            <Setter Property="MaxWidth" Value="600" />
+            <Setter Property="Margin" Value="16,48,16,16" />
+            <Setter Property="HorizontalAlignment" Value="Stretch" />
+            <Setter Property="VerticalAlignment" Value="Top" />
+        </Style>
+        <Style Selector="Border#Card ScrollViewer#CardScroll">
+            <Setter Property="MaxHeight" Value="640" />
+        </Style>
+        <Style Selector="Border#Card.wide">
+            <Setter Property="MaxWidth" Value="1180" />
+            <Setter Property="Margin" Value="24" />
+            <Setter Property="VerticalAlignment" Value="Stretch" />
+            <Setter Property="Padding" Value="32,24" />
+        </Style>
+        <Style Selector="Border#Card.wide ScrollViewer#CardScroll">
+            <Setter Property="MaxHeight" Value="Infinity" />
+        </Style>
+        <Style Selector="TextBlock.run-banner">
+            <Setter Property="FontFamily" Value="{DynamicResource Cora.Font.Heading}" />
+            <Setter Property="FontSize" Value="42" />
+            <Setter Property="FontWeight" Value="Heavy" />
+            <Setter Property="LetterSpacing" Value="6" />
+            <Setter Property="HorizontalAlignment" Value="Center" />
+        </Style>
+        <Style Selector="Border.run-badge">
+            <Setter Property="BorderBrush" Value="{DynamicResource Cora.Accent.Store}" />
+            <Setter Property="BorderThickness" Value="1" />
+            <Setter Property="CornerRadius" Value="12" />
+            <Setter Property="Padding" Value="12,3" />
+            <Setter Property="Background" Value="{DynamicResource Cora.Surface.Void}" />
+        </Style>
+        <Style Selector="Border.run-section.first">
+            <Setter Property="BorderThickness" Value="0" />
+            <Setter Property="Padding" Value="0" />
+            <Setter Property="Margin" Value="0" />
+        </Style>
     </UserControl.Styles>
 
     <Grid>
         <Border Background="{DynamicResource Cora.Scrim}" />
 
         <Border x:Name="Card"
-                Width="600"
-                MaxWidth="600"
-                Margin="16,48,16,16"
-                HorizontalAlignment="Center"
-                VerticalAlignment="Top"
+                Classes.wide="{Binding IsRecap}"
                 Background="{DynamicResource Cora.Surface.Elevated}"
                 BorderBrush="{DynamicResource Cora.Accent.Store}"
                 BorderThickness="1"
                 CornerRadius="6"
                 Padding="24,20"
                 ClipToBounds="True">
-            <ScrollViewer MaxHeight="640" HorizontalScrollBarVisibility="Disabled">
+            <ScrollViewer x:Name="CardScroll" HorizontalScrollBarVisibility="Disabled">
                 <Panel>
 
                     <!-- ── Start card ─────────────────────────────────────────── -->
@@ -189,195 +223,244 @@
                         </StackPanel>
                     </StackPanel>
 
-                    <!-- ── Recap ──────────────────────────────────────────────── -->
+                    <!-- ── Recap: a banner, then the numbers on the left and the run's shape and the note on the right ── -->
                     <StackPanel x:Name="RecapCard" IsVisible="{Binding IsRecap}" Spacing="6">
-                        <TextBlock Classes="run-headline" Text="{Binding Recap.Headline, FallbackValue=''}" />
-                        <TextBlock Classes="run-sub" Text="{Binding Recap.Summary, FallbackValue=''}" />
-
-                        <Border Classes="run-tile" HorizontalAlignment="Center" Padding="16,6"
-                                IsVisible="{Binding Recap.HasMilestone, FallbackValue=False}"
-                                BorderBrush="{DynamicResource Cora.Accent.Success}">
-                            <TextBlock Text="{Binding Recap.Milestone, FallbackValue=''}" FontWeight="SemiBold"
-                                       Foreground="{DynamicResource Cora.Accent.Success}" />
-                        </Border>
-
-                        <UniformGrid Columns="3" Margin="0,8,0,0">
-                            <Border Classes="run-tile">
-                                <StackPanel>
-                                    <TextBlock Classes="run-caps" Text="ADDED" />
-                                    <TextBlock Classes="run-value" Text="{Binding Recap.Added, FallbackValue=''}" />
-                                </StackPanel>
-                            </Border>
-                            <Border Classes="run-tile">
-                                <StackPanel>
-                                    <TextBlock Classes="run-caps" Text="CUT" />
-                                    <TextBlock Classes="run-value" Text="{Binding Recap.Cut, FallbackValue=''}" />
-                                </StackPanel>
-                            </Border>
-                            <Border Classes="run-tile">
-                                <StackPanel>
-                                    <TextBlock Classes="run-caps" Text="NET" />
-                                    <TextBlock Classes="run-value" Text="{Binding Recap.Net, FallbackValue=''}" />
-                                </StackPanel>
-                            </Border>
-                            <Border Classes="run-tile">
-                                <StackPanel>
-                                    <TextBlock Classes="run-caps" Text="TIME" />
-                                    <TextBlock Classes="run-value" Text="{Binding Recap.Minutes, FallbackValue=''}" />
-                                </StackPanel>
-                            </Border>
-                            <Border Classes="run-tile">
-                                <StackPanel>
-                                    <TextBlock Classes="run-caps" Text="WORDS / MIN" />
-                                    <TextBlock Classes="run-value" Text="{Binding Recap.WordsPerMinute, FallbackValue=''}" />
-                                </StackPanel>
-                            </Border>
-                            <Border Classes="run-tile" BorderBrush="{DynamicResource Cora.Accent.Store}">
-                                <StackPanel>
-                                    <TextBlock Classes="run-caps" Text="EARNED" />
-                                    <TextBlock Classes="run-value run-xp" Text="{Binding Recap.Xp, FallbackValue=''}" />
-                                </StackPanel>
-                            </Border>
-                        </UniformGrid>
-
-                        <!-- Impact: what share of the words touched were added vs cut -->
-                        <Border Classes="run-section" IsVisible="{Binding Recap.HasChanges, FallbackValue=False}">
-                            <StackPanel Spacing="6">
-                                <DockPanel>
-                                    <TextBlock Classes="run-caps" Text="IMPACT" />
-                                    <TextBlock Text="{Binding Recap.ChurnLabel, FallbackValue=''}"
-                                               HorizontalAlignment="Right" FontSize="12"
-                                               Foreground="{DynamicResource Cora.Text}" />
-                                </DockPanel>
-                                <ProgressBar Minimum="0" Maximum="100" Height="8" CornerRadius="4"
-                                             Value="{Binding Recap.AddedPercent, FallbackValue=0}"
-                                             Foreground="{DynamicResource Cora.Accent.Success}"
-                                             Background="{DynamicResource Cora.Accent.Error}"
-                                             ToolTip.Tip="Green: words added · red: words cut" />
-                                <ItemsControl ItemsSource="{Binding Recap.Chapters, FallbackValue={x:Null}}">
-                                    <ItemsControl.ItemTemplate>
-                                        <DataTemplate x:DataType="vm:RunRecapChapter">
-                                            <DockPanel Margin="0,2">
-                                                <TextBlock DockPanel.Dock="Right" Text="{Binding DetailDisplay}"
-                                                           FontSize="11" Margin="12,0,0,0"
-                                                           Foreground="{DynamicResource Cora.Text.Secondary}" />
-                                                <TextBlock DockPanel.Dock="Right" Text="{Binding NetDisplay}"
-                                                           FontFamily="{DynamicResource Cora.Font.Machine}"
-                                                           FontSize="12" Margin="12,0,0,0"
-                                                           Foreground="{DynamicResource Cora.Text}" />
-                                                <TextBlock Text="{Binding Title}" FontSize="12"
-                                                           TextTrimming="CharacterEllipsis"
-                                                           Foreground="{DynamicResource Cora.Text}" />
-                                            </DockPanel>
-                                        </DataTemplate>
-                                    </ItemsControl.ItemTemplate>
-                                </ItemsControl>
-                            </StackPanel>
-                        </Border>
-
-                        <!-- Minute by minute: per-minute bars, or running totals -->
-                        <Border Classes="run-section" IsVisible="{Binding Recap.HasTimeline, FallbackValue=False}">
-                            <StackPanel Spacing="6">
-                                <DockPanel>
-                                    <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" Spacing="4">
-                                        <RadioButton x:Name="PerMinuteToggle" Classes="run-chart-mode" GroupName="runChart"
-                                                     Content="Per minute"
-                                                     IsChecked="{Binding ShowPerMinute}" />
-                                        <RadioButton x:Name="CumulativeToggle" Classes="run-chart-mode" GroupName="runChart"
-                                                     Content="Running total"
-                                                     IsChecked="{Binding ShowCumulative}" />
-                                    </StackPanel>
-                                    <TextBlock Classes="run-caps" Text="MINUTE BY MINUTE" VerticalAlignment="Center" />
-                                </DockPanel>
-                                <controls:RunMinuteChart x:Name="MinuteChart"
-                                                         Height="150"
-                                                         Items="{Binding Recap.Timeline, FallbackValue={x:Null}}"
-                                                         Cumulative="{Binding ShowCumulative}" />
-                                <DockPanel>
-                                    <TextBlock DockPanel.Dock="Right" FontSize="11"
-                                               Text="{Binding Recap.BestMinute, FallbackValue=''}"
-                                               Foreground="{DynamicResource Cora.Accent.Store}" />
-                                    <StackPanel Orientation="Horizontal" Spacing="12">
-                                        <TextBlock FontSize="11" Text="■ added" Foreground="{DynamicResource Cora.Accent.Success}" />
-                                        <TextBlock FontSize="11" Text="■ cut" Foreground="{DynamicResource Cora.Accent.Error}" />
-                                        <TextBlock FontSize="11" Text="■ net" Foreground="{DynamicResource Cora.Accent.Store}" />
-                                    </StackPanel>
-                                </DockPanel>
-                            </StackPanel>
-                        </Border>
-
-                        <!-- Project progress -->
-                        <Border Classes="run-section">
-                            <StackPanel Spacing="6">
-                                <DockPanel>
-                                    <TextBlock Classes="run-caps" Text="PROJECT" />
-                                    <TextBlock Text="{Binding Recap.ProjectWords, FallbackValue=''}"
-                                               HorizontalAlignment="Right" FontSize="12"
-                                               Foreground="{DynamicResource Cora.Text}" />
-                                </DockPanel>
-                                <StackPanel Spacing="4" IsVisible="{Binding Recap.HasTarget, FallbackValue=False}">
-                                    <ProgressBar Minimum="0" Maximum="100" Height="8" CornerRadius="4"
-                                                 Value="{Binding Recap.TargetPercentAfter, FallbackValue=0}"
-                                                 Foreground="{DynamicResource Cora.Accent.Store}" />
-                                    <TextBlock Text="{Binding Recap.TargetProgress, FallbackValue=''}" FontSize="11"
-                                               Foreground="{DynamicResource Cora.Text.Secondary}" />
-                                </StackPanel>
-                            </StackPanel>
-                        </Border>
-
-                        <!-- Streak: the last 12 weeks, the current streak in the accent colour -->
-                        <Border Classes="run-section">
-                            <Grid ColumnDefinitions="*,Auto" ColumnSpacing="16">
-                                <StackPanel Grid.Column="0" Spacing="2" VerticalAlignment="Center">
-                                    <TextBlock Classes="run-caps" Text="STREAK" />
-                                    <TextBlock Text="{Binding Recap.Streak, FallbackValue=''}" FontSize="15" FontWeight="SemiBold"
-                                               TextWrapping="Wrap"
-                                               IsVisible="{Binding Recap.HasStreak, FallbackValue=False}"
-                                               Foreground="{DynamicResource Cora.Accent.Store}" />
-                                    <TextBlock Text="{Binding Recap.BestStreak, FallbackValue=''}" FontSize="11"
-                                               IsVisible="{Binding Recap.HasStreak, FallbackValue=False}"
-                                               Foreground="{DynamicResource Cora.Text.Secondary}" />
-                                    <TextBlock Text="{Binding Recap.ProfileError, FallbackValue=''}" FontSize="11"
-                                               TextWrapping="Wrap"
-                                               IsVisible="{Binding Recap.HasProfileError, FallbackValue=False}"
-                                               Foreground="{DynamicResource Cora.Accent.Error}" />
-                                </StackPanel>
-                                <controls:StreakHeatmap x:Name="StreakCalendar" Grid.Column="1" CellSize="11"
-                                                        VerticalAlignment="Center"
-                                                        Days="{Binding Recap.StreakDays, FallbackValue={x:Null}}"
-                                                        IsVisible="{Binding Recap.HasStreakDays, FallbackValue=False}" />
+                        <!-- Banner: the open door between two rules, the headline in fire, the summary and any milestone -->
+                        <StackPanel x:Name="RecapBanner" Spacing="6" HorizontalAlignment="Center" Margin="0,0,0,8">
+                            <Grid ColumnDefinitions="*,Auto,*" ColumnSpacing="14" Width="420" HorizontalAlignment="Center">
+                                <Border Grid.Column="0" Height="2" VerticalAlignment="Center" CornerRadius="1">
+                                    <Border.Background>
+                                        <LinearGradientBrush StartPoint="0%,0%" EndPoint="100%,0%">
+                                            <GradientStop Color="Transparent" Offset="0" />
+                                            <GradientStop Color="{DynamicResource Cora.Accent.Store.Color}" Offset="1" />
+                                        </LinearGradientBrush>
+                                    </Border.Background>
+                                </Border>
+                                <Viewbox Grid.Column="1" Width="26" Height="26">
+                                    <Canvas Width="24" Height="24">
+                                        <Path Data="M6 21V9a6 6 0 0 1 12 0v12z"
+                                              Fill="{DynamicResource Cora.Accent.Store}" Opacity="0.35" />
+                                        <Path Data="F1 M4 21V9a8 8 0 0 1 16 0v12h-2V9a6 6 0 0 0-12 0v12z M2 21h20v2H2z M6.5 21V10.2l5.5-2.4v11.6z M10.4 14.6a.9.9 0 1 0 0.01 0z"
+                                              Fill="{DynamicResource Cora.Accent.Store}" />
+                                    </Canvas>
+                                </Viewbox>
+                                <Border Grid.Column="2" Height="2" VerticalAlignment="Center" CornerRadius="1">
+                                    <Border.Background>
+                                        <LinearGradientBrush StartPoint="0%,0%" EndPoint="100%,0%">
+                                            <GradientStop Color="{DynamicResource Cora.Accent.Store.Color}" Offset="0" />
+                                            <GradientStop Color="Transparent" Offset="1" />
+                                        </LinearGradientBrush>
+                                    </Border.Background>
+                                </Border>
                             </Grid>
-                        </Border>
+                            <TextBlock x:Name="RecapHeadline" Classes="run-banner"
+                                       Text="{Binding Recap.Headline, FallbackValue=''}">
+                                <TextBlock.Foreground>
+                                    <LinearGradientBrush StartPoint="0%,0%" EndPoint="100%,100%">
+                                        <GradientStop Color="{DynamicResource Cora.Accent.Create.Color}" Offset="0" />
+                                        <GradientStop Color="{DynamicResource Cora.Accent.Store.Color}" Offset="0.5" />
+                                        <GradientStop Color="{DynamicResource Cora.Accent.Error.Color}" Offset="1" />
+                                    </LinearGradientBrush>
+                                </TextBlock.Foreground>
+                                <TextBlock.Effect>
+                                    <DropShadowEffect OffsetX="0" OffsetY="0" BlurRadius="22" Opacity="0.55"
+                                                      Color="{DynamicResource Cora.Accent.Store.Color}" />
+                                </TextBlock.Effect>
+                            </TextBlock>
+                            <TextBlock Classes="run-sub" FontSize="15" Text="{Binding Recap.Summary, FallbackValue=''}" />
+                            <StackPanel Orientation="Horizontal" Spacing="8" HorizontalAlignment="Center" Margin="0,4,0,0">
+                                <Border Classes="run-badge" BorderBrush="{DynamicResource Cora.Accent.Success}"
+                                        IsVisible="{Binding Recap.HasMilestone, FallbackValue=False}">
+                                    <TextBlock Text="{Binding Recap.Milestone, FallbackValue=''}" FontWeight="SemiBold" FontSize="13"
+                                               Foreground="{DynamicResource Cora.Accent.Success}" />
+                                </Border>
+                            </StackPanel>
+                        </StackPanel>
 
-                        <!-- Note to Future You: optional; Done saves it -->
-                        <Border Classes="run-section">
-                            <StackPanel Spacing="8">
-                                <TextBlock Classes="run-caps" Text="NOTE TO FUTURE YOU" />
-                                <TextBlock Text="Tomorrow's first minute is the hardest. Tell Future You exactly where to start."
-                                           FontSize="12" TextWrapping="Wrap"
-                                           Foreground="{DynamicResource Cora.Text.Secondary}" />
-                                <Border Classes="run-tile" Margin="0" IsVisible="{Binding HasLeftOff}">
-                                    <StackPanel Spacing="4">
-                                        <TextBlock Classes="run-caps" Text="WHERE YOU LEFT OFF" />
-                                        <TextBlock Text="{Binding LeftOffChapter}" FontWeight="SemiBold" FontSize="13"
-                                                   Foreground="{DynamicResource Cora.Text}" />
-                                        <TextBlock Text="{Binding LeftOffLine}" FontStyle="Italic" FontSize="12"
-                                                   TextWrapping="Wrap"
-                                                   Foreground="{DynamicResource Cora.Text.Secondary}" />
+                        <Grid x:Name="RecapColumns" ColumnDefinitions="5*,6*" ColumnSpacing="28">
+                            <StackPanel Grid.Column="0" Spacing="6">
+                                <UniformGrid Columns="3" Margin="-4,0">
+                                    <Border Classes="run-tile">
+                                        <StackPanel>
+                                            <TextBlock Classes="run-caps" Text="ADDED" />
+                                            <TextBlock Classes="run-value" Text="{Binding Recap.Added, FallbackValue=''}" />
+                                        </StackPanel>
+                                    </Border>
+                                    <Border Classes="run-tile">
+                                        <StackPanel>
+                                            <TextBlock Classes="run-caps" Text="CUT" />
+                                            <TextBlock Classes="run-value" Text="{Binding Recap.Cut, FallbackValue=''}" />
+                                        </StackPanel>
+                                    </Border>
+                                    <Border Classes="run-tile">
+                                        <StackPanel>
+                                            <TextBlock Classes="run-caps" Text="NET" />
+                                            <TextBlock Classes="run-value" Text="{Binding Recap.Net, FallbackValue=''}" />
+                                        </StackPanel>
+                                    </Border>
+                                    <Border Classes="run-tile">
+                                        <StackPanel>
+                                            <TextBlock Classes="run-caps" Text="TIME" />
+                                            <TextBlock Classes="run-value" Text="{Binding Recap.Minutes, FallbackValue=''}" />
+                                        </StackPanel>
+                                    </Border>
+                                    <Border Classes="run-tile">
+                                        <StackPanel>
+                                            <TextBlock Classes="run-caps" Text="WORDS / MIN" />
+                                            <TextBlock Classes="run-value" Text="{Binding Recap.WordsPerMinute, FallbackValue=''}" />
+                                        </StackPanel>
+                                    </Border>
+                                    <Border Classes="run-tile" BorderBrush="{DynamicResource Cora.Accent.Store}">
+                                        <StackPanel>
+                                            <TextBlock Classes="run-caps" Text="EARNED" />
+                                            <TextBlock Classes="run-value run-xp" Text="{Binding Recap.Xp, FallbackValue=''}" />
+                                        </StackPanel>
+                                    </Border>
+                                </UniformGrid>
+
+                                <!-- Impact: what share of the words touched were added vs cut -->
+                                <Border Classes="run-section" IsVisible="{Binding Recap.HasChanges, FallbackValue=False}">
+                                    <StackPanel Spacing="6">
+                                        <DockPanel>
+                                            <TextBlock Classes="run-caps" Text="IMPACT" />
+                                            <TextBlock Text="{Binding Recap.ChurnLabel, FallbackValue=''}"
+                                                       HorizontalAlignment="Right" FontSize="12"
+                                                       Foreground="{DynamicResource Cora.Text}" />
+                                        </DockPanel>
+                                        <ProgressBar Minimum="0" Maximum="100" Height="8" CornerRadius="4"
+                                                     Value="{Binding Recap.AddedPercent, FallbackValue=0}"
+                                                     Foreground="{DynamicResource Cora.Accent.Success}"
+                                                     Background="{DynamicResource Cora.Accent.Error}"
+                                                     ToolTip.Tip="Green: words added · red: words cut" />
+                                        <ItemsControl ItemsSource="{Binding Recap.Chapters, FallbackValue={x:Null}}">
+                                            <ItemsControl.ItemTemplate>
+                                                <DataTemplate x:DataType="vm:RunRecapChapter">
+                                                    <DockPanel Margin="0,2">
+                                                        <TextBlock DockPanel.Dock="Right" Text="{Binding DetailDisplay}"
+                                                                   FontSize="11" Margin="12,0,0,0"
+                                                                   Foreground="{DynamicResource Cora.Text.Secondary}" />
+                                                        <TextBlock DockPanel.Dock="Right" Text="{Binding NetDisplay}"
+                                                                   FontFamily="{DynamicResource Cora.Font.Machine}"
+                                                                   FontSize="12" Margin="12,0,0,0"
+                                                                   Foreground="{DynamicResource Cora.Text}" />
+                                                        <TextBlock Text="{Binding Title}" FontSize="12"
+                                                                   TextTrimming="CharacterEllipsis"
+                                                                   Foreground="{DynamicResource Cora.Text}" />
+                                                    </DockPanel>
+                                                </DataTemplate>
+                                            </ItemsControl.ItemTemplate>
+                                        </ItemsControl>
                                     </StackPanel>
                                 </Border>
-                                <TextBox x:Name="FutureYouInput"
-                                         Text="{Binding FutureYouText}"
-                                         PlaceholderText="What happens next? e.g. Mara opens the letter and recognises the handwriting."
-                                         AcceptsReturn="True"
-                                         TextWrapping="Wrap"
-                                         MinHeight="72"
-                                         FontSize="14" />
+
+                                <!-- Project progress -->
+                                <Border Classes="run-section">
+                                    <StackPanel Spacing="6">
+                                        <DockPanel>
+                                            <TextBlock Classes="run-caps" Text="PROJECT" />
+                                            <TextBlock Text="{Binding Recap.ProjectWords, FallbackValue=''}"
+                                                       HorizontalAlignment="Right" FontSize="12"
+                                                       Foreground="{DynamicResource Cora.Text}" />
+                                        </DockPanel>
+                                        <StackPanel Spacing="4" IsVisible="{Binding Recap.HasTarget, FallbackValue=False}">
+                                            <ProgressBar Minimum="0" Maximum="100" Height="8" CornerRadius="4"
+                                                         Value="{Binding Recap.TargetPercentAfter, FallbackValue=0}"
+                                                         Foreground="{DynamicResource Cora.Accent.Store}" />
+                                            <TextBlock Text="{Binding Recap.TargetProgress, FallbackValue=''}" FontSize="11"
+                                                       Foreground="{DynamicResource Cora.Text.Secondary}" />
+                                        </StackPanel>
+                                    </StackPanel>
+                                </Border>
+
+                                <!-- Streak: the last 12 weeks, the current streak in the accent colour -->
+                                <Border Classes="run-section">
+                                    <Grid ColumnDefinitions="*,Auto" ColumnSpacing="16">
+                                        <StackPanel Grid.Column="0" Spacing="2" VerticalAlignment="Center">
+                                            <TextBlock Classes="run-caps" Text="STREAK" />
+                                            <TextBlock Text="{Binding Recap.Streak, FallbackValue=''}" FontSize="15" FontWeight="SemiBold"
+                                                       TextWrapping="Wrap"
+                                                       IsVisible="{Binding Recap.HasStreak, FallbackValue=False}"
+                                                       Foreground="{DynamicResource Cora.Accent.Store}" />
+                                            <TextBlock Text="{Binding Recap.BestStreak, FallbackValue=''}" FontSize="11"
+                                                       IsVisible="{Binding Recap.HasStreak, FallbackValue=False}"
+                                                       Foreground="{DynamicResource Cora.Text.Secondary}" />
+                                            <TextBlock Text="{Binding Recap.ProfileError, FallbackValue=''}" FontSize="11"
+                                                       TextWrapping="Wrap"
+                                                       IsVisible="{Binding Recap.HasProfileError, FallbackValue=False}"
+                                                       Foreground="{DynamicResource Cora.Accent.Error}" />
+                                        </StackPanel>
+                                        <controls:StreakHeatmap x:Name="StreakCalendar" Grid.Column="1" CellSize="12"
+                                                                VerticalAlignment="Center"
+                                                                Days="{Binding Recap.StreakDays, FallbackValue={x:Null}}"
+                                                                IsVisible="{Binding Recap.HasStreakDays, FallbackValue=False}" />
+                                    </Grid>
+                                </Border>
+
                             </StackPanel>
-                        </Border>
+                            <StackPanel Grid.Column="1" Spacing="6">
+                                <!-- Minute by minute: per-minute bars, or running totals -->
+                                <Border Classes="run-section first" IsVisible="{Binding Recap.HasTimeline, FallbackValue=False}">
+                                    <StackPanel Spacing="6">
+                                        <DockPanel>
+                                            <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" Spacing="4">
+                                                <RadioButton x:Name="PerMinuteToggle" Classes="run-chart-mode" GroupName="runChart"
+                                                             Content="Per minute"
+                                                             IsChecked="{Binding ShowPerMinute}" />
+                                                <RadioButton x:Name="CumulativeToggle" Classes="run-chart-mode" GroupName="runChart"
+                                                             Content="Running total"
+                                                             IsChecked="{Binding ShowCumulative}" />
+                                            </StackPanel>
+                                            <TextBlock Classes="run-caps" Text="MINUTE BY MINUTE" VerticalAlignment="Center" />
+                                        </DockPanel>
+                                        <controls:RunMinuteChart x:Name="MinuteChart"
+                                                                 Height="200"
+                                                                 Items="{Binding Recap.Timeline, FallbackValue={x:Null}}"
+                                                                 Cumulative="{Binding ShowCumulative}" />
+                                        <DockPanel>
+                                            <TextBlock DockPanel.Dock="Right" FontSize="11"
+                                                       Text="{Binding Recap.BestMinute, FallbackValue=''}"
+                                                       Foreground="{DynamicResource Cora.Accent.Store}" />
+                                            <StackPanel Orientation="Horizontal" Spacing="12">
+                                                <TextBlock FontSize="11" Text="■ added" Foreground="{DynamicResource Cora.Accent.Success}" />
+                                                <TextBlock FontSize="11" Text="■ cut" Foreground="{DynamicResource Cora.Accent.Error}" />
+                                                <TextBlock FontSize="11" Text="■ net" Foreground="{DynamicResource Cora.Accent.Store}" />
+                                            </StackPanel>
+                                        </DockPanel>
+                                    </StackPanel>
+                                </Border>
+
+                                <!-- Note to Future You: optional; Done saves it -->
+                                <Border Classes="run-section note">
+                                    <StackPanel Spacing="8">
+                                        <TextBlock Classes="run-caps" Text="NOTE TO FUTURE YOU" />
+                                        <TextBlock Text="Tomorrow's first minute is the hardest. Tell Future You exactly where to start."
+                                                   FontSize="12" TextWrapping="Wrap"
+                                                   Foreground="{DynamicResource Cora.Text.Secondary}" />
+                                        <Border Classes="run-tile" Margin="0" IsVisible="{Binding HasLeftOff}">
+                                            <StackPanel Spacing="4">
+                                                <TextBlock Classes="run-caps" Text="WHERE YOU LEFT OFF" />
+                                                <TextBlock Text="{Binding LeftOffChapter}" FontWeight="SemiBold" FontSize="13"
+                                                           Foreground="{DynamicResource Cora.Text}" />
+                                                <TextBlock Text="{Binding LeftOffLine}" FontStyle="Italic" FontSize="12"
+                                                           TextWrapping="Wrap"
+                                                           Foreground="{DynamicResource Cora.Text.Secondary}" />
+                                            </StackPanel>
+                                        </Border>
+                                        <TextBox x:Name="FutureYouInput"
+                                                 Text="{Binding FutureYouText}"
+                                                 PlaceholderText="What happens next? e.g. Mara opens the letter and recognises the handwriting."
+                                                 AcceptsReturn="True"
+                                                 TextWrapping="Wrap"
+                                                 MinHeight="72"
+                                                 FontSize="14" />
+                                    </StackPanel>
+                                </Border>
+
+                            </StackPanel>
+                        </Grid>
 
                         <Button x:Name="DoneButton" Classes="run-primary" Content="DONE"
-                                HorizontalAlignment="Center" Margin="0,16,0,0" MinWidth="140"
+                                HorizontalAlignment="Center" Margin="0,12,0,0" MinWidth="140"
                                 HorizontalContentAlignment="Center"
                                 ToolTip.Tip="Close the recap (saves your note, if you wrote one). Ctrl+Enter from the note."
                                 Command="{Binding DoneCommand}" IsDefault="True" />

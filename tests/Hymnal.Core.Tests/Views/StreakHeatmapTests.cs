@@ -16,7 +16,7 @@ public class StreakHeatmapTests
     private static readonly Color Surface = Color.Parse("#0B0807");
 
     [Fact]
-    public void Denser_days_are_more_saturated_and_stronger_in_both_scales()
+    public void Light_days_are_pale_and_dense_days_saturated_in_both_scales()
     {
         foreach (var scale in new[] { Accent, Neutral })
         {
@@ -24,9 +24,11 @@ public class StreakHeatmapTests
             for (var i = 1; i < shades.Count; i++)
             {
                 Assert.True(shades[i].ToHsl().S > shades[i - 1].ToHsl().S, $"saturation climbs at level {i + 1}");
-                Assert.True(Distance(shades[i], Surface) > Distance(shades[i - 1], Surface), $"stands out more at level {i + 1}");
+                Assert.True(shades[i].ToHsl().L < shades[i - 1].ToHsl().L, $"lighter at the low end, level {i + 1}");
             }
             Assert.True(Distance(shades[^1], scale) < 2); // the busiest day is the scale colour itself
+            // Even the lightest day is clearly not an empty square on a dark card.
+            Assert.True(Distance(shades[0], Surface) > 150, $"level 1 is only {Distance(shades[0], Surface):0} from the surface");
         }
     }
 

@@ -47,6 +47,7 @@ public sealed class RunViewsTests
                 await context.SettleAsync();
                 Assert.True(overlay.IsVisible);
                 Assert.True(overlay.FindControl<StackPanel>("StartCard")!.IsVisible);
+                Assert.Equal(600, overlay.FindControl<Border>("Card")!.Bounds.Width); // the start card stays compact
                 var dial = overlay.FindControl<MinuteDial>("Dial")!;
                 Assert.True(dial.IsFocused);
                 Assert.Equal(15, dial.Value);
@@ -83,6 +84,15 @@ public sealed class RunViewsTests
                 Assert.False(hud.IsVisible);
                 Assert.True(overlay.FindControl<StackPanel>("RecapCard")!.IsVisible);
                 Assert.True(overlay.FindControl<Button>("DoneButton")!.IsFocused);
+
+                // The recap is a screen of its own: the card fills the window (up to 1,180 px), the chart gets
+                // room, and everything fits without scrolling.
+                var card = overlay.FindControl<Border>("Card")!;
+                Assert.Equal(1000 - 48, card.Bounds.Width);
+                Assert.True(overlay.FindControl<RunMinuteChart>("MinuteChart")!.Bounds.Width > 450);
+                var scroll = overlay.FindControl<ScrollViewer>("CardScroll")!;
+                Assert.True(scroll.Extent.Height <= scroll.Viewport.Height + 1,
+                    $"recap needs {scroll.Extent.Height:0} px but has {scroll.Viewport.Height:0}");
                 Assert.True(overlay.FindControl<TextBox>("FutureYouInput")!.IsEffectivelyVisible);
                 Assert.True(overlay.FindControl<StreakHeatmap>("StreakCalendar")!.IsEffectivelyVisible);
                 var chart = overlay.FindControl<RunMinuteChart>("MinuteChart")!;

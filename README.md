@@ -127,7 +127,7 @@ run) it all builds: the flames climb, the vignette closes in, the timer runs hot
 goes the full distance ends with a chime and a burst. Turn any layer off, set the ambience volume, or play a sample
 in **Settings → Runs**.
 
-When time is up, or you press **End**, the recap shows what you did: words added, cut and net, words per minute,
+When time is up, or you press **End**, the recap fills the window and shows what you did: words added, cut and net, words per minute,
 XP, how much was fresh drafting versus revision, the chapters you touched, the project's progress toward its targets
 (with milestones at 10/25/50/75/100%), a minute-by-minute chart, and your streak on a 12-week calendar (the current
 streak in the accent colour). At the bottom, leave a **note for Future You**, a line about what to write next, and

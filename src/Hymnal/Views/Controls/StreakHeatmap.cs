@@ -100,19 +100,21 @@ public sealed class StreakHeatmap : Control
 
     /// <summary>
     /// A day's colour: <paramref name="level"/> 0 is a faint empty square; 1–4 climb from pale and washed out to
-    /// the full, saturated <paramref name="scale"/> colour. Opaque, mixed over <paramref name="surface"/>.
+    /// the full, saturated <paramref name="scale"/> colour. Opaque, mixed a little with <paramref name="surface"/>.
     /// </summary>
     internal static Color Shade(Color scale, Color surface, int level)
     {
         if (level <= 0)
             return Mix(surface, scale, 0.1);
+        // Pale and light at the low end, so even a short day stands out clearly from an empty one on a dark card;
+        // deep and saturated at the high end.
         var t = Math.Clamp(level, 1, 4) / 4.0;
         var hsl = scale.ToHsl();
         var tinted = new HslColor(1,
             hsl.H,
-            hsl.S * (0.3 + 0.7 * t),
-            hsl.L + (1 - hsl.L) * 0.3 * (1 - t)).ToRgb();
-        return Mix(surface, tinted, 0.35 + 0.65 * t);
+            hsl.S * (0.45 + 0.55 * t),
+            hsl.L + (1 - hsl.L) * 0.45 * (1 - t)).ToRgb();
+        return Mix(surface, tinted, 0.8 + 0.2 * t);
     }
 
     private static Color Mix(Color from, Color to, double amount) => Color.FromRgb(
