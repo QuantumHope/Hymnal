@@ -16,6 +16,10 @@ manuscript itself, skills that are real editor tools, and currencies to spend on
 know dungeon crawlers, LitRPGs and RPGs, and it serves every project kind: short story, anthology, novella, novel and
 series.
 
+The app has two jobs, and both matter equally:
+1. Gamify the scary start of a session and the flow within it.
+2. Help the writer see and explore the shape and status of the whole project. The Map and Camp exist for this.
+
 The research shapes three guardrails:
 
 1. **Structure first, loot second (R-F3).** The goal you pick and the progress you see are the core. Currencies and
@@ -135,11 +139,37 @@ loadout is one click once you've chosen:
      style, for example torchlit amber for the Delver, cool stone for the Mason and violet starlight for the Seer.
      Owned variants of that style (bought, or earned through prestige) can be swapped in on this step. Styles reuse
      `ThemeCatalog`, the run atmosphere and `IRunSoundscape`.
-2. **Goal.** Usually three goals, drawn from a deck and built from the manuscript's state, plus the run length (the
-   minute dial). **Reroll** swaps the offer for gold. A "no goal" free run is always allowed.
+2. **Goal and run kind.** Usually three goals, drawn from a deck and built from the manuscript's state. **Reroll**
+   swaps the offer for gold. A "no goal" free run is always allowed. Then choose how the run ends:
+   - **Timed:** the minute dial, as in phase 1.
+   - **Untimed:** there's no clock, and the run ends when its goal is met, for example "500 words into chapter 7" or
+     "renovate 6 scenes". You can also end it yourself.
+
+The class is also the run's *intent*: a drafting class means "this run, I write", and an editing class means "this
+run, I edit, revise or proofread this area". There is no separate Edit place. Editing runs happen in Write with that
+class's panels and skills.
 
 The **dungeon's look is not part of the loadout.** Room textures and tile sets belong to the *story*, not the
 character, so a book looks the same whichever class you play (§6, "Tile sets").
+
+### Kinds of run, and bonus time
+
+| Kind | Ends when | HUD shows | Scoring |
+|---|---|---|---|
+| **Timed** | The timer runs out, or you end it | The clock, then the final stretch | Phase 1 formula (minutes count) |
+| **Untimed (goal run)** | The goal is met, or you end it | Goal progress (a bar in place of the clock) and the time elapsed | The same formula with the actual focused minutes. Meeting the goal pays the goal bonus. An idle-time cap keeps a run left open overnight from counting |
+| **Bonus time** | When the timer ends (or an untimed goal is met), the recap's banner offers **Keep going** (open-ended overtime) or **+5 / +10 / +15 minutes** | An **OVERTIME** clock counting up, or the added minutes, with the atmosphere at full intensity | Overtime words and minutes count at the normal rate and are shown separately on the recap ("+212 in overtime"). The full-run bonus is already banked |
+
+Bonus time is always optional. Turning it down shows the recap as usual. Overtime never puts a met goal at risk.
+
+**Units for untimed editing goals.** A *chunk* is a scene (a dungeon room, §6) or a paragraph (a feature),
+depending on the goal:
+
+- **Revised:** a scene or paragraph changed, with renovation credit.
+- **Proofread:** a scene whose spelling issues have all been resolved or dismissed.
+- **Commented:** a note pinned to a scene or paragraph.
+
+The goal card says which unit it counts.
 
 ### Goal deck (first draft)
 
@@ -155,6 +185,10 @@ Each goal names its room or floor, so the map can light it up.
 | **Clear the echoes** | Editing | The repeated-word skill reports no flagged echoes left in a chapter |
 | **Proofread a floor** | Editing | A chapter has no spelling issues left |
 | **Map the depths** | Planning | N beats or cards added or completed on a board |
+| **Shore up** *N rooms* | Editing (untimed) | N scenes in an area revised |
+| **Inspect** *N rooms* | Editing (untimed) | N scenes proofread |
+| **Leave marks** *N* | Editing (untimed) | N notes or comments pinned to scenes or paragraphs |
+| **Dig N words** | Drafting (untimed) | N net words added in the chosen area |
 
 Goals are data (id, title, family, a rule over the run summary and the manuscript's state, a reward), the same way the
 runs spec plans achievements. Revision goals are judged by results (status changes, net cuts, fewer issues), not raw
@@ -162,7 +196,7 @@ churn, so they don't reward busywork (an open question in the research).
 
 ### Missing a goal
 
-When the timer ends with the goal unmet, the recap says **GOAL MISSED** in calm colours, then shows how close you got
+When a timed run ends (or an untimed run is ended by hand) with the goal unmet, the recap says **GOAL MISSED** in calm colours, then shows how close you got
 and what the run still earned (XP, base gold, streak). No words or progress are removed. Next time, the same goal
 can be offered again at a small discount.
 
@@ -332,7 +366,8 @@ purchases, so the balance is recomputed and a formula change can be applied to h
 ## 9. Storage additions (all additive)
 
 - `writer-profile.json` gains:
-  - per run: `classId`, `styleId`, `goal { id, target, met }`, `goldEarned`, `summary`
+  - per run: `classId`, `styleId`, `kind` (timed / untimed), `goal { id, unit, target, progress, met }`,
+    `overtime { seconds, added, cut }`, `goldEarned`, `summary`
   - at the top level: `character { background, perks[], classLevels { classId: n }, respecs }`, `purchases[]`,
     `equipped { title, relics[], skillBar }`, `achievements[]`
 
@@ -370,7 +405,7 @@ This replaces and extends phases 2–5 of the runs spec:
 
 | Phase | Contents |
 |---|---|
-| 2. Launch pad + loadout | Launch pad (Future You note, last room, **Enter**). Loadout with the class and its editor style (Delver and Mason to start) and the goal deck (Excavate, Break ground, Renovate, Clear rubble). Missed-goal recap. `goal` stored on runs. |
+| 2. Launch pad + loadout | Launch pad (Future You note, last room, **Enter**). Loadout with the class and its editor style (Delver and Mason to start) and the goal deck (Excavate, Break ground, Renovate, Clear rubble). Missed-goal recap. Untimed goal runs and bonus time (Keep going, +5/+10/+15). `goal`, `kind` and `overtime` stored on runs. |
 | 3. Character sheet + progression | Character creation (background), level, class levels with multiclassing, perk picks and the first perks, achievements shelf, titles and relics, the free first respec. The skill bar with the Delver and Mason level 1–2 skills (Tunnel vision, Second wind, Spellward, Echo sight). |
 | 4. Dungeon map | The Dungeon mode on the rail, scene rooms with paragraph features and fingerprints, the heuristic classifier, the tile view (floors, doors, rock), condition and freshness, and the run path on the recap. |
 | 5. Economy + shop | Gold, the shop (the old unlock web) with cosmetics, editor improvements and rerolls, and the Cartographer class. |
